@@ -97,9 +97,9 @@ Switching rooms always lands on that room's start page, greeted by the hour —
 
 ## The craft
 
-> *Suit the action to the word, the word to the action; with this special
-> observance, that you o'erstep not the modesty of nature.*
-> <br>— William Shakespeare, *Hamlet*, III.ii
+> *Beauty is the reasoned harmony of all the parts, so that nothing may be added,
+> taken away or altered, save for the worse.*
+> <br>— Leon Battista Alberti, *De re aedificatoria*, VI (after the common English rendering)
 
 | | |
 |---|---|
@@ -156,7 +156,7 @@ npi --version        # npi/1.0.1
 
 ## Where things live
 
-> *This above all: to thine own self be true.* — William Shakespeare, *Hamlet*, I.iii
+> *Man is the measure of all things.* — Protagoras
 
 Your things stay where you can see them.
 
@@ -228,8 +228,7 @@ dist/       release builds (not tracked)
 
 ## Thanks
 
-> *How far that little candle throws his beams! So shines a good deed in a naughty world.*
-> <br>— William Shakespeare, *The Merchant of Venice*, V.i
+> *Ars longa, vita brevis.* — Hippocrates, in Seneca's rendering
 
 - **omp** by Mario Zechner and Stencil Labs, and **omp-desktop** by Miroslav
   Drbal — both MIT. NPi stands on their work; see `omp/LICENSE` and `desktop/LICENSE`.
