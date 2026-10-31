@@ -187,7 +187,6 @@ function App() {
   }, [t.uiDetail]);
   const [chatDir, setChatDir] = React.useState("");
   const [savedChats, setSavedChats] = React.useState([]);
-  const lastTab = React.useRef({ chat: null, code: null });
   React.useEffect(() => { let live = true; Promise.resolve(bridge?.chatDir?.()).then(d => { if (live && d) setChatDir(d); }); return () => { live = false; }; }, [bridge]);
   const isChatTab = s => !!chatDir && s.path === chatDir;
   const chatTabs = sessions.filter(isChatTab);
@@ -852,13 +851,11 @@ function App() {
   const activeIsChat = isChatTab(activeProject);
   // The other mode's tab is not shown: this mode's start page is.
   const showHome = noTab || home || (sessions.length > 0 && activeIsChat !== isChat);
-  React.useEffect(() => { if (!showHome && activeSessionId) lastTab.current[activeIsChat ? "chat" : "code"] = activeSessionId; }, [showHome, activeSessionId, activeIsChat]);
+  // Switching modes always lands on the start page of the mode.
   const handleMode = m => {
     if (m === t.appMode) return;
     setTweak("appMode", m);
-    const target = lastTab.current[m === "chat" ? "chat" : "code"];
-    if (target && sessions.some(s => s.id === target)) { setHome(false); if (target !== activeSessionId) bridge?.activateSession(target); }
-    else setHome(true);
+    setHome(true);
   };
   const quotas = useQuotas({ bridge, profileId: activeProfileId, enabled: showRail && !showHome && side !== "browser" });
   const welcomeProjects = (() => {
@@ -964,6 +961,7 @@ function App() {
             onBack={() => setHome(true)}
             onForward={() => setHome(false)}
             mode={t.appMode}
+            home={showHome}
             onMode={handleMode}
             toolbar={
               <ChromeToolbar

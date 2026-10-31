@@ -62,7 +62,7 @@ function WindowChrome({
   profiles, activeProfileId, startupProfileId,
   onSelectProfile, onCreateProfile, onRenameProfile, onDeleteProfile, onSetStartupProfile,
   sidebarOpen, onToggleSidebar, toolbar,
-  canBack, canForward, onBack, onForward, mode, onMode,
+  canBack, canForward, onBack, onForward, mode, onMode, home = false,
 }) {
   return (
     <div className={`chrome ${sidebarOpen ? "with-sidebar" : ""}`} data-tauri-drag-region>
@@ -91,8 +91,8 @@ function WindowChrome({
 
       <div className="chrome-main" data-tauri-drag-region>
         <div className="chrome-title" data-tauri-drag-region>
-          <span className="chrome-name">{project.name}</span>
-          {project.branch && (
+          {!home && <span className="chrome-name">{project.name}</span>}
+          {!home && project.branch && (
             <span className="chrome-branch">
               <Icon name="branch" size={11} color="var(--fg-4)" />
               {project.branch}
