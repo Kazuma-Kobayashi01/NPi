@@ -4489,9 +4489,9 @@
     /** `{ instructions, memory }` of the Chat space, or null. */
     async chatPrefs() { return _invokeSafe("chat_prefs_get", {}, null); },
     /** Sidebar actions on a saved conversation (deleted for good) / a folder. Resolve to `{ ok }`. */
-    async deleteSavedSession(path) {
+    async deleteSavedSession(path, profile) {
       if (!window.__TAURI__) return { ok: false, error: "not connected" };
-      try { await window.__TAURI__.core.invoke("delete_saved_session", { path, profile: _activeProfileId() }); return { ok: true }; }
+      try { await window.__TAURI__.core.invoke("delete_saved_session", { path, profile: profile || _activeProfileId() }); return { ok: true }; }
       catch (e) { return { ok: false, error: String(e) }; }
     },
     async revealPath(path) {
@@ -4534,7 +4534,9 @@
      *  shell. Unconditional; the tab bar goes through
      *  `closeSessionGuarded`. */
     async closeSession(id) {
-      _closeTab(id);
+      // Waited for: the tab's omp must be gone before anything deletes its session file,
+      // or its exit writes recreate it.
+      await _closeTab(id);
       sessionRegistry.delete(id);
       promptHistories.delete(id);
       _modeRestartMissed.delete(id);

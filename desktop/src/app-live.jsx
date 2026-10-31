@@ -170,15 +170,23 @@ function App() {
   const handlePin = file => setTweak("pinnedSessions", pinned.includes(file) ? pinned.filter(f => f !== file) : [...pinned, file]);
   const handleReveal = path => { bridge?.revealPath?.(path); };
   // `row` of the chat sidebar ({ tab?, saved?, file }) or a code tab: the file is its saved conversation.
-  const trashConversation = async (id, file) => {
-    if (id) { await bridge?.closeSessionGuarded(id); }
-    if (file) await bridge?.deleteSavedSession?.(file);
+  const trashConversation = async (tab, file) => {
+    // A busy tab asks first; "keep" means keep the file too.
+    if (tab && (await bridge?.closeSessionGuarded(tab.id)) === false) return false;
+    if (file) {
+      const r = await bridge?.deleteSavedSession?.(file, tab?.profile);
+      if (r && !r.ok) { console.error("[app] could not delete the conversation:", r.error); return false; }
+      setSavedChats(list => list.filter(x => x.path !== file));
+      if (pinned.includes(file)) setTweak("pinnedSessions", pinned.filter(f => f !== file));
+      if (archived.includes(file)) setTweak("archivedSessions", archived.filter(f => f !== file));
+    }
+    return true;
   };
   const handleArchiveRow = row => {
     if (row.file) setTweak("archivedSessions", [...archived, row.file]);
     if (row.tab) bridge?.closeSessionGuarded(row.tab.id);
   };
-  const handleDeleteRow = row => { trashConversation(row.tab?.id, row.file); };
+  const handleDeleteRow = row => { trashConversation(row.tab, row.file); };
   // The interface-detail step as a class on <html> (layout/shell.css).
   React.useEffect(() => {
     const root = document.documentElement;
@@ -1004,7 +1012,7 @@ function App() {
                 tabs={codeTabs}
                 unread={unread} onReveal={handleReveal} onMarkUnread={handleMarkUnread}
                 onArchiveTab={tab => handleCloseTab(tab.id)}
-                onDeleteTab={tab => trashConversation(tab.id, tab.sessionFile)}
+                onDeleteTab={tab => trashConversation(tab, tab.sessionFile)}
                 activeId={activeSessionId}
                 recents={recentRows(recentProjects, sessions, activeProfileId).filter(r => r.path !== chatDir && !chatDirs.includes(r.path))}
                 profileLabel={profileLabel}
