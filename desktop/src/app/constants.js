@@ -31,6 +31,7 @@
     "layout": "rail",
     "appMode": "code",
     "uiDetail": 3,
+    "chatWidth": "narrow",
     "accountName": "",
     "accountCall": "",
     "accountAvatar": "",

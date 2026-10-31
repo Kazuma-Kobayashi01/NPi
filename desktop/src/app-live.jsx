@@ -184,7 +184,8 @@ function App() {
     const root = document.documentElement;
     const n = window.OMP_UI_DETAIL.clamp(t.uiDetail);
     for (let i = 1; i <= 5; i++) root.classList.toggle(`detail-${i}`, i === n);
-  }, [t.uiDetail]);
+    for (const w of ["narrow", "medium", "wide"]) root.classList.toggle(`chat-w-${w}`, (t.chatWidth ?? "narrow") === w);
+  }, [t.uiDetail, t.chatWidth]);
   const [chatDir, setChatDir] = React.useState("");
   const [savedChats, setSavedChats] = React.useState([]);
   React.useEffect(() => { let live = true; Promise.resolve(bridge?.chatDir?.()).then(d => { if (live && d) setChatDir(d); }); return () => { live = false; }; }, [bridge]);
@@ -1054,6 +1055,7 @@ function App() {
                     submitKey={t.submitKey}
                     wallpaper={null}
                     onRewind={streaming ? null : handleRewind}
+                    streaming={streaming}
                   />
                   <Composer
                     sessionId={planKey}

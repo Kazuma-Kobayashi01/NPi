@@ -64,6 +64,10 @@
         custom("wallpaperArt", "Artwork", "Which artwork the wallpaper shows.", "wallpaper artwork vitruvian athens venus adam melencolia last supper",
           { keys: ["wallpaperArt"], visibleIf: (v) => v?.wallpaper !== false }),
       ] },
+      { name: "Layout", rows: [
+        tweak("chatWidth", "seg", "Chat width", "How wide the conversation and the prompt box are.", "width narrow medium wide column reading",
+          { options: opts(["narrow", "medium", "wide"]) }),
+      ] },
       { name: "Text", rows: [
         tweak("density", "seg", "Density", "Row height, padding and the base text size.", "spacing compact",
           { options: opts(["cozy", "compact", "dense"]) }),
