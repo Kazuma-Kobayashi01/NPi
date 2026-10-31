@@ -126,6 +126,7 @@ function UsageCard({ provider, quotas, stats }) {
   const { mine, others } = U.quotaFor(quotas?.rows, provider);
   const rows = U.tokenRows(stats);
   const title = mine ? "Plan usage" : "Usage";
+  const [othersOpen, setOthersOpen] = React.useState(false);
   return (
     <SideCard title={title}
       extra={quotas?.refresh && (
@@ -141,8 +142,13 @@ function UsageCard({ provider, quotas, stats }) {
       </>)}
       {!mine && quotas?.loading && !quotas.rows && <div className="sp-dim">Checking limits…</div>}
       {others.length > 0 && (<>
-        <div className="sp-sub">Other accounts</div>
-        {others.map(r => (
+        <button type="button" className="sp-sub sp-fold" aria-expanded={othersOpen} onClick={() => setOthersOpen(v => !v)}>
+          <span>Other accounts</span>
+          <svg className={`sp-chev${othersOpen ? " open" : ""}`} width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {othersOpen && others.map(r => (
           <div key={r.provider} className="sp-other">
             <div className="sp-trow"><span className="sp-label">{M.vendorLabel(r.provider)}{r.plan ? ` · ${r.plan}` : ""}</span></div>
             {r.limits.map((l, i) => (

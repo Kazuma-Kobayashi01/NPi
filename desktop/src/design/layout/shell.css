@@ -658,3 +658,5 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .composer { max-width: calc(var(--u) * 50); }
 .composer-row { min-height: calc(var(--u) * 2.5); }
 .composer-input textarea { min-height: calc(var(--u) * 1.375); }
+.sp-fold { appearance: none; border: 0; background: transparent; width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0; cursor: pointer; font: inherit; text-align: left; }
+.sp-fold:hover { color: var(--fg); }
