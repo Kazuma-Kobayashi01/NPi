@@ -5,10 +5,10 @@
 <p align="center"><em>What a piece of work is a man! How noble in reason, how infinite in faculty!</em><br>
 <sub>— William Shakespeare, <i>Hamlet</i>, II.ii</sub></p>
 
-<p align="center"><sub>NeoPi Desktop &nbsp;·&nbsp; 1.0.1 &nbsp;·&nbsp; for macOS on Apple silicon</sub></p>
+<p align="center"><sub>NeoPi Desktop &nbsp;·&nbsp; 1.0.1-hotfix01 &nbsp;·&nbsp; for macOS on Apple silicon</sub></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.1-C8A96A?style=flat-square&labelColor=1f1f1d" alt=" Version 1.0.1">
+  <img src="https://img.shields.io/badge/version-1.0.1--hotfix01-C8A96A?style=flat-square&labelColor=1f1f1d" alt=" Version 1.0.1-hotfix01">
   <img src="https://img.shields.io/badge/macOS-Apple%20silicon-6E7F99?style=flat-square&labelColor=1f1f1d&logo=apple&logoColor=E9E4D6" alt="macOS Apple silicon">
   <img src="https://img.shields.io/badge/Tauri-2-C8A96A?style=flat-square&labelColor=1f1f1d&logo=tauri&logoColor=E9E4D6" alt="Tauri 2">
   <img src="https://img.shields.io/badge/Rust-stable-8E8E88?style=flat-square&labelColor=1f1f1d&logo=rust&logoColor=E9E4D6" alt="Rust">
@@ -137,7 +137,7 @@ flowchart LR
 
 ## Install
 
-1. Open `NPi-Desktop-1.0.1-arm64.dmg` and drag **NPi Desktop** to *Applications*.
+1. Open `NPi-Desktop-1.0.1-hotfix01-arm64.dmg` and drag **NPi Desktop** to *Applications*.
 2. The app is not notarized, so the first time, right-click it and choose **Open**.
 3. Sign in from **Settings → Models**, or from a terminal with `npi login`.
 
@@ -145,7 +145,7 @@ The command line travels inside the app. To use it in any terminal:
 
 ```bash
 ln -sf "/Applications/NPi Desktop.app/Contents/MacOS/npi" ~/.local/bin/npi
-npi --version        # npi/1.0.1
+npi --version        # npi/1.0.1-hotfix01
 ```
 
 **Requires** macOS on Apple silicon.

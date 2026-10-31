@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-hotfix01] - 2026-10-31
+
+### Fixed
+
+- Bundled CLI: Ctrl+C now cancels active main-session work instead of only clearing input, leaving the session available for the next command. Cancellation no longer arms the idle double-tap exit timer.
+
 ## [1.0.1] - 2026-10-31
 
 First NPi Desktop release (macOS, Apple silicon).

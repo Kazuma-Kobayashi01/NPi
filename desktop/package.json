@@ -1,7 +1,7 @@
 {
   "name": "omp-desktop",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.1-hotfix01",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build --config src-tauri/tauri.dist.conf.json",
