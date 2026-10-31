@@ -35,7 +35,7 @@ function WelcomeMark() {
 
 const _ewCap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
-function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, approvalModes, profileId, favorites = [], onManageModels, wallpaper = null, chat = "" }) {
+function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, approvalModes, profileId, favorites = [], onManageModels, wallpaper = null, chat = "", appMode = "code", userName = "" }) {
   const M = window.OMP_MODELS;
   const IMG = window.OMP_IMAGES;
   const [text, setText] = React.useState("");
@@ -48,6 +48,13 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
   const [defaultSel, setDefaultSel] = React.useState("");
   const [modelKey, setModelKey] = React.useState(null);   // null: omp's default
   const [level, setLevel] = React.useState(null);         // null: the default's level
+  // The greeting: drawn once per visit to the page (and again when the mode changes).
+  const [seed, setSeed] = React.useState(() => Math.random());
+  React.useEffect(() => { setSeed(Math.random()); }, [appMode]);
+  const title = React.useMemo(
+    () => window.OMP_GREETINGS.greeting({ mode: appMode, name: userName, hour: new Date().getHours(), seed }),
+    [appMode, userName, seed],
+  );
   const taRef = React.useRef(null);
   const rootRef = React.useRef(null);
   const fileRef = React.useRef(null);
@@ -143,7 +150,7 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
     <div className="empty-ws" aria-label="no project open" ref={rootRef}>
       {wallpaper && <div className="wallpaper" style={{ "--wp": `url("${new URL(wallpaper, document.baseURI).href}")` }} aria-hidden="true" />}
       <div className="welcome">
-        <h1 className="welcome-title"><WelcomeMark />{chat ? "What is on your mind?" : "What shall we work on?"}</h1>
+        <h1 className="welcome-title"><WelcomeMark />{title}</h1>
 
         <div className={`welcome-box${open ? " open" : ""}`} onMouseDown={e => { if (e.target === e.currentTarget) taRef.current?.focus(); }}>
           {atts.length > 0 && (

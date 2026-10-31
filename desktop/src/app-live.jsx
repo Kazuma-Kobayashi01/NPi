@@ -1037,7 +1037,7 @@ function App() {
                     recents={welcomeProjects}
                     onPickFolder={() => bridge?.pickFolder()}
                     onStart={handleStartFromWelcome}
-                    chat={isChat ? chatDir : ""}
+                    chat={isChat ? chatDir : ""} appMode={isChat ? "chat" : "code"} userName={t.accountCall || t.accountName}
                     bridge={bridge} approvalModes={approvalModes} profileId={activeProfileId}
                     wallpaper={null}
                     favorites={t.favoriteModels} onManageModels={() => openSettings("models")} />
