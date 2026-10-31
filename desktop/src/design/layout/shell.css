@@ -100,7 +100,7 @@ body { font-feature-settings: normal; }
 .ass-rail { display: none; }
 .ass-meta { position: relative; height: 0; margin: 0; }
 .ass-meta > :not(.ass-copy) { display: none; }
-.ass-meta .ass-copy { position: absolute; right: 0; top: calc(var(--u) * -1.375); }
+.ass-meta .ass-copy { display: none; }
 .row { gap: 0; }
 .ass-text { font-size: var(--d-text); }
 
@@ -553,8 +553,8 @@ html.tauri-native .window {
 /* ── Chat wallpaper: a faint artwork behind the conversation ──
    The file is a mask (its transparency is the artwork's tone); the colour is
    the theme's text colour, so it reads as engraving on either theme. */
-:root { --wp-opacity: 0.06; }
-.theme-ivory { --wp-opacity: 0.07; }
+:root { --wp-opacity: 0.13; }
+.theme-ivory { --wp-opacity: 0.15; }
 .wallpaper {
   position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background: var(--fg); opacity: var(--wp-opacity);
