@@ -1,0 +1,51 @@
+# ── Rust / Tauri ──────────────────────────────────────────────────────────────
+/src-tauri/target/
+/src-tauri/gen/
+
+# ── Release frontend (scripts/build-frontend.mjs) ─────────────────────────────
+/dist/
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Local overrides ───────────────────────────────────────────────────────────
+*.local
+.env
+.env.*
+!.env.example
+
+# Local-only issue triage tracking — internal, never committed
+/ISSUES.md
+
+# ── Dev artefacts ─────────────────────────────────────────────────────────────
+dev.log
+*.log
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editors ───────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Design prototype (read-only reference — live copy lives in src/design/) ───
+/design/
+
+# Worktrees
+.worktrees/
+
+# Throw-away commit-message scratch files used by the agent harness
+.git-commit-msg.tmp
+
+# Agent-internal plans and superpowers docs (never commit)
+docs/superpowers/
+
+# ── Nucleus MCP index (local tool state) ─────────────────────────────────────
+.nucleus/
+
+# bundled omp sidecar (copied in by hand, ~200MB)
+/src-tauri/binaries/

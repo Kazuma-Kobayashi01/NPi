@@ -1,0 +1,547 @@
+/* Chat surface — bubbles, inline plan, tool card, eval, diff ────── */
+
+/* ── Chat ───────────────────────────────────────────────────────────── */
+.chat-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto; overflow-x: hidden;
+  background: var(--bg-window);
+}
+
+/* Shown only while unpinned from the bottom (issue #20) — an explicit,
+   deliberate way back to the live tail instead of every update yanking
+   the view there regardless of what the user is reading. */
+.chat-jump-latest {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-bright);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  animation: chat-jump-in 0.15s var(--ease-out);
+}
+.chat-jump-latest:hover { border-color: var(--accent); color: var(--accent); }
+@keyframes chat-jump-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.chat-pad {
+  max-width: none;
+  margin: 0;
+  padding: 24px 32px 12px;
+  display: flex; flex-direction: column;
+  gap: 18px;
+}
+
+.row { display: flex; gap: 12px; }
+.row.user { justify-content: flex-end; }
+
+/* assistant left rail with thread */
+.ass-rail {
+  position: relative;
+  width: 22px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding-top: 2px;
+}
+.ass-glyph, .tool-glyph {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--line));
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+.tool-glyph { border-radius: 6px; }
+.ass-thread {
+  flex: 1; width: 1.5px;
+  background: linear-gradient(180deg, var(--line-bright), transparent);
+  margin-top: 2px;
+}
+.ass-body { flex: 1; min-width: 0; }
+.ass-meta {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 4px;
+  font-size: var(--d-text-xs);
+}
+.ass-text {
+  margin: 0; padding: 0;
+  font-size: var(--d-text);
+  color: var(--fg);
+  line-height: var(--d-leading);
+  text-wrap: pretty;
+}
+.thought {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--lilac);
+  background: color-mix(in oklab, var(--lilac) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+  font-size: var(--d-text-sm);
+}
+.thought-text { flex: 1; min-width: 0; }
+/* Collapsed (#44, see "Collapsible blocks" below). */
+.thought.is-collapsed .thought-text {
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--collapse-lines); line-clamp: var(--collapse-lines);
+  overflow: hidden;
+}
+.thought .collapse-toggle { margin: -2px -4px 0 0; }
+
+/* A failed request (assistant-bubble.jsx `_AB_Failure`) */
+.ass-glyph.failed { border-color: color-mix(in oklab, var(--rose) 45%, var(--line-bright)); }
+.ass-failure {
+  margin-top: 4px; max-width: 720px;
+  padding: 8px 12px 9px;
+  border: 1px solid color-mix(in oklab, var(--rose) 35%, var(--line-bright));
+  border-radius: var(--r-2);
+  background: color-mix(in oklab, var(--rose) 5%, var(--bg-surface));
+}
+.ass-failure-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ass-failure-head .chip { padding: 1px 8px; white-space: nowrap; }
+.ass-failure-title { margin-right: 2px; color: var(--rose); font-weight: 600; font-size: var(--d-text-sm); }
+.ass-failure-msg {
+  margin-top: 6px;
+  color: var(--fg); font-size: var(--d-text); line-height: var(--d-leading);
+  overflow-wrap: anywhere;
+}
+.ass-failure-raw { margin-top: 6px; }
+.ass-failure-raw > summary {
+  cursor: pointer; list-style: none;
+  color: var(--fg-4); font-family: var(--font-mono); font-size: var(--d-text-xs);
+}
+.ass-failure-raw > summary::-webkit-details-marker { display: none; }
+.ass-failure-raw > summary::before { content: "▸ "; }
+.ass-failure-raw[open] > summary::before { content: "▾ "; }
+.ass-failure-raw pre {
+  margin: 6px 0 0; padding: 6px 8px; max-height: 160px; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--fg-3);
+  background: var(--bg-input); border: 1px solid var(--line); border-radius: var(--r-1);
+}
+
+/* user bubble — right side, soft gradient */
+.user-bubble {
+  max-width: min(820px, 70%);
+  padding: 10px 14px;
+  border-radius: 12px 12px 4px 12px;
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--accent) 18%, var(--bg-elevated)),
+    var(--bg-elevated));
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--line-bright));
+}
+.user-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.user-image { max-width: 220px; max-height: 220px; border-radius: 8px; border: 1px solid var(--line-bright); display: block; }
+.user-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; font-size: var(--d-text-xs); }
+.user-text {
+  font-size: var(--d-text);
+  color: var(--fg);
+  /* A prompt is plain text, not markdown: keep its line breaks (a pasted
+     log or stack trace would otherwise run together, #31). No
+     `text-wrap: pretty` here: in WebKit it breaks preserved lines short
+     of the shrink-to-fit bubble's own max-content width, wrapping lines
+     that fit. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── Inline plan (assistant's first reply) ──────────────────────────── */
+.inline-plan {
+  margin-top: 8px;
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--accent) 6%, var(--bg-surface)),
+    var(--bg-surface));
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
+  border-radius: 10px;
+  overflow: hidden;
+}
+.inline-plan-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklab, var(--accent) 4%, transparent);
+}
+.inline-plan-body { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.inline-phase-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--d-text-xs); letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.inline-phase-head .hr { flex: 1; }
+.inline-task {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 3px 0;
+  font-size: var(--d-text-sm);
+  color: var(--fg-2);
+}
+.inline-task.status-done .task-text { color: var(--fg-3); text-decoration: line-through; text-decoration-color: var(--line-bright); }
+.inline-task.status-done .task-mark { color: var(--accent); }
+.inline-task.status-in_progress .task-text { color: var(--fg); font-weight: 500; }
+.task-mark {
+  width: 14px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  margin-top: 2px;
+}
+.pulse-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--cyan) 40%, transparent);
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+
+/* ── Tool card ─────────────────────────────────────────────────────── */
+.tool-card {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 200ms;
+}
+.tool-card.running { border-color: color-mix(in oklab, var(--accent) 35%, var(--line-bright)); }
+.tool-card-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  font-size: var(--d-text-sm);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-elevated) 60%, transparent), transparent);
+}
+.tool-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: var(--d-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.tool-title {
+  font-family: var(--font-mono);
+  color: var(--fg);
+  font-size: var(--d-text-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tool-card-spacer { flex: 1; }
+/* job row (chat-view.jsx `JobRow`): the command after the job id */
+.job-label { color: var(--fg-3); }
+/* retry row (chat/retry-row.jsx): omp retrying a failed request */
+.retry-card { border-color: color-mix(in oklab, var(--amber) 35%, var(--line)); }
+.retry-glyph svg { animation: spin 1.4s linear infinite; }
+.retry-where { flex: none; }
+.retry-body { padding: 2px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.retry-error { color: var(--fg-2); }
+.retry-foot { display: flex; align-items: center; gap: 10px; }
+.retry-status { flex: 1; min-width: 0; color: var(--fg-4); font-size: var(--d-text-xs); }
+.retry-stop { flex: none; white-space: nowrap; padding: 3px 12px; font-size: var(--d-text-xs); }
+.retry-stop-error { color: var(--rose); font-size: var(--d-text-xs); }
+
+.tool-search {
+  padding: 6px 8px 8px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.search-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono); font-size: var(--d-text-sm);
+}
+.search-row.hot { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+.search-row:hover { background: var(--bg-hover); }
+
+.tool-foot {
+  padding: 6px 12px 10px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--d-text-sm);
+}
+
+.tool-bash {
+  margin: 0;
+  padding: 8px 12px 10px;
+  background: var(--bg-input);
+  border-top: 1px solid var(--line);
+  font-size: var(--d-text-sm);
+  white-space: pre-wrap;
+  max-height: 180px; overflow-y: auto;
+}
+.tool-bash > div { line-height: 1.55; }
+
+/* ── Collapsible blocks (#44): tool card bodies and thinking ─────────
+   app/chat-collapse.js decides; ui/collapse-toggle.jsx is the control.
+   A collapsed block keeps `--collapse-lines` (set on .chat-pad from
+   OMP_COLLAPSE.PREVIEW_LINES) in view and fades out where it is cut. */
+/* Sized in em of the button's rem-based text size, so the control grows
+   with the font-size tweak and the density like the text beside it. */
+.btn.icon.collapse-toggle { flex: none; width: 2em; height: 2em; }
+.btn.collapse-toggle:focus-visible { outline-offset: -2px; }
+/* The icon shows what a click does: a down chevron expands a collapsed
+   block, the same chevron turned up collapses an open one. */
+.collapse-toggle svg { width: 1.75em; height: 1.75em; transition: transform 120ms; }
+.collapse-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.collapse-clip {
+  max-height: calc(var(--collapse-lines) * 1.55em + 18px);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+/* bash keeps its last lines (tool-card.jsx renders only those): fade the
+   top, and when wrapped lines still overflow, cut them off the top too, so
+   the final line (often the exit code or wall time) stays in view. The
+   floating copy button moves to the bottom, out of the fade. */
+.collapse-clip.from-end {
+  display: flex; flex-direction: column; justify-content: flex-end;
+  -webkit-mask-image: linear-gradient(to top, #000 45%, transparent);
+  mask-image: linear-gradient(to top, #000 45%, transparent);
+}
+.collapse-clip.from-end > * { flex: none; }
+.collapse-clip.from-end .copy-btn.is-floating { top: auto; bottom: 6px; }
+
+/* ── Copy buttons (#33, ui/copy-button.jsx) ─────────────────────────
+   Icon and label are pseudo-elements, so a button adds no text to a manual
+   selection; marked-setup.js emits the same markup for code blocks. The
+   two icons are `copy` and `check` from ui/icons.jsx — keep them in step. */
+.copy-btn {
+  --copy-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='5' width='8' height='8' rx='1'/><path d='M3 10V4a1 1 0 0 1 1-1h6'/></svg>");
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 1.25rem; min-width: 1.25rem; padding: 0 4px;
+  border: 1px solid var(--line-bright); border-radius: 4px;
+  background: var(--bg-elevated); color: var(--fg-3);
+  font: 500 0.625rem/1 var(--font-mono);
+  cursor: pointer; user-select: none;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+.copy-btn::before {
+  content: ""; flex: none; width: 0.6875rem; height: 0.6875rem;
+  background: currentColor;
+  -webkit-mask: var(--copy-icon) center / contain no-repeat;
+  mask: var(--copy-icon) center / contain no-repeat;
+}
+.copy-btn:hover, .copy-btn:focus-visible { color: var(--fg); }
+.copy-btn.is-copied {
+  --copy-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8l3 3 7-7'/></svg>");
+  color: var(--accent);
+}
+.copy-btn.is-copied::after { content: "copied"; }
+.copy-btn.is-failed { color: var(--rose); }
+.copy-btn.is-failed::after { content: "copy failed"; }
+
+/* Floating: top-right of its block. In-flow ones sit in a header row.
+   Every copy button shows while its block is hovered (or it has focus,
+   or is flashing its result). Plan blocks ignore the pointer
+   (overlays.css), so they reveal it on the block's own hover and hand the
+   button the pointer back. A block still streaming has no button. */
+.copy-host { position: relative; }
+.copy-btn.is-floating { position: absolute; top: 6px; right: 14px; z-index: 1; }
+.copy-btn.ass-copy { margin-left: auto; }
+.copy-host:hover > .copy-btn,
+.plan-block:hover .code-block > .copy-btn,
+.row.assistant:hover .copy-btn.ass-copy,
+.diff-wrap:hover .copy-btn.diff-copy,
+.copy-btn:focus-visible,
+.copy-btn.is-copied,
+.copy-btn.is-failed { opacity: 1; }
+.plan-block-body .copy-btn { pointer-events: auto; }
+.md-streaming .copy-btn { display: none; }
+
+
+/* ── Eval cells ────────────────────────────────────────────────────── */
+.tool-eval { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.eval-cell { border-bottom: 1px solid var(--line); }
+.eval-cell:last-child { border-bottom: none; }
+.eval-cell-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 10px;
+  background: var(--bg-input);
+  font-size: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.eval-lang { color: var(--rose); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.eval-title { color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eval-dur { color: var(--fg-4); }
+.eval-code {
+  margin: 0; padding: 6px 10px;
+  font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 240px; overflow-y: auto;
+}
+/* plain (pre-highlight) fallback only — hljs tokens override when present */
+.eval-code.mono { color: var(--fg-2); }
+.eval-code code { font-size: inherit; }
+.eval-output {
+  margin: 0; padding: 6px 10px;
+  font-size: 11px; line-height: 1.5;
+  color: var(--fg-3);
+  white-space: pre-wrap; word-break: break-all;
+  border-top: 1px solid var(--line);
+  background: color-mix(in oklab, var(--bg-input) 60%, transparent);
+  max-height: 200px; overflow-y: auto;
+}
+.eval-output.eval-error { color: var(--rose); }
+.eval-running .eval-cell-head { border-bottom-color: color-mix(in oklab, var(--rose) 30%, var(--line)); }
+/* ── Diff (scrubbable) ─────────────────────────────────────────────── */
+.diff-wrap { border-top: 1px solid var(--line); }
+.diff-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  font-size: var(--d-text-xs);
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--line);
+}
+.diff-counts { margin-left: auto; display: flex; gap: 8px; }
+
+.diff-body {
+  background: var(--bg-input);
+  font-size: var(--d-text-sm);
+  line-height: 1.55;
+  padding: 4px 0;
+  max-height: 260px; overflow-y: auto; overflow-x: auto;
+}
+.diff-line {
+  display: grid;
+  grid-template-columns: 44px 14px auto;
+  align-items: center;
+  padding: 1px 0 1px 4px;
+  white-space: pre;
+}
+.diff-lines {
+  display: inline-block;
+  min-width: 100%;
+  vertical-align: top;
+}
+.diff-line.k-add { background: var(--diff-add-bg); }
+.diff-line.k-rem { background: var(--diff-rm-bg); }
+.diff-gutter {
+  text-align: right;
+  padding-right: 8px;
+  color: var(--fg-5);
+  font-size: var(--d-text-xs);
+  border-right: 1px solid var(--line);
+}
+.diff-mark {
+  text-align: center;
+  font-weight: 600;
+}
+.diff-line.k-add .diff-mark { color: var(--diff-add-fg); }
+.diff-line.k-rem .diff-mark { color: var(--diff-rm-fg); }
+.diff-code { padding: 0 12px; color: var(--fg-2); }
+.diff-line.k-add .diff-code { color: var(--diff-add-fg); }
+.diff-line.k-rem .diff-code { color: var(--diff-rm-fg); }
+.diff-line.ghost { opacity: 0.18; }
+.diff-line.ghost .diff-code { color: var(--fg-5); }
+
+.diff-track-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 12px 10px;
+  background: var(--bg-input);
+}
+.diff-track {
+  position: relative; flex: 1; height: 14px;
+  cursor: ew-resize;
+}
+.diff-track-base {
+  position: absolute; left: 0; right: 0; top: 6px; height: 2px;
+  background: var(--line-bright);
+  border-radius: 2px;
+}
+.diff-tick {
+  position: absolute; top: 3px; height: 8px;
+  border-radius: 1px;
+}
+.diff-tick.k-add { background: var(--diff-add-fg); }
+.diff-tick.k-rem { background: var(--diff-rm-fg); }
+.diff-tick.k-ctx { background: var(--fg-5); top: 5px; height: 4px; }
+.diff-track-cursor {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  transform: translateX(-1px);
+  pointer-events: none;
+  transition: left 80ms var(--ease-out);
+}
+
+
+/* ── Task subagent panel ──────────────────────────────────────────── */
+.task-panel { border-top: 1px solid var(--line); }
+.ta-row { border-bottom: 1px solid var(--line); }
+.ta-row:last-child { border-bottom: 0; }
+.ta-top { display: flex; align-items: center; }
+.ta-top .ta-hd { flex: 1; min-width: 0; }
+.btn.ta-inspect { width: 1.375rem; height: 1.375rem; margin-right: 4px; flex: none; opacity: 0.55; }
+.ta-row:hover .ta-inspect { opacity: 1; }
+.ta-inspect:hover { color: var(--accent); }
+.ta-hd {
+  appearance: none; border: 0; background: transparent;
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 5px 10px;
+  font: inherit; color: inherit; text-align: left;
+}
+.ta-hd:hover { background: var(--bg-hover); }
+.ta-agent {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  color: var(--fg-2); flex-shrink: 0;
+}
+.ta-hint {
+  font-size: 11px; color: var(--fg-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; max-width: 260px;
+}
+.ta-chip { font-size: 10px !important; padding: 0 4px !important; height: 16px !important; min-width: 0 !important; }
+.ta-body {
+  margin: 0; padding: 4px 0 6px;
+  background: var(--bg-input);
+  max-height: 300px; overflow-y: auto;
+  border-top: 1px solid var(--line);
+  scrollbar-width: thin; scrollbar-color: var(--line-bright) transparent;
+}
+.ta-running .ta-agent { color: var(--accent); }
+.ta-failed  .ta-agent { color: var(--rose); }
+.ta-aborted .ta-agent { color: var(--amber); }
+
+.ta-stream {
+  max-height: 360px; overflow-y: auto;
+  background: var(--bg-input);
+  border-top: 1px solid var(--line);
+  scrollbar-width: thin; scrollbar-color: var(--line-bright) transparent;
+}
+.ta-stream-empty {
+  display: block; padding: 10px 12px;
+  font-size: 11px; color: var(--fg-4); font-style: italic;
+}
+.ta-stream-block { padding: 8px 0 4px; border-bottom: 1px solid var(--line); }
+.ta-stream-block:last-child { border-bottom: 0; }
+.ta-stream-hd {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px 4px; font-size: 11px;
+}
+.ta-stream-line {
+  padding: 0 10px 0 26px;
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.55;
+  color: var(--fg-3); white-space: pre-wrap; word-break: break-all;
+}
+
+/* ── Compact card body (expandable summary) ──────────────────────── */
+.compact-body {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--line);
+  font-size: var(--d-text-sm);
+  color: var(--fg-3);
+  line-height: var(--d-leading);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-bright) transparent;
+}

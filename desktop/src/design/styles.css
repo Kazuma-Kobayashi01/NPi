@@ -1,0 +1,382 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   OMP Desktop — design tokens
+   Two themes: graphite (default dark) and ivory (light).
+   Density: cozy / compact / dense (rem scale + line-height).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Noto, bundled (assets/fonts/, SIL OFL): Sans for the default setting, Serif for the Serif one. */
+@font-face { font-family: "Noto Sans"; font-weight: 100 900; font-display: swap; src: url("../assets/fonts/NotoSans-latin.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans SC"; font-weight: 100 900; font-display: swap; src: url("../assets/fonts/NotoSansSC-sub.woff2") format("woff2"); }
+@font-face { font-family: "Noto Serif"; font-weight: 100 900; font-display: swap; src: url("../assets/fonts/NotoSerif-latin.woff2") format("woff2"); }
+@font-face { font-family: "Noto Serif SC"; font-weight: 200 900; font-display: swap; src: url("../assets/fonts/NotoSerifSC-sub.woff2") format("woff2"); }
+
+:root {
+  /* type */
+  --font-sans: "Noto Sans", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --font-serif: "Noto Serif", "Noto Serif SC", "Songti SC", Georgia, serif;
+  --font-ui-sans: "Noto Sans", "Noto Sans SC", -apple-system, sans-serif;
+  --font-display: var(--font-sans);
+
+  /* density (overridden by .density-* on root) */
+  --d-row: 28px;
+  --d-pad: 14px;
+  --d-gap: 10px;
+  --d-text:    0.8125rem;
+  --d-text-sm: 0.7188rem;
+  --d-text-xs: 0.6563rem;
+  --d-text-lg: 0.9063rem;
+  --d-leading: 1.55;
+
+  /* radius / shadow */
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 14px;
+  --r-pill: 999px;
+  --shadow-pop: 0 8px 24px -8px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-window: 0 30px 90px -20px rgba(0,0,0,0.7), 0 8px 24px -8px rgba(0,0,0,0.5);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Graphite (default dark) ───────────────────────────────────────────── */
+/* Neutral greys; also the fallback for any unknown theme id. */
+:root, .theme-graphite {
+  --bg-app: #111111;
+  --bg-window: #181818;
+  --bg-sidebar: #232323;
+  --bg-surface: #1E1E1E;
+  --bg-elevated: #252525;
+  --bg-input: #313131;
+  --bg-hover: #2C2C2C;
+  --bg-active: #353535;
+
+  --line: #383838;
+  --line-soft: #2E2E2E;
+  --line-bright: #474747;
+
+  --fg: #ECECEC;
+  --fg-2: #C4C4C4;
+  --fg-3: #9B9B9B;
+  --fg-4: #727272;
+  --fg-5: #4D4D4D;
+
+  --accent: #3F8FEA;
+  --accent-deep: #2F6FBA;
+  --accent-soft: rgba(63, 143, 234, 0.14);
+  --accent-glow: rgba(63, 143, 234, 0.45);
+  --on-accent: #FFFFFF;
+
+  --magenta: #E26AA8;
+  --cyan: #5CC8E8;
+  --amber: #E8A33D;
+  --lilac: #A58BF0;
+  --rose: #F0707A;
+  --lime: #7FCB6B;
+
+  --syntax-comment: #6E6E6E;
+  --syntax-key: #A58BF0;
+  --syntax-str: #8BC77A;
+  --syntax-num: #E8A33D;
+  --syntax-fn: #5CB8F0;
+  --syntax-tag: #F07080;
+
+  --diff-add-bg: rgba(110, 200, 130, 0.12);
+  --diff-add-fg: #7FD08C;
+  --diff-rm-bg: rgba(240, 112, 122, 0.10);
+  --diff-rm-fg: #F0707A;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Ivory (light) ─────────────────────────────────────────────────────── */
+.theme-ivory {
+  --bg-app: #E9E9E6;
+  --bg-window: #FFFFFF;
+  --bg-sidebar: #F4F4F1;
+  --bg-surface: #F8F8F6;
+  --bg-elevated: #F1F1EE;
+  --bg-input: #FFFFFF;
+  --bg-hover: #EBEBE7;
+  --bg-active: #E1E1DC;
+
+  --line: #E2E2DD;
+  --line-soft: #EDEDE9;
+  --line-bright: #CDCDC6;
+
+  --fg: #1F1F1D;
+  --fg-2: #3D3D3A;
+  --fg-3: #6A6A65;
+  --fg-4: #8E8E88;
+  --fg-5: #BBBBB4;
+
+  --accent: #2B6FD6;
+  --accent-deep: #1F57AD;
+  --accent-soft: rgba(43, 111, 214, 0.12);
+  --accent-glow: rgba(43, 111, 214, 0.4);
+  --on-accent: #FFFFFF;
+
+  --magenta: #C2438C;
+  --cyan: #1F7A8C;
+  --amber: #B7791F;
+  --lilac: #6A4FE0;
+  --rose: #C04A56;
+  --lime: #4F8A2A;
+
+  --syntax-comment: #8E8E88;
+  --syntax-key: #6A4FE0;
+  --syntax-str: #2F7D4F;
+  --syntax-num: #B7791F;
+  --syntax-fn: #1F6FB0;
+  --syntax-tag: #C2438C;
+
+  --diff-add-bg: rgba(47, 125, 79, 0.10);
+  --diff-add-fg: #1F6B3F;
+  --diff-rm-bg: rgba(192, 74, 86, 0.08);
+  --diff-rm-fg: #B23A45;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}
+
+/* ── Density ──────────────────────────────────────────────────────────── */
+.density-cozy {
+  --d-row: 32px;
+  --d-pad: 18px;
+  --d-gap: 12px;
+  --d-text:    0.96875rem;
+  --d-text-sm: 0.84375rem;
+  --d-text-xs: 0.71875rem;
+  --d-text-lg: 1.09375rem;
+  --d-leading: 1.6129;
+}
+.density-compact {
+  --d-row: 26px;
+  --d-pad: 12px;
+  --d-gap: 8px;
+  --d-text:    0.9375rem;
+  --d-text-sm: 0.8125rem;
+  --d-text-xs: 0.6875rem;
+  --d-text-lg: 1.0625rem;
+  --d-leading: 1.6;
+}
+.density-dense {
+  --d-row: 22px;
+  --d-pad: 8px;
+  --d-gap: 6px;
+  --d-text:    0.875rem;
+  --d-text-sm: 0.75rem;
+  --d-text-xs: 0.6875rem;
+  --d-text-lg: 1rem;
+  --d-leading: 1.5;
+}
+
+/* ── Reset + globals ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg-app);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--d-text);
+  line-height: var(--d-leading);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
+  overflow: hidden;
+  user-select: none;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+input, textarea { font: inherit; color: inherit; background: transparent; border: 0; outline: none; }
+.selectable, .selectable * { user-select: text; }
+.mono { font-family: var(--font-mono); font-feature-settings: "ss01"; }
+
+/* Font tweak: the whole interface in a serif. Code keeps --font-mono. */
+html.font-ui-serif { --font-sans: var(--font-serif); --font-display: var(--font-serif); }
+/* A hair of outline on all text (Sans 0.1px, Serif 0.3px): Noto's Chinese is thin. */
+body { -webkit-text-stroke: 0.1px currentColor; }
+html.font-ui-serif body { -webkit-text-stroke: 0.3px currentColor; }
+code, pre, kbd, samp, .mono, .xterm, .xterm *,
+html.font-ui-serif code, html.font-ui-serif pre, html.font-ui-serif kbd, html.font-ui-serif samp,
+html.font-ui-serif .mono, html.font-ui-serif .xterm, html.font-ui-serif .xterm * { -webkit-text-stroke: 0; }
+
+/* ── App backdrop: flat ─────────────────────────────────────────────── */
+.app-backdrop { position: fixed; inset: 0; background: var(--bg-app); z-index: -1; }
+
+/* ── Scrollbars ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line-bright); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Common motion utilities ──────────────────────────────────────────── */
+/* The endless decorative loops (shimmer, pulseDot, drift; tab-run-pulse in
+   layout/chrome.css, wdg-attn-* in layout/widgets.css) step through each
+   keyframe interval, whatever timing the rule using them names: a smooth
+   loop makes the compositor draw every display frame (120/s) for as long as
+   it runs. Measured on a release build streaming a recorded session: webview
+   CPU 8.4 s → 2.8 s per 30 s, mostly the GPU process. Transient spinners
+   (spin, page load, update download) stay smooth. */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes shimmer {
+  /* background-position repaints the text: 12 steps per sweep. */
+  0% { background-position: -200% 0; animation-timing-function: steps(12); }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); animation-timing-function: steps(4); }
+  50% { opacity: 0.55; transform: scale(0.8); animation-timing-function: steps(4); }
+}
+@keyframes typeBlink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0); animation-timing-function: steps(4); }
+  50% { transform: translate(0, -3px); animation-timing-function: steps(4); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.fade-up { animation: fadeUp 320ms var(--ease-out) both; }
+.slide-in { animation: slideIn 360ms var(--ease-out) both; }
+
+/* shimmer skeleton for streaming text */
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--fg) 70%, transparent) 0%,
+    color-mix(in oklab, var(--accent) 90%, transparent) 50%,
+    color-mix(in oklab, var(--fg) 70%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.caret-blink::after {
+  content: "▌";
+  margin-left: 1px;
+  color: var(--accent);
+  animation: typeBlink 1.05s steps(1) infinite;
+}
+
+/* ── Soft chip ────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  color: var(--fg-2);
+  font-size: var(--d-text-xs);
+  letter-spacing: 0.01em;
+}
+.chip.accent { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 30%, var(--line)); background: var(--accent-soft); }
+.chip.warn { color: var(--amber); border-color: color-mix(in oklab, var(--amber) 30%, var(--line)); }
+.chip.danger { color: var(--rose); border-color: color-mix(in oklab, var(--rose) 30%, var(--line)); }
+.chip.muted { color: var(--fg-3); }
+
+/* dot */
+.dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fg-4);
+}
+.dot.live { background: var(--accent); box-shadow: 0 0 0 0 var(--accent-glow); animation: pulseDot 1.4s ease-in-out infinite; }
+/* Loops always on screen, whatever the tab does: they run only while the
+   active tab streams (`.window.is-running`, app-live.jsx). Even a stepped
+   endless loop keeps an idle window compositing every frame (measured: 3.5 s
+   of webview CPU per idle 15 s, 0.08 s without). */
+.window:not(.is-running) :is(.status-cell, .composer-pill) > .dot.live,
+.window:not(.is-running) .radar-cell.on { animation: none; }
+.dot.warn { background: var(--amber); }
+.dot.error { background: var(--rose); }
+
+/* keyboard chip */
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.5938rem;
+  color: var(--fg-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+/* hairline divider used everywhere */
+.hr { height: 1px; background: var(--line); width: 100%; }
+.vr { width: 1px; background: var(--line); align-self: stretch; }
+
+/* card */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-card);
+}
+
+/* glass surface for ambient peripherals */
+.glass {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--bg-elevated) 80%, transparent),
+    color-mix(in oklab, var(--bg-surface) 90%, transparent)
+  );
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+}
+
+/* <Icon> (ui/icons.jsx) sets --icon-size in rem: icons follow the font-size
+   tweak. The icon-only boxes around them (.btn.icon, tab close, sidebar
+   actions, …) are rem-sized for the same reason. A crowded flex row never
+   squeezes an icon. */
+.ui-icon { width: var(--icon-size); height: var(--icon-size); flex-shrink: 0; }
+
+/* button base */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; height: 24px;
+  border-radius: var(--r-1);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: var(--d-text-sm);
+  transition: background 120ms var(--ease-out), color 120ms, border-color 120ms;
+}
+.btn:hover { background: var(--bg-hover); color: var(--fg); }
+.btn.ghost { color: var(--fg-3); }
+.btn.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--on-accent); }
+.btn.outlined { border-color: var(--line); }
+.btn.outlined:hover { border-color: var(--line-bright); }
+.btn.icon {
+  width: 1.5rem; height: 1.5rem; padding: 0; justify-content: center;
+}
+.btn.danger { color: var(--rose); }
+.btn.danger:hover { background: color-mix(in oklab, var(--rose) 15%, transparent); }
+
+/* focus ring */
+.btn:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

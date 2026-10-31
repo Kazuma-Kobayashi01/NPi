@@ -1,0 +1,24 @@
+/* layout.css — composition styles, split by visual layer.
+   Pairs with styles.css (design tokens). */
+
+@import "./chrome.css";
+@import "./stage.css";
+@import "./sidebar.css";
+@import "./chat.css";
+@import "./ask.css";
+@import "./composer.css";
+@import "./goal.css";
+@import "./rail.css";
+@import "./browser.css";
+@import "./widgets.css";
+@import "./overlays.css";
+@import "./lightbox.css";
+@import "./file-preview.css";
+@import "./settings.css";
+@import "./settings-rows.css";
+@import "./panels.css";
+@import "./git.css";
+@import "./subagents.css";
+@import "./tree.css";
+@import "./terminal.css";
+@import "./shell.css";

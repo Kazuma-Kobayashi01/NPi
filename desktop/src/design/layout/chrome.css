@@ -1,0 +1,344 @@
+/* App + window chrome — Tabs ─────────────────────────────────────── */
+
+/* ── App + window chrome ─────────────────────────────────────────────── */
+.app {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px;
+}
+
+.window {
+  position: relative;
+  width: 100%; height: 100%;
+  max-width: 1480px; max-height: 1000px;
+  background: var(--bg-window);
+  border-radius: 14px;
+  border: 1px solid var(--line-bright);
+  box-shadow: var(--shadow-window);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+.chrome {
+  display: flex; align-items: center; gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  background: var(--bg-window);
+  border-bottom: 1px solid var(--line);
+}
+.chrome-lights { display: flex; gap: 6px; }
+.light { width: 12px; height: 12px; border-radius: 50%; border: 0.5px solid rgba(0,0,0,0.4); }
+.light.red { background: #FF5F57; }
+.light.amber { background: #FEBC2E; }
+.light.green { background: #28C840; }
+.win-controls { display: flex; gap: 2px; align-items: center; }
+.win-ctrl {
+  appearance: none; border: 0; background: transparent;
+  width: 28px; height: 28px; font-size: 13px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; cursor: default;
+}
+.chrome-title { display: flex; align-items: center; gap: 6px; font-size: var(--d-text-sm); flex: 1; justify-content: center; }
+/* align-items is load-bearing. `.win-ctrl` is full-bar height (38px), so this
+   flex line's cross size is 38px even though `.chrome` centres the box
+   itself; the 24px `.btn` has a definite height, so under the default
+   `stretch` it is placed at cross-start instead. Measured in a real webview:
+   button centre 11.5px vs 18.5px for the window controls and profile chip —
+   a 7px offset, on every platform that renders the controls. */
+.chrome-right { display: flex; align-items: center; gap: 6px; }
+
+/* ── Per-tab profile selector ─────────────────────────────────────────── */
+.profile-menu { position: relative; display: flex; align-items: center; }
+.profile-trigger { display: flex; align-items: center; gap: 6px; max-width: 220px; }
+.profile-trigger-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dropdown chrome shared by the profile, tab-group and thinking menus
+   (thinking-menu.jsx, positioned in composer.css) and the browser panel's
+   annotate popover (positioned in browser.css). */
+.profile-pop, .tab-group-pop, .thinking-pop, .browser-popover {
+  position: absolute; z-index: 40;
+  padding: 4px;
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-bright);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-pop);
+}
+/* Right-anchored, not centred: the trigger sits between a `flex: 1` title
+   and `.chrome-right`, near the window's right edge. Centring the pop under
+   it would push up to 170px (half of max-width) past that edge, and
+   `.window { overflow: hidden }` clips the overflow silently - no scroll,
+   no repositioning. Growing leftward from the trigger's own right edge
+   never runs out of room on that side. */
+.profile-pop {
+  top: calc(100% + 6px); right: 0; left: auto;
+  min-width: 260px; max-width: 340px;
+}
+.profile-pop-head {
+  padding: 5px 8px 4px;
+  font-size: var(--d-text-xs); color: var(--fg-4);
+  text-transform: lowercase; letter-spacing: 0.04em;
+}
+/* Bounds the row list, not `.profile-pop` itself, so the create/rename form
+   and hint stay pinned below and visible. The backend allows up to
+   MAX_PROFILES = 64 (src-tauri/src/profiles.rs); at one ~30px row apiece
+   that's well past `.window`'s clipping overflow:hidden, and past that
+   point the form and hint - the only way to reach a profile you can't see -
+   would be unreachable rather than merely off-screen. */
+.profile-list {
+  display: flex; flex-direction: column; gap: 1px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--line-bright) transparent;
+}
+/* 6px gutter, not 2px: a near-miss on the 24px tick must land on dead space,
+   never on .profile-item - whose single click respawns the tab and drops its
+   transcript. (Deleting a profile, which only unlists it, takes two clicks;
+   the risk gradient has to point the same way.) */
+.profile-row { display: flex; align-items: center; gap: 6px; }
+.profile-row .profile-item { flex: 1; min-width: 0; }
+.profile-item, .thinking-item {
+  appearance: none; border: 0; background: transparent;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: var(--r-1);
+  font-size: var(--d-text-sm); color: var(--fg-2);
+  text-align: left; cursor: pointer;
+}
+.profile-item:hover, .thinking-item:hover { background: var(--bg-hover); color: var(--fg); }
+/* The row button is not a `.btn`, so it misses the global focus ring in
+   styles.css - without this, tabbing lights the two small icon buttons and
+   leaves the primary target between them invisible. */
+.profile-item:focus-visible, .thinking-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.profile-item.active, .thinking-item.active { color: var(--fg); }
+/* Fixed-width gutter so names stay aligned whether or not the row is the
+   running one (the mark is rendered only when it is). */
+.profile-item-mark {
+  width: 9px; height: 9px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.profile-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-item-id {
+  font-size: var(--d-text-xs); color: var(--fg-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px;
+}
+/* Default-profile tick. A bordered box so it reads as a settable checkbox,
+   distinct from the `live` ring inside .profile-item that merely reports
+   which profile this tab's process runs under. Always visible (unlike
+   .profile-del, which appears on hover): an empty box is what tells the user
+   the control exists. 22px is a real hit target (the 16px original sat 2px
+   from a one-click respawn); .profile-row's 6px gutter does the rest. */
+.btn.profile-star {
+  appearance: none;
+  width: 1.375rem; height: 1.375rem; min-width: 1.375rem;
+  padding: 0; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: transparent;
+  opacity: 0.55;
+  transition: opacity 120ms, border-color 120ms, background 120ms;
+}
+.profile-row:hover .profile-star,
+.btn.profile-star.on { opacity: 1; }
+.btn.profile-star:hover { border-color: var(--accent); background: var(--bg-hover); }
+.btn.profile-star.on {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+/* Delete sits on `.btn.icon.ghost`; only the hover reveal, the wider armed
+   "delete?" label and the rose tint are specific to it. */
+.btn.profile-del {
+  width: auto; min-width: 24px; padding: 0 6px; flex: none;
+  color: var(--fg-4);
+  opacity: 0; transition: opacity 120ms, background 120ms, color 120ms;
+}
+.profile-row:hover .profile-del { opacity: 1; }
+/* Same class of problem as .profile-item:focus-visible above: opacity: 0
+   also hides the global .btn:focus-visible ring, so a keyboard user tabbing
+   through would land on a fully invisible delete control. */
+.btn.profile-del:focus-visible { opacity: 1; }
+.btn.profile-del:hover { color: var(--rose); }
+.btn.profile-del.armed { opacity: 1; color: var(--rose); background: color-mix(in oklab, var(--rose) 14%, transparent); }
+.profile-del-label { font-size: var(--d-text-xs); }
+/* Matches .btn.profile-del's unarmed rendered width (min-width: 24px; else
+   the rem-sized trash icon + 12px padding + 2px border) so the built-in
+   row - which renders this instead of the button - doesn't lose that column
+   and stretch its flex:1 .profile-item wider than every other row. */
+.profile-del-spacer { width: max(24px, calc(0.625rem + 14px)); flex: none; }
+.profile-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+.profile-form { display: flex; align-items: center; gap: 4px; padding: 2px 4px 4px; }
+/* Shared by the inline conversation-name editor (#32) below. */
+.profile-input, .rename-field {
+  flex: 1; min-width: 0;
+  padding: 5px 7px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-bright); border-radius: var(--r-1);
+  color: var(--fg); font-family: var(--font-mono); font-size: var(--d-text-sm);
+}
+.profile-input:focus, .rename-field:focus { outline: none; border-color: var(--accent); }
+.profile-hint { padding: 4px 8px 5px; font-size: var(--d-text-xs); color: var(--fg-4); }
+.profile-hint.err { color: var(--rose); }
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex; align-items: stretch;
+  height: 32px;
+  background: var(--bg-window);
+  border-bottom: 1px solid var(--line);
+  padding-left: 4px;
+}
+.tab {
+  position: relative;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 14px;
+  height: 100%;
+  font-size: var(--d-text-sm);
+  color: var(--fg-3);
+  cursor: pointer;
+  border-right: 1px solid var(--line-soft);
+  transition: color 120ms, background 120ms;
+  min-width: 140px;
+}
+.tab:hover { color: var(--fg-2); background: var(--bg-hover); }
+.tab.active { color: var(--fg); background: var(--bg-surface); }
+.tab-bar-mark {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  transition: background 200ms var(--ease-out);
+}
+.tab-name {
+  font-family: var(--font-mono); font-size: var(--d-text-sm);
+  /* Flex child: needs min-width:0 to shrink below its content size, or
+     text-overflow is inert (same trap as .tab-profile below). An
+     auto-generated history title can run to a full sentence otherwise -
+     capped here so one tab can't squeeze every other tab off the bar. */
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* `folder · title` on a tab shown on its own (#46), tab bar and sidebar:
+   the folder gives way first, then the title. Flexbox hands each item a
+   share of the overflow weighted by shrink × width, and even a sub-pixel
+   share triggers the title's ellipsis, so the folder's weight is huge
+   (100:1 still clipped the last glyph of a title that fit). Its floor of
+   up to 4ch is set inline by TabLabel, capped at the folder's length. */
+.tab-label { display: flex; align-items: baseline; }
+.tab-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-prefix { flex: 0 100000 auto; color: var(--fg-4); }
+.tab-sep { flex: none; margin: 0 5px; color: var(--fg-5); }
+.tab-title { flex: 0 1 auto; min-width: 0; }
+/* Inline conversation-name editor (#32): tab bar, group popover, sidebar. */
+.rename-field { height: 20px; padding: 0 5px; border-color: var(--accent); }
+/* In the tab bar: same footprint as the .tab-name it replaces. */
+.tab > .rename-field { flex: none; width: 200px; }
+.tab-group-editing { cursor: default; }
+.tab-profile {
+  /* `.chip` is inline-flex, on which `text-overflow` is inert - the label
+     would hard-clip mid-glyph at max-width instead of ellipsizing. Single
+     text child here, so `.chip`'s align-items/gap are unused anyway. */
+  display: inline-block;
+  padding: 1px 6px;
+  max-width: 84px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tab-run-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+}
+.tab-run-dot.running { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 30%, transparent); animation: tab-run-pulse 1.6s ease-in-out infinite; }
+/* The agent yielded, a background job will wake it: a hollow ring, slower. */
+.tab-run-dot.background { box-shadow: inset 0 0 0 1.5px var(--accent); animation: tab-run-pulse 2.6s ease-in-out infinite; }
+.tab-run-dot.waiting-user { background: var(--amber); }
+.tab-run-dot.failed { background: var(--rose); }
+/* omp is retrying a failed request: an amber ring that spins. */
+.tab-run-dot.retrying { box-sizing: border-box; border: 1.5px solid var(--amber); border-top-color: transparent; animation: spin 1s linear infinite; }
+@keyframes tab-run-pulse {
+  /* Stepped like every endless loop (styles.css, motion utilities). */
+  0%, 100% { opacity: 1; animation-timing-function: steps(4); }
+  50% { opacity: 0.45; animation-timing-function: steps(4); }
+}
+.tab-close {
+  width: 1rem; height: 1rem; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px; opacity: 0; background: transparent; border: 0;
+  color: var(--fg-3);
+  transition: opacity 120ms, background 120ms;
+}
+/* Child combinator: a grouped chip's popover rows are descendants of the
+   `.tab` too, and must reveal their own × per row, not all at once. */
+.tab:hover > .tab-close { opacity: 1; }
+/* Not a `.btn`, so no global focus ring. */
+.tab > .tab-close:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: -1px; }
+.tab-close:hover { background: var(--bg-active); color: var(--fg); }
+
+.tab-add {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px;
+  background: transparent; border: 0; border-right: 1px solid var(--line-soft);
+  color: var(--fg-3);
+}
+.tab-add:hover { color: var(--accent); background: var(--bg-hover); }
+.tab-add.on { color: var(--accent); }
+
+/* ── Grouped tab chip (#27) ──────────────────────────────────────────── */
+.tab-count {
+  font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--fg-4);
+  padding: 0 5px; border-radius: 8px; background: var(--bg-hover); line-height: 15px;
+}
+.tab.active .tab-count { color: var(--fg-3); background: var(--bg-active); }
+/* Always visible, unlike .tab-close: it is the only way into the group. */
+.tab-group-trigger {
+  width: 1rem; height: 1rem; padding: 0; margin-left: -4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px; background: transparent; border: 0; color: var(--fg-3);
+}
+.tab-group-trigger:hover,
+.tab-group-trigger[aria-expanded="true"] { background: var(--bg-active); color: var(--fg); }
+/* Left-anchored, unlike .profile-pop: tabs start at the window's left edge,
+   so growing rightward from the chip never runs into `.window`'s clipping. */
+.tab-group-pop {
+  top: 100%; left: 0;
+  min-width: 220px; max-width: 320px;
+  cursor: default;
+}
+.tab-group-row { display: flex; align-items: center; gap: 2px; padding-right: 4px; border-radius: var(--r-1); }
+.tab-group-row:hover { background: var(--bg-hover); }
+.tab-group-row.active { background: var(--bg-surface); }
+.tab-group-item {
+  appearance: none; border: 0; background: transparent;
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: var(--r-1);
+  font-size: var(--d-text-sm); color: var(--fg-2);
+  text-align: left; cursor: pointer;
+}
+.tab-group-item:hover, .tab-group-row:hover .tab-group-item, .tab-group-row.active .tab-group-item { color: var(--fg); }
+.tab-group-pop > .tab-group-item:hover { background: var(--bg-hover); }
+/* Not a `.btn`: same missing-focus-ring fix as .profile-item. */
+.tab-group-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.tab-group-item .tab-name { flex: 1; }
+/* Fixed gutter so names align whether or not a row has a run dot. */
+.tab-group-dot { width: 10px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.tab-group-row:hover .tab-close { opacity: 1; }
+/* Not a `.btn` either, so no global focus ring. */
+.tab-group-row .tab-close:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: -1px; }
+.tab-group-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+
+.tabs-right {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  font-size: var(--d-text-xs);
+}
+
+/* Tab-bar pill announcing an available update. */
+.btn.update-pill {
+  height: 18px; padding: 0 8px;
+  border-radius: 9px;
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  color: var(--accent);
+  font-size: var(--d-text-xs);
+}
+/* Running version; click checks for updates. xs like its neighbours —
+   `.btn` alone would bump it to sm. */
+.btn.app-version {
+  height: 18px; padding: 0 4px;
+  color: var(--fg-4);
+  font-size: var(--d-text-xs);
+}
+

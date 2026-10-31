@@ -1,0 +1,112 @@
+/* Project sidebar (issue #27) ─────────────────────────────────────── */
+
+/* Row below the tab bar: sidebar + stage. The sidebar sits outside `.stage`,
+   so the stage's grid templates (rail / split pane) are untouched. Its
+   width is `--w-sidebar` (app/use-pane-widths.jsx); the row positions the
+   sidebar's resize handle (stage.css `.pane-resize.at-sidebar`). */
+.workspace { flex: 1; min-height: 0; display: flex; position: relative; }
+
+.project-sidebar {
+  width: var(--w-sidebar, 220px); flex: none; min-height: 0;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--bg-sidebar, var(--bg-window));
+}
+.psb-head {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 30px; padding: 0 6px 0 12px; flex: none;
+  font-size: var(--d-text-xs); color: var(--fg-4);
+  text-transform: lowercase; letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--line-soft);
+}
+.psb-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 6px 8px; }
+.psb-section {
+  padding: 10px 6px 4px;
+  font-size: var(--d-text-xs); color: var(--fg-5);
+  text-transform: lowercase; letter-spacing: 0.04em;
+}
+.psb-section:first-child { padding-top: 4px; }
+.psb-empty { padding: 4px 8px; font-size: var(--d-text-xs); color: var(--fg-5); }
+
+/* A row is a container; `.psb-main` is its primary click target. */
+.psb-row {
+  display: flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 6px; border-radius: var(--r-1);
+  font-size: var(--d-text-sm); color: var(--fg-3);
+}
+.psb-row:hover { background: var(--bg-hover); color: var(--fg-2); }
+.psb-row.active { background: var(--bg-surface); color: var(--fg); }
+/* Member rows line up under their project's name: row padding + chevron +
+   gap + folder icon + gap; the chevron box and the icon are rem-sized. */
+.psb-row.psb-tab { padding-left: calc(18px + 1.5625rem); }
+.psb-main {
+  appearance: none; border: 0; background: transparent; padding: 0;
+  flex: 1; min-width: 0; height: 100%;
+  display: flex; align-items: center; gap: 6px;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+/* Not a `.btn`: no global focus ring otherwise (same as .profile-item). */
+.psb-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-radius: var(--r-1); }
+.psb-editing { cursor: default; }
+.psb-name {
+  flex: 1; min-width: 0;
+  font-family: var(--font-mono); font-size: var(--d-text-sm);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.psb-parent { margin-left: 6px; font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--fg-5); }
+.psb-row .tab-profile { font-size: var(--d-text-xs); }
+
+.psb-chev {
+  width: 0.875rem; height: 0.875rem; flex: none; padding: 0; border: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--fg-4);
+  transition: transform 120ms;
+}
+.psb-chev.open { transform: rotate(90deg); }
+.psb-chev-spacer { width: 0.875rem; flex: none; }
+
+/* Hover actions replace the count. `display: none` also takes them out of
+   the tab order, so reveal them on focus-within too: tabbing onto a row's
+   main button then makes its actions the next stops. */
+.psb-actions { display: none; align-items: center; gap: 2px; }
+.psb-row:hover .psb-actions,
+.psb-row:focus-within .psb-actions { display: inline-flex; }
+.psb-row:hover .psb-count,
+.psb-row:focus-within .psb-count { display: none; }
+.psb-act {
+  width: 1.125rem; height: 1.125rem; padding: 0; border: 0; border-radius: 4px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--fg-3);
+}
+.psb-act:hover { background: var(--bg-active); color: var(--fg); }
+.psb-act:focus-visible,
+.psb-chev:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.psb-foot {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  height: 32px; padding: 0 12px;
+  border: 0; border-top: 1px solid var(--line-soft);
+  background: transparent; color: var(--fg-3);
+  font-size: var(--d-text-sm); text-align: left; cursor: pointer;
+}
+.psb-foot:hover { color: var(--accent); background: var(--bg-hover); }
+.psb-foot:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ── Drag to reorder (#40): tab bar, group dropdown and sidebar ─────────
+   `ui/use-drag-reorder.js` tags items with their axis and marks the
+   dragged one and the slot's neighbour. The slot is an accent edge on the
+   side the item will land, drawn above the item's children (an inset
+   shadow would sit under a sidebar row's own background). */
+body.reordering, body.reordering * { cursor: grabbing !important; user-select: none; }
+/* The children, not the item: opacity on a chip would make it a stacking
+   context and paint its open dropdown under the stage while it is dragged. */
+.reorder-src > :not(.tab-group-pop) { opacity: 0.5; }
+.drop-before, .drop-after { position: relative; }
+.drop-before::after, .drop-after::after {
+  content: ""; position: absolute; z-index: 1; pointer-events: none;
+  background: var(--accent);
+}
+[data-reorder-axis="x"].drop-before::after { top: 0; bottom: 0; left: 0; width: 2px; }
+[data-reorder-axis="x"].drop-after::after  { top: 0; bottom: 0; right: 0; width: 2px; }
+[data-reorder-axis="y"].drop-before::after { left: 0; right: 0; top: 0; height: 2px; }
+[data-reorder-axis="y"].drop-after::after  { left: 0; right: 0; bottom: 0; height: 2px; }
+

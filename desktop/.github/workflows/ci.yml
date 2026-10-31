@@ -1,0 +1,23 @@
+# CI — runs the shared test suite (tests.yml) on every push and PR.
+# No bundle build here — that lives in release.yml.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src-tauri/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'scripts/**'
+      - '.github/scripts/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml

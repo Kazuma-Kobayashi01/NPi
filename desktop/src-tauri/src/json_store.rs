@@ -1,0 +1,1145 @@
+//! Atomic write + snapshot/rollback primitives for any JSON (or other small)
+//! state this app persists to disk — approval-rule files today, session
+//! metadata in the future. Three independent pieces:
+//!
+//! - [`write_atomic`] / [`sweep_orphan_temp_files`] — write-to-temp-then-rename
+//!   so a crash mid-write never corrupts the destination file, plus cleanup
+//!   for temp files left behind by a previous crash; [`read_strict`] /
+//!   [`read_or_default`] / [`update_strict`] read and rewrite JSON with it.
+//! - [`SnapshotRing`] — a small content-addressed history of a file's past
+//!   contents, so a bad write (or a bad read of a good write) can be rolled
+//!   back to the last known-good version.
+//! - [`with_lock`] — a best-effort, cross-process advisory lock with
+//!   staleness recovery, for guarding the read-modify-write cycle around a
+//!   shared file.
+
+use crate::supervisor::pid_is_alive;
+use std::collections::HashSet;
+use std::fmt::Write as _;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, ErrorKind, Write as _};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+
+// ── atomic write ────────────────────────────────────────────────────────────
+
+/// Monotonic counter appended to temp file names so two writes from the same
+/// process land on different temp files even within the same millisecond.
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Destinations this process has already swept for orphan temp files.
+static SWEPT: Mutex<Option<HashSet<PathBuf>>> = Mutex::new(None);
+
+/// `true` the first time this process writes to `path` — the only time a
+/// pre-existing-orphan sweep can find anything. A poisoned lock answers
+/// `true` (sweep anyway): the sweep is best-effort and idempotent, so
+/// repeating it is always safe, whereas skipping it could leak files.
+fn first_write_to(path: &Path) -> bool {
+    let Ok(mut swept) = SWEPT.lock() else {
+        return true;
+    };
+    swept
+        .get_or_insert_with(HashSet::new)
+        .insert(path.to_path_buf())
+}
+
+/// Build the temp file path [`write_atomic`] uses for `path`: same directory,
+/// named `<file_name>.<pid>-<counter>.tmp`. Pulled out as a pure function so
+/// the naming scheme is unit-testable without touching the filesystem.
+fn temp_path_for(path: &Path) -> PathBuf {
+    let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("state");
+    path.with_file_name(format!("{file_name}.{}-{counter}.tmp", std::process::id()))
+}
+
+/// Write `bytes` to `path` without ever leaving a partially-written file at
+/// the destination. Writes to a uniquely-named temp file in `path`'s
+/// directory, `fsync`s it, then renames it over `path`.
+///
+/// `rename` is atomic on POSIX when source and destination share a
+/// filesystem: the destination always has either the old contents or the
+/// new ones, never a partial write. On Windows, `std::fs::rename` maps to
+/// `MoveFileExW`/`SetFileInformationByHandle` with replace semantics, so the
+/// destination is still fully replaced — but the platform does not document
+/// that replace step as atomic the way POSIX `rename(2)` is, so a crash
+/// exactly during the replace is not covered by the same guarantee there.
+///
+/// The **first** write to a given destination in this process also runs
+/// [`sweep_orphan_temp_files`] for `path`'s directory and file name,
+/// best-effort, so temp files abandoned by a process that crashed
+/// mid-write on a previous run don't pile up forever. Subsequent writes
+/// to the same destination skip it: the orphans it targets are those left
+/// by *earlier* runs, a set fixed before this process started, and this
+/// process removes its own temp file on every failure path below. Sweeping
+/// on every write would mean a full `read_dir` per write for a set that
+/// cannot have grown.
+///
+/// # Errors
+/// Returns an error if the temp file can't be created/written/synced, or if
+/// the final rename fails (e.g. `path`'s directory doesn't exist, or a
+/// permissions problem). The temp file is removed best-effort on any
+/// failure path; the original error is always returned, never masked by a
+/// cleanup failure.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if let Some(base) = path.file_name().and_then(|n| n.to_str()) {
+        if first_write_to(path) {
+            let _ = sweep_orphan_temp_files(dir, base);
+        }
+    }
+
+    let temp_path = temp_path_for(path);
+    let write_result = File::create(&temp_path).and_then(|mut file| {
+        file.write_all(bytes)?;
+        file.sync_all()
+    });
+
+    match write_result {
+        Ok(()) => {
+            let rename_result = fs::rename(&temp_path, path);
+            if rename_result.is_err() {
+                let _ = fs::remove_file(&temp_path);
+            }
+            rename_result
+        }
+        Err(err) => {
+            let _ = fs::remove_file(&temp_path);
+            Err(err)
+        }
+    }
+}
+
+/// Read `path` as JSON for state a bad file must not silently replace
+/// (keybinding overlay, terminal settings): `NotFound` reads as
+/// `T::default()`; any other failure (IO error, malformed JSON) is an `Err`.
+///
+/// # Errors
+/// The IO or JSON error's message.
+pub fn read_strict<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
+    match fs::read(path) {
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(T::default()),
+        Err(e) => Err(e.to_string()),
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string()),
+    }
+}
+
+/// Read `path` as JSON for disposable data (recent projects, open tabs):
+/// [`read_strict`], except that a failure also reads as `T::default()`
+/// after logging it — the next write replaces the bad file.
+pub fn read_or_default<T: DeserializeOwned + Default>(path: &Path) -> T {
+    read_strict(path).unwrap_or_else(|e| {
+        eprintln!(
+            "[omp-desktop] {} unreadable, reading as empty: {e}",
+            path.display()
+        );
+        T::default()
+    })
+}
+
+/// Locked read-modify-write of the JSON file at `path`, under
+/// [`with_lock_str`] on `lock`: read it with [`read_strict`], let `modify`
+/// edit it, write it back atomically **only when `modify` reports a change**
+/// (a no-op must not rewrite the file, or create it on a fresh install),
+/// then hand the result to `commit` — still under the lock, so a caller's
+/// in-memory copy updated there follows the file's write order.
+///
+/// A file that exists but cannot be read is never overwritten: that would
+/// silently discard whatever the user had stored there.
+///
+/// # Errors
+/// `"<path> is unreadable: …"` when the read fails, otherwise the lock,
+/// serialisation or write error.
+pub fn update_strict<T, R>(
+    path: &Path,
+    lock: &Path,
+    modify: impl FnOnce(&mut T) -> bool,
+    commit: impl FnOnce(T) -> R,
+) -> Result<R, String>
+where
+    T: Serialize + DeserializeOwned + Default,
+{
+    with_lock_str(lock, || {
+        let mut data: T =
+            read_strict(path).map_err(|e| format!("{} is unreadable: {e}", path.display()))?;
+        if modify(&mut data) {
+            let bytes = serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?;
+            // `with_lock` already created the lock file's directory, which
+            // callers keep next to `path`.
+            write_atomic(path, &bytes).map_err(|e| e.to_string())?;
+        }
+        Ok(commit(data))
+    })
+}
+
+/// Remove leftover `<base_name>.*.tmp` files in `dir` — the residue of a
+/// process that crashed between creating a [`write_atomic`] temp file and
+/// renaming it over the destination. `write_atomic` calls this itself,
+/// scoped to its own directory/base name, before every write; it's also
+/// exposed publicly for callers who want to sweep a directory once at
+/// startup regardless of whether a write happens this run.
+///
+/// # Errors
+/// Returns an error if `dir` can't be read. Individual file removals inside
+/// the sweep are best-effort: a file that disappears or can't be removed
+/// (e.g. a permissions race) is silently skipped rather than aborting the
+/// whole sweep.
+pub fn sweep_orphan_temp_files(dir: &Path, base_name: &str) -> io::Result<usize> {
+    let prefix = format!("{base_name}.");
+    let mut removed = 0usize;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let has_tmp_extension = Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("tmp"));
+        if name.starts_with(&prefix) && has_tmp_extension && fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+// ── content hashing ─────────────────────────────────────────────────────────
+
+/// Hex-encoded SHA-256 of `bytes`, used as the content-addressed snapshot id.
+/// SHA-256 (rather than a cheaper non-cryptographic hash) is deliberate:
+/// snapshot ids are meant to be tamper-evident, so [`SnapshotRing::restore`]
+/// and [`SnapshotRing::restore_latest`] can detect on-disk corruption by
+/// simply re-hashing and comparing to the filename.
+pub fn hex_sha256(bytes: &[u8]) -> String {
+    hex_lower(&Sha256::digest(bytes))
+}
+
+/// Lowercase hex of `bytes` (a digest), two characters per byte.
+pub fn hex_lower(bytes: &[u8]) -> String {
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
+}
+
+// ── snapshot ring ────────────────────────────────────────────────────────────
+
+/// One snapshot's on-disk identity: content-hash id and last-modified time.
+/// Used to order candidates newest-first (`restore_latest`) and to pick
+/// prune victims oldest-first (`prune`).
+struct SnapshotEntry {
+    id: String,
+    modified: SystemTime,
+}
+
+/// A small content-addressed history of a file's past contents, kept as
+/// `<dir>/<hex_sha256>.json`. After each new snapshot, entries beyond
+/// `retain` (oldest first, by file modified time) are pruned so the ring
+/// never grows without bound.
+///
+/// Ordering comes from each snapshot file's own mtime, so no metadata
+/// sidecar is written: a `<id>.meta.json` companion used to be, but
+/// nothing ever read it back. [`Self::prune`] still deletes any such file
+/// left over from an older version of this module.
+pub struct SnapshotRing {
+    dir: PathBuf,
+    retain: usize,
+}
+
+impl SnapshotRing {
+    /// Create a ring rooted at `dir`, retaining the `retain` most recent
+    /// snapshots. `dir` is created lazily on the first [`snapshot`] call,
+    /// not here — constructing a `SnapshotRing` never touches the
+    /// filesystem.
+    ///
+    /// [`snapshot`]: SnapshotRing::snapshot
+    #[must_use]
+    pub const fn new(dir: PathBuf, retain: usize) -> Self {
+        Self { dir, retain }
+    }
+
+    fn snapshot_path(&self, id: &str) -> PathBuf {
+        self.dir.join(format!("{id}.json"))
+    }
+
+    /// Legacy metadata sidecar path. Nothing writes one any more; [`prune`]
+    /// still removes any left behind by an older version of this module.
+    ///
+    /// [`prune`]: SnapshotRing::prune
+    fn legacy_meta_path(&self, id: &str) -> PathBuf {
+        self.dir.join(format!("{id}.meta.json"))
+    }
+
+    /// Write `bytes` as a new snapshot, returning its content-hash id. If a
+    /// snapshot with identical content already exists, this overwrites its
+    /// file (an atomic no-op content-wise) and refreshes its mtime, so an
+    /// unchanged file re-saved repeatedly doesn't create duplicate ring
+    /// entries. Prunes snapshots beyond `retain` afterward, oldest (by
+    /// mtime) first.
+    ///
+    /// # Errors
+    /// Returns an error if `dir` can't be created or if writing the
+    /// snapshot fails.
+    pub fn snapshot(&self, bytes: &[u8]) -> io::Result<String> {
+        fs::create_dir_all(&self.dir)?;
+        let id = hex_sha256(bytes);
+        write_atomic(&self.snapshot_path(&id), bytes)?;
+        self.prune()?;
+        Ok(id)
+    }
+
+    /// List snapshot ids present in `dir` with their mtimes, newest first.
+    /// Missing directory (no snapshots taken yet) is treated as empty
+    /// rather than an error.
+    fn list_entries(&self) -> io::Result<Vec<SnapshotEntry>> {
+        let read_dir = match fs::read_dir(&self.dir) {
+            Ok(rd) => rd,
+            Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) => return Err(err),
+        };
+
+        let mut entries = Vec::new();
+        for entry in read_dir {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            // Sidecars are `<id>.meta.json`; stripping `.json` from those
+            // would wrongly yield `<id>.meta` as an id, so skip them.
+            let Some(id) = name.strip_suffix(".json").filter(|id| {
+                !Path::new(id)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("meta"))
+            }) else {
+                continue;
+            };
+            let modified = entry.metadata()?.modified()?;
+            entries.push(SnapshotEntry {
+                id: id.to_string(),
+                modified,
+            });
+        }
+        entries.sort_by_key(|e| std::cmp::Reverse(e.modified));
+        Ok(entries)
+    }
+
+    /// Remove snapshots beyond `retain`, oldest first — along with any
+    /// legacy `<id>.meta.json` sidecar an older version of this module
+    /// wrote next to them. Best-effort: a removal failure for one stale
+    /// entry doesn't abort pruning the rest.
+    fn prune(&self) -> io::Result<()> {
+        for stale in self.list_entries()?.iter().skip(self.retain) {
+            let _ = fs::remove_file(self.snapshot_path(&stale.id));
+            let _ = fs::remove_file(self.legacy_meta_path(&stale.id));
+        }
+        Ok(())
+    }
+
+    /// Read the most recent valid snapshot's bytes. A snapshot whose
+    /// content no longer hashes to its filename (on-disk corruption — a
+    /// crash mid-write outside this module, disk bitrot, manual editing) is
+    /// quarantined by renaming it to `<id>.corrupt`, and the next-most-recent
+    /// snapshot is tried instead. Returns `Ok(None)` only once every
+    /// candidate has been exhausted without finding a valid one.
+    ///
+    /// # Errors
+    /// Returns an error if the snapshot directory can't be listed, or a
+    /// candidate file exists but can't be read for a reason other than it
+    /// having disappeared underneath us.
+    pub fn restore_latest(&self) -> io::Result<Option<Vec<u8>>> {
+        for entry in self.list_entries()? {
+            let path = self.snapshot_path(&entry.id);
+            let bytes = match fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(err) if err.kind() == ErrorKind::NotFound => continue,
+                Err(err) => return Err(err),
+            };
+            if hex_sha256(&bytes) == entry.id {
+                return Ok(Some(bytes));
+            }
+            let _ = fs::rename(&path, self.dir.join(format!("{}.corrupt", entry.id)));
+        }
+        Ok(None)
+    }
+
+    /// Restore a specific snapshot by its content-hash id. Unlike
+    /// [`restore_latest`], this never quarantines on a hash mismatch — it's
+    /// a targeted read of a specific id, so corruption is reported as an
+    /// error rather than silently worked around.
+    ///
+    /// Public rollback-by-id API for a future "pick a version to restore"
+    /// UI. `restore_latest` is this crate's only current consumer of the
+    /// ring's read path (automatic recovery in `approval::RuleBook`);
+    /// nothing yet needs a targeted restore, but the method is exercised
+    /// by this module's own tests (`restore_by_id_reports_corruption_...`)
+    /// and kept rather than deleted since rewriting it later would just
+    /// reproduce this same, already-verified logic.
+    ///
+    /// # Errors
+    /// Returns an `io::Error` if the snapshot file doesn't exist or can't
+    /// be read, or one of kind [`ErrorKind::InvalidData`] if its content
+    /// doesn't hash to `id`.
+    #[allow(dead_code)]
+    pub fn restore(&self, id: &str) -> io::Result<Vec<u8>> {
+        let bytes = fs::read(self.snapshot_path(id))?;
+        if hex_sha256(&bytes) == id {
+            Ok(bytes)
+        } else {
+            Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!("snapshot {id} content does not match its hash"),
+            ))
+        }
+    }
+}
+
+// ── advisory lock ────────────────────────────────────────────────────────────
+
+/// Number of takeover attempts against an apparently-stale lock before
+/// giving up and reporting it as held.
+const LOCK_TAKEOVER_ATTEMPTS: u32 = 10;
+/// Delay between takeover attempts. This reduces, but cannot eliminate, the
+/// race against another process independently deciding the same lock is
+/// stale — see [`with_lock`]'s doc comment.
+const LOCK_TAKEOVER_DELAY: Duration = Duration::from_millis(25);
+
+/// Per-process, per-acquisition nonce appended to the lock token so two
+/// acquisitions minted by this process within the same wall-clock second
+/// (e.g. two `spawn_blocking` threads racing `with_lock` on the same
+/// path, see `lib.rs::with_profile_store`) still produce distinct
+/// tokens — `LockGuard`'s ownership check on drop depends on its token
+/// being unique to its own acquisition.
+static LOCK_NONCE: AtomicU64 = AtomicU64::new(0);
+
+/// Render this process's lock-ownership marker:
+/// `{pid}:{unix_timestamp}:{nonce}`. The nonce is a per-process monotonic
+/// counter, not part of the staleness calculation (`parse_lock_contents`
+/// / `lock_is_stale` only look at pid and timestamp) — it exists purely
+/// so two tokens minted in the same second are never byte-identical.
+fn lock_contents() -> String {
+    let created_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let nonce = LOCK_NONCE.fetch_add(1, Ordering::Relaxed);
+    format!("{}:{created_at}:{nonce}", std::process::id())
+}
+
+/// Parse `pid:timestamp[:nonce]` lock file contents. The optional
+/// trailing nonce (see [`lock_contents`]) disambiguates same-second
+/// tokens but plays no part in staleness, so it's parsed and discarded
+/// here. Returns `None` if the contents aren't in the expected shape
+/// (e.g. truncated by an interrupted write, or from an incompatible
+/// future format) — treated as stale by the caller, since there's
+/// nothing sensible to compare against.
+fn parse_lock_contents(contents: &str) -> Option<(u32, u64)> {
+    let mut parts = contents.trim().splitn(3, ':');
+    let pid = parts.next()?.parse().ok()?;
+    let created_at = parts.next()?.parse().ok()?;
+    Some((pid, created_at))
+}
+
+/// Whether a lock file with the given contents should be considered
+/// abandoned: either its owning pid is no longer alive, or `stale_after`
+/// has elapsed since it recorded its timestamp.
+fn lock_is_stale(contents: &str, stale_after: Duration) -> bool {
+    let Some((pid, created_at)) = parse_lock_contents(contents) else {
+        return true;
+    };
+    if !pid_is_alive(pid) {
+        return true;
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    Duration::from_secs(now.saturating_sub(created_at)) >= stale_after
+}
+
+/// RAII guard that removes the lock file on drop, so a panic inside `f`
+/// still releases the lock instead of wedging it for every future caller.
+///
+/// Ownership-checked: `token` is the exact `{pid}:{unix_timestamp}` this
+/// process wrote when it acquired the lock. `lock_is_stale`'s comparison is
+/// wall-clock based (see [`STORE_LOCK_STALE_AFTER`]'s doc comment), so
+/// another caller can legitimately decide this lock is abandoned and take
+/// it over while this guard is still alive; an unconditional remove on drop
+/// would then delete *their* lock file instead of this one, letting a third
+/// caller in. Comparing the token before removing means this guard only
+/// ever cleans up the lock file it itself created.
+struct LockGuard<'a> {
+    path: &'a Path,
+    token: String,
+}
+
+impl Drop for LockGuard<'_> {
+    fn drop(&mut self) {
+        // Best-effort: an unreadable lock file (already removed, permission
+        // race) is left alone rather than panicking or retrying — the same
+        // posture as every other cleanup path in this module.
+        if fs::read_to_string(self.path).is_ok_and(|contents| contents.trim() == self.token) {
+            let _ = fs::remove_file(self.path);
+        }
+    }
+}
+
+/// Run `f` while holding an advisory, cross-process exclusive lock at
+/// `lock_path`.
+///
+/// This is *advisory*, not a correctness guarantee: it only excludes other
+/// callers that also go through `with_lock` on the same path, and the
+/// stale-lock takeover below has a small (bounded by
+/// [`LOCK_TAKEOVER_ATTEMPTS`] × [`LOCK_TAKEOVER_DELAY`]) race window against
+/// another process independently deciding the same lock is stale at the
+/// same moment. It's meant to reduce accidental concurrent
+/// read-modify-write races on a shared JSON file, not to provide
+/// `flock`-grade mutual exclusion.
+///
+/// The lock file is created with `create_new` (which atomically fails if
+/// the file already exists) holding this call's lock-ownership marker
+/// (see [`lock_contents`]). If creation
+/// fails because the file exists, its contents are inspected: if the owning
+/// pid is no longer alive (see [`pid_is_alive`]) or
+/// `stale_after` has elapsed since its timestamp, the lock is considered
+/// abandoned and is forcibly taken over (best-effort remove, then retry —
+/// up to [`LOCK_TAKEOVER_ATTEMPTS`] times). The lock file is removed after
+/// `f` returns (or panics) only if it still carries the token this call
+/// wrote — see [`LockGuard`].
+///
+/// # Errors
+/// Returns an error if the lock is currently held by a live, non-stale
+/// owner (or was still contested after every takeover attempt), or if `f`
+/// itself returns an error.
+pub fn with_lock<T>(
+    lock_path: &Path,
+    stale_after: Duration,
+    f: impl FnOnce() -> io::Result<T>,
+) -> io::Result<T> {
+    // Callers may pass a path under a config directory that doesn't exist
+    // yet (e.g. a fresh install's app_config_dir()) — the lock kit must not
+    // require a pre-existing directory any more than write_atomic does.
+    if let Some(dir) = lock_path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        fs::create_dir_all(dir)?;
+    }
+    let mut attempts = 0u32;
+    let token = loop {
+        let candidate = lock_contents();
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(lock_path)
+        {
+            Ok(mut file) => {
+                file.write_all(candidate.as_bytes())?;
+                file.sync_all()?;
+                break candidate;
+            }
+            Err(err) if err.kind() == ErrorKind::AlreadyExists => {
+                let contents = fs::read_to_string(lock_path).unwrap_or_default();
+                if attempts >= LOCK_TAKEOVER_ATTEMPTS || !lock_is_stale(&contents, stale_after) {
+                    return Err(io::Error::new(ErrorKind::WouldBlock, err));
+                }
+                let _ = fs::remove_file(lock_path);
+                attempts += 1;
+                std::thread::sleep(LOCK_TAKEOVER_DELAY);
+            }
+            Err(err) => return Err(err),
+        }
+    };
+
+    let _guard = LockGuard {
+        path: lock_path,
+        token,
+    };
+    f()
+}
+
+/// Stale-after window used by the `String`-error stores (approval rules,
+/// profiles) — generous under normal conditions, but a heuristic, not a
+/// guarantee: `lock_is_stale` compares wall-clock seconds, so an NTP step
+/// or a VM/laptop resume can make a fresh lock look abandoned and trigger
+/// an immediate takeover. See [`with_lock`]'s own "not `flock`-grade"
+/// doc comment; [`LockGuard`]'s token check bounds the resulting damage to
+/// a lost update, not a deleted-out-from-under-you lock file.
+const STORE_LOCK_STALE_AFTER: Duration = Duration::from_secs(5);
+
+/// [`with_lock`] for callers whose read-modify-write reports `String`
+/// errors: `f`'s error is tunnelled through `io::Error` and flattened back
+/// to its message, so a store module never has to know about `io::Error`.
+/// A live, non-stale contending lock — re-wrapped by [`with_lock`] as
+/// `ErrorKind::WouldBlock` so it can never be confused with an unrelated
+/// `ErrorKind::AlreadyExists` (e.g. `fs::create_dir_all` racing a
+/// same-named file) — is rendered as a human-readable sentence instead
+/// of the raw `io::Error` text (`"File exists (os error 17)"`) — the
+/// message a UI like the profile menu or the approval prompt ends up
+/// displaying verbatim. Every other error kind renders via `Display` as
+/// before.
+///
+/// # Errors
+/// Same as [`with_lock`], rendered as a `String`.
+pub fn with_lock_str<T>(
+    lock_path: &Path,
+    f: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    with_lock(lock_path, STORE_LOCK_STALE_AFTER, || {
+        f().map_err(io::Error::other)
+    })
+    .map_err(|e| {
+        if e.kind() == ErrorKind::WouldBlock {
+            "another window is updating this file; try again".to_string()
+        } else {
+            e.to_string()
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64 as TestCounter, Ordering as TestOrdering};
+
+    static TEST_DIR_COUNTER: TestCounter = TestCounter::new(0);
+
+    /// Fresh, uniquely-named scratch directory under the system temp dir,
+    /// so parallel test runs never collide. No external `tempfile` crate
+    /// needed — a process-id + monotonic-counter suffix is unique enough.
+    fn unique_test_dir(label: &str) -> PathBuf {
+        let n = TEST_DIR_COUNTER.fetch_add(1, TestOrdering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "omp_json_store_test_{label}_{}_{n}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("create unique test dir");
+        dir
+    }
+
+    #[test]
+    fn read_or_default_reads_missing_and_malformed_files_as_default() {
+        let dir = unique_test_dir("read_or_default");
+        let path = dir.join("data.json");
+        assert_eq!(read_or_default::<Vec<u32>>(&path), Vec::<u32>::new());
+
+        fs::write(&path, b"{ not json").expect("write");
+        assert_eq!(read_or_default::<Vec<u32>>(&path), Vec::<u32>::new());
+
+        fs::write(&path, b"[1, 2]").expect("write");
+        assert_eq!(read_or_default::<Vec<u32>>(&path), vec![1, 2]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_strict_defaults_only_a_missing_file() {
+        let dir = unique_test_dir("read_strict");
+        let path = dir.join("data.json");
+        assert_eq!(read_strict::<Vec<u32>>(&path), Ok(Vec::new()));
+
+        fs::write(&path, b"{ not json").expect("write");
+        assert!(read_strict::<Vec<u32>>(&path).is_err());
+
+        fs::write(&path, b"[1, 2]").expect("write");
+        assert_eq!(read_strict::<Vec<u32>>(&path), Ok(vec![1, 2]));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_strict_writes_only_changes_and_commits_under_the_lock() {
+        let dir = unique_test_dir("update_strict");
+        let path = dir.join("data.json");
+        let lock = path.with_extension("lock");
+
+        // A no-op on a fresh install creates no file.
+        let seen = update_strict(&path, &lock, |_: &mut Vec<u32>| false, |v| v);
+        assert_eq!(seen, Ok(Vec::new()));
+        assert!(!path.exists(), "an unchanged update must not write");
+
+        let seen = update_strict(
+            &path,
+            &lock,
+            |v: &mut Vec<u32>| {
+                v.push(7);
+                true
+            },
+            |v| {
+                assert!(lock.exists(), "commit runs while the lock is held");
+                v
+            },
+        );
+        assert_eq!(seen, Ok(vec![7]));
+        assert_eq!(read_strict::<Vec<u32>>(&path), Ok(vec![7]));
+        assert!(!lock.exists(), "the lock is released afterwards");
+
+        // An unchanged update leaves the bytes alone.
+        let before = fs::read(&path).expect("read");
+        let seen = update_strict(&path, &lock, |_: &mut Vec<u32>| false, |v| v);
+        assert_eq!(seen, Ok(vec![7]));
+        assert_eq!(fs::read(&path).expect("read"), before);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_strict_refuses_to_overwrite_an_unreadable_file() {
+        let dir = unique_test_dir("update_strict_corrupt");
+        let path = dir.join("data.json");
+        let lock = path.with_extension("lock");
+        fs::write(&path, b"{ not json").expect("write");
+
+        let mut modified = false;
+        let err = update_strict(
+            &path,
+            &lock,
+            |v: &mut Vec<u32>| {
+                modified = true;
+                v.push(1);
+                true
+            },
+            |v| v,
+        )
+        .expect_err("a corrupt file is an error");
+        assert!(err.contains("is unreadable"), "{err}");
+        assert!(!modified, "modify never sees a corrupt file");
+        assert_eq!(fs::read(&path).expect("read"), b"{ not json");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hex_sha256_matches_known_vectors() {
+        // The hex digest is persisted (snapshot filenames, approval project
+        // keys), so a hashing-crate upgrade that changed the output or its
+        // formatting would orphan existing on-disk state.
+        assert_eq!(
+            hex_sha256(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hex_sha256(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    /// Spawn a trivial child process, wait for it to exit, and return its
+    /// now-dead pid — a pid guaranteed not to belong to any live process
+    /// (barring extremely unlikely pid reuse in the instant between wait
+    /// and use, which every test in this module tolerates the same way any
+    /// real caller would). Unix-only because it spawns `true`, like its one
+    /// caller.
+    #[cfg(unix)]
+    fn spawn_and_reap_dead_pid() -> u32 {
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn short-lived helper process");
+        let pid = child.id();
+        child.wait().expect("wait for short-lived helper process");
+        pid
+    }
+
+    #[test]
+    fn write_atomic_round_trips_content() {
+        let dir = unique_test_dir("roundtrip");
+        let target = dir.join("state.json");
+
+        write_atomic(&target, b"{\"a\":1}").expect("write_atomic");
+
+        assert_eq!(fs::read(&target).expect("read back"), b"{\"a\":1}");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_atomic_leaves_no_tmp_file_and_sweeps_preexisting_ones() {
+        let dir = unique_test_dir("sweep_on_write");
+        let target = dir.join("state.json");
+
+        // Simulate a temp file abandoned by a crash on a previous run.
+        let orphan = dir.join("state.json.9999-1.tmp");
+        fs::write(&orphan, b"partial").expect("write orphan temp file");
+
+        write_atomic(&target, b"{\"a\":1}").expect("write_atomic");
+
+        assert_eq!(fs::read(&target).expect("read back"), b"{\"a\":1}");
+        assert!(
+            !orphan.exists(),
+            "pre-existing orphan .tmp must be swept by write_atomic"
+        );
+
+        let leftover_tmp = fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(Result::ok)
+            .any(|e| e.file_name().to_string_lossy().ends_with(".tmp"));
+        assert!(
+            !leftover_tmp,
+            "write_atomic must not leave its own temp file behind on success"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn sweep_orphan_temp_files_matches_pattern_and_ignores_unrelated_files() {
+        let dir = unique_test_dir("sweep_pattern");
+        fs::write(dir.join("state.json.111-0.tmp"), b"x").expect("write");
+        fs::write(dir.join("state.json.222-1.tmp"), b"y").expect("write");
+        fs::write(dir.join("other.json.111-0.tmp"), b"z").expect("write");
+        fs::write(dir.join("state.json"), b"keep").expect("write");
+
+        let removed = sweep_orphan_temp_files(&dir, "state.json").expect("sweep");
+
+        assert_eq!(removed, 2);
+        assert!(
+            dir.join("other.json.111-0.tmp").exists(),
+            "unrelated base name must survive"
+        );
+        assert!(
+            dir.join("state.json").exists(),
+            "the real file must survive"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn snapshot_ring_prunes_beyond_retain() {
+        let dir = unique_test_dir("ring_retain");
+        let ring = SnapshotRing::new(dir.clone(), 2);
+
+        ring.snapshot(b"one").expect("snapshot 1");
+        std::thread::sleep(Duration::from_millis(10));
+        ring.snapshot(b"two").expect("snapshot 2");
+        std::thread::sleep(Duration::from_millis(10));
+        let id3 = ring.snapshot(b"three").expect("snapshot 3");
+
+        let remaining = ring.list_entries().expect("list entries");
+        assert_eq!(
+            remaining.len(),
+            2,
+            "only `retain` snapshots should survive pruning"
+        );
+        assert!(
+            remaining.iter().any(|e| e.id == id3),
+            "the newest snapshot must never be pruned"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn restore_latest_returns_most_recent_valid_snapshot() {
+        let dir = unique_test_dir("ring_latest");
+        let ring = SnapshotRing::new(dir.clone(), 5);
+        ring.snapshot(b"old").expect("snapshot old");
+        std::thread::sleep(Duration::from_millis(10));
+        ring.snapshot(b"new").expect("snapshot new");
+
+        let restored = ring.restore_latest().expect("restore_latest");
+        assert_eq!(restored, Some(b"new".to_vec()));
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn restore_latest_quarantines_corrupt_snapshot_and_falls_back() {
+        let dir = unique_test_dir("ring_corrupt");
+        let ring = SnapshotRing::new(dir.clone(), 5);
+        ring.snapshot(b"good").expect("snapshot good");
+        std::thread::sleep(Duration::from_millis(10));
+        let bad_id = ring.snapshot(b"bad").expect("snapshot bad");
+
+        // Simulate on-disk corruption: tamper with the newer snapshot's
+        // bytes directly, so its content no longer hashes to its filename.
+        fs::write(ring.snapshot_path(&bad_id), b"tampered").expect("corrupt snapshot");
+
+        let restored = ring.restore_latest().expect("restore_latest");
+        assert_eq!(
+            restored,
+            Some(b"good".to_vec()),
+            "must fall back to the next-most-recent valid snapshot"
+        );
+        assert!(
+            dir.join(format!("{bad_id}.corrupt")).exists(),
+            "corrupt snapshot must be quarantined"
+        );
+        assert!(
+            !ring.snapshot_path(&bad_id).exists(),
+            "quarantined snapshot must be renamed away from its id path"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn restore_by_id_reports_corruption_without_quarantining() {
+        let dir = unique_test_dir("ring_restore_id");
+        let ring = SnapshotRing::new(dir.clone(), 5);
+        let id = ring.snapshot(b"payload").expect("snapshot");
+        fs::write(ring.snapshot_path(&id), b"tampered").expect("corrupt snapshot");
+
+        let err = ring.restore(&id).expect_err("corrupted content must error");
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
+        assert!(
+            ring.snapshot_path(&id).exists(),
+            "explicit restore-by-id must not quarantine on mismatch"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn restore_latest_is_none_when_ring_is_empty() {
+        let dir = unique_test_dir("ring_empty");
+        let ring = SnapshotRing::new(dir.clone(), 5);
+
+        assert_eq!(
+            ring.restore_latest().expect("restore_latest on empty ring"),
+            None
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn with_lock_takes_over_when_owner_pid_is_dead() {
+        let dir = unique_test_dir("lock_dead_pid");
+        let lock_path = dir.join("state.lock");
+        let dead_pid = spawn_and_reap_dead_pid();
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_secs();
+        fs::write(&lock_path, format!("{dead_pid}:{now}")).expect("write stale lock");
+
+        // stale_after is huge so only the dead-pid check can explain a
+        // successful takeover here, not timestamp-based staleness.
+        let result = with_lock(&lock_path, Duration::from_secs(3600), || Ok(42));
+
+        assert_eq!(
+            result.expect("with_lock should take over a dead-pid lock"),
+            42
+        );
+        assert!(
+            !lock_path.exists(),
+            "lock file must be released after f() returns"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn with_lock_refuses_to_steal_own_recent_lock_before_stale_after_elapses() {
+        let dir = unique_test_dir("lock_self_recent");
+        let lock_path = dir.join("state.lock");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_secs();
+        let original_contents = format!("{}:{now}", std::process::id());
+        fs::write(&lock_path, &original_contents).expect("write own fresh lock");
+
+        let result = with_lock(&lock_path, Duration::from_secs(3600), || Ok(1));
+
+        assert!(
+            result.is_err(),
+            "a lock held by our own live, non-stale pid must not be taken over"
+        );
+        assert_eq!(
+            fs::read_to_string(&lock_path).expect("lock file must be untouched"),
+            original_contents,
+            "a refused takeover must leave the existing lock file exactly as it was"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn with_lock_takes_over_own_lock_once_stale_after_elapses() {
+        let dir = unique_test_dir("lock_self_stale");
+        let lock_path = dir.join("state.lock");
+        // Old enough that a 1-second stale_after has definitely elapsed,
+        // even though the pid (ours) is still very much alive — proving
+        // the timestamp check alone is sufficient to trigger takeover.
+        let old_ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_secs()
+            .saturating_sub(10);
+        fs::write(&lock_path, format!("{}:{old_ts}", std::process::id()))
+            .expect("write stale-timestamp lock");
+
+        let result = with_lock(&lock_path, Duration::from_secs(1), || Ok(7));
+
+        assert_eq!(
+            result.expect("with_lock should take over a timestamp-stale lock"),
+            7
+        );
+        assert!(
+            !lock_path.exists(),
+            "lock file must be released after f() returns"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn with_lock_releases_lock_after_f_errors() {
+        let dir = unique_test_dir("lock_error_cleanup");
+        let lock_path = dir.join("state.lock");
+
+        let result: io::Result<()> = with_lock(&lock_path, Duration::from_secs(60), || {
+            Err(io::Error::other("boom"))
+        });
+
+        assert!(result.is_err());
+        assert!(
+            !lock_path.exists(),
+            "lock file must be released even when f() returns an error"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn with_lock_str_round_trips_the_callers_message_and_value() {
+        let dir = unique_test_dir("lock_str");
+        let lock_path = dir.join("state.lock");
+
+        assert_eq!(with_lock_str(&lock_path, || Ok(7)), Ok(7));
+        let err: Result<(), String> = with_lock_str(&lock_path, || Err("boom".to_string()));
+        assert_eq!(err, Err("boom".to_string()));
+        assert!(!lock_path.exists());
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn lock_guard_does_not_delete_a_lock_file_taken_over_by_another_owner() {
+        let dir = unique_test_dir("lock_guard_token");
+        let lock_path = dir.join("state.lock");
+        fs::write(&lock_path, "111:1").expect("write initial token");
+
+        {
+            let _guard = LockGuard {
+                path: &lock_path,
+                token: "111:1".to_string(),
+            };
+            // Simulate a takeover by another owner while this guard is
+            // still alive: `lock_is_stale`'s wall-clock comparison (see
+            // `STORE_LOCK_STALE_AFTER`'s doc comment) can make this happen
+            // for a real caller too, not just this direct construction.
+            fs::write(&lock_path, "222:2").expect("simulate takeover");
+        }
+
+        assert_eq!(
+            fs::read_to_string(&lock_path).expect("lock file must survive"),
+            "222:2",
+            "a guard must never delete a lock file it does not own"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn with_lock_str_renders_already_exists_as_a_legible_contention_message() {
+        let dir = unique_test_dir("lock_str_contention");
+        let lock_path = dir.join("state.lock");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_secs();
+        fs::write(&lock_path, format!("{}:{now}", std::process::id()))
+            .expect("write live, non-stale lock");
+
+        let err = with_lock_str(&lock_path, || Ok(())).expect_err("live lock must contend");
+
+        assert_eq!(err, "another window is updating this file; try again");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn with_lock_creates_missing_parent_directory() {
+        // Regression: RuleBook (and any future json_store consumer) is
+        // constructed with a config-dir path that may not exist yet on a
+        // fresh install — the lock kit must not require the caller to have
+        // created it first (the directory it lives in is otherwise only
+        // created by the *locked* write itself, which never runs if the
+        // lock file's own open fails first).
+        let dir = unique_test_dir("lock_missing_parent");
+        let missing_subdir = dir.join("not-created-yet");
+        let lock_path = missing_subdir.join("state.lock");
+
+        assert!(!missing_subdir.exists(), "precondition: parent absent");
+
+        let result = with_lock(&lock_path, Duration::from_secs(60), || Ok(99));
+
+        assert_eq!(
+            result.expect("with_lock should create its own parent directory"),
+            99
+        );
+        assert!(
+            !lock_path.exists(),
+            "lock file must be released after f() returns"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn parse_lock_contents_rejects_malformed_input() {
+        assert_eq!(parse_lock_contents("123:456"), Some((123, 456)));
+        assert_eq!(
+            parse_lock_contents("123:456:789"),
+            Some((123, 456)),
+            "an optional trailing nonce (see lock_contents) must not affect parsing"
+        );
+        assert_eq!(parse_lock_contents("not-a-lock"), None);
+        assert_eq!(parse_lock_contents("abc:456"), None);
+        assert_eq!(parse_lock_contents("123:abc"), None);
+    }
+
+    #[test]
+    fn lock_contents_never_repeats_within_the_same_process() {
+        // Regression: the token used to be `{pid}:{unix_timestamp}` alone,
+        // so two acquisitions from the same process within one
+        // wall-clock second minted byte-identical tokens - `LockGuard`'s
+        // ownership check could then delete a lock it did not create. The
+        // nonce must make every call distinct regardless of timing.
+        let a = lock_contents();
+        let b = lock_contents();
+        assert_ne!(a, b, "two calls in the same second must not collide");
+    }
+
+    #[test]
+    fn create_dir_all_already_exists_is_not_reported_as_contention() {
+        let base = unique_test_dir("lock_dir_shape");
+        // A regular file occupying the lock's immediate parent-directory
+        // path makes `fs::create_dir_all` return `ErrorKind::AlreadyExists`
+        // (ordinary `mkdir` EEXIST) - a filesystem-shape error, not lock
+        // contention.
+        let occupied = base.join("occupied-by-a-file");
+        fs::write(&occupied, b"not a directory").expect("occupy the path with a file");
+        let lock_path = occupied.join("state.lock");
+
+        let err = with_lock_str(&lock_path, || Ok(())).expect_err("parent is a file, not a dir");
+
+        assert_ne!(
+            err, "another window is updating this file; try again",
+            "a create_dir_all shape error must not be mislabelled as lock contention"
+        );
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn temp_path_for_stays_in_same_directory_and_is_unique_per_call() {
+        let path = Path::new("/some/dir/state.json");
+        let a = temp_path_for(path);
+        let b = temp_path_for(path);
+
+        assert_eq!(a.parent(), Some(Path::new("/some/dir")));
+        assert_ne!(a, b, "successive calls must never collide");
+        assert!(a.to_string_lossy().ends_with(".tmp"));
+    }
+}

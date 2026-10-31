@@ -1,0 +1,58 @@
+/* Stage layout + session column ──────────────────────────────────── */
+
+/* ── Stage layout ────────────────────────────────────────────────────── */
+/* Column widths come from app/use-pane-widths.jsx as variables on
+   `.workspace`, set for every shown column from the first render; the
+   fallbacks only repeat OMP_LAYOUT_WIDTHS.PANES' defaults. */
+.stage {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 0;
+  position: relative;
+}
+/* The columns after the chat (side panel, subagents, terminal) are set inline
+   by app-live.jsx, each new one to the right of the last. */
+
+/* ── Column resize handles (ui/resize-handle.jsx) ───────────────────── */
+/* A 6px line centred on the pane's edge. In the stage it is placed in its
+   pane's grid area without taking part in auto-placement (an absolutely
+   positioned grid child), so a scrolling pane does not carry it along. */
+.pane-resize {
+  position: absolute; top: 0; bottom: 0; left: -3px; z-index: 4;
+  width: 6px; cursor: col-resize; touch-action: none; outline: none;
+}
+.pane-resize.at-split, .pane-resize.at-side, .pane-resize.at-term { grid-row: 1; }
+.pane-resize.at-sidebar { left: calc(var(--w-sidebar, 220px) - 3px); }
+
+/* ── Session column ─────────────────────────────────────────────────── */
+.session {
+  display: flex; flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg-window);
+  min-height: 0;
+  position: relative;
+  border-right: 1px solid var(--line);
+}
+
+/* ── Empty workspace (no tab open) ──────────────────────────────────── */
+.empty-ws { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+/* Fills the column; the canvas draws its own background (see
+   design/empty-workspace.jsx), so it needs no fill here. */
+.empty-ws-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* Bridge notes float over the rain, below the logo. */
+.empty-ws-notes {
+  position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+  width: min(460px, calc(100% - 48px));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.empty-ws-note {
+  padding: 8px 12px;
+  background: color-mix(in oklab, var(--bg-window) 88%, transparent);
+  border: 1px solid color-mix(in oklab, var(--rose) 40%, var(--line));
+  border-radius: var(--r-2);
+  font-size: var(--d-text-sm); color: var(--fg-2);
+}
+

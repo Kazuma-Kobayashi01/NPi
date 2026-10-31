@@ -1,0 +1,204 @@
+/* Catppuccin (https://catppuccin.com, MIT): Latte, Frappé, Macchiato, Mocha.
+   Same tokens as Graphite/Ivory in styles.css; accent is the flavour's Mauve. */
+
+/* ── Catppuccin Latte (light) ─── */
+.theme-latte {
+  --bg-app: #DCE0E8;
+  --bg-window: #EFF1F5;
+  --bg-sidebar: #E6E9EF;
+  --bg-surface: #E6E9EF;
+  --bg-elevated: #DEE0E8;
+  --bg-input: #EFF1F5;
+  --bg-hover: #DADDE5;
+  --bg-active: #CBCFD8;
+
+  --line: #BCC0CC;
+  --line-soft: #CCD0DA;
+  --line-bright: #ACB0BE;
+
+  --fg: #4C4F69;
+  --fg-2: #5C5F77;
+  --fg-3: #6C6F85;
+  --fg-4: #8C8FA1;
+  --fg-5: #9CA0B0;
+
+  --accent: #8839EF;
+  --accent-deep: #6A2CBA;
+  --accent-soft: rgba(136, 57, 239, 0.14);
+  --accent-glow: rgba(136, 57, 239, 0.45);
+  --on-accent: #FFFFFF;
+
+  --magenta: #EA76CB;
+  --cyan: #04A5E5;
+  --amber: #DF8E1D;
+  --lilac: #7287FD;
+  --rose: #D20F39;
+  --lime: #40A02B;
+
+  --syntax-comment: #9CA0B0;
+  --syntax-key: #8839EF;
+  --syntax-str: #40A02B;
+  --syntax-num: #FE640B;
+  --syntax-fn: #1E66F5;
+  --syntax-tag: #D20F39;
+
+  --diff-add-bg: rgba(64, 160, 43, 0.12);
+  --diff-add-fg: #40A02B;
+  --diff-rm-bg: rgba(210, 15, 57, 0.1);
+  --diff-rm-fg: #D20F39;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}
+
+/* ── Catppuccin Frappé (dark) ─── */
+.theme-frappe {
+  --bg-app: #232634;
+  --bg-window: #303446;
+  --bg-sidebar: #292C3C;
+  --bg-surface: #292C3C;
+  --bg-elevated: #383C50;
+  --bg-input: #414559;
+  --bg-hover: #3A3E51;
+  --bg-active: #4A5065;
+
+  --line: #51576D;
+  --line-soft: #414559;
+  --line-bright: #626880;
+
+  --fg: #C6D0F5;
+  --fg-2: #B5BFE2;
+  --fg-3: #A5ADCE;
+  --fg-4: #838BA7;
+  --fg-5: #737994;
+
+  --accent: #CA9EE6;
+  --accent-deep: #9E7BB3;
+  --accent-soft: rgba(202, 158, 230, 0.14);
+  --accent-glow: rgba(202, 158, 230, 0.45);
+  --on-accent: #232634;
+
+  --magenta: #F4B8E4;
+  --cyan: #99D1DB;
+  --amber: #E5C890;
+  --lilac: #BABBF1;
+  --rose: #E78284;
+  --lime: #A6D189;
+
+  --syntax-comment: #737994;
+  --syntax-key: #CA9EE6;
+  --syntax-str: #A6D189;
+  --syntax-num: #EF9F76;
+  --syntax-fn: #8CAAEE;
+  --syntax-tag: #E78284;
+
+  --diff-add-bg: rgba(166, 209, 137, 0.12);
+  --diff-add-fg: #A6D189;
+  --diff-rm-bg: rgba(231, 130, 132, 0.1);
+  --diff-rm-fg: #E78284;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Catppuccin Macchiato (dark) ─── */
+.theme-macchiato {
+  --bg-app: #181926;
+  --bg-window: #24273A;
+  --bg-sidebar: #1E2030;
+  --bg-surface: #1E2030;
+  --bg-elevated: #2D3044;
+  --bg-input: #363A4F;
+  --bg-hover: #2F3247;
+  --bg-active: #42455C;
+
+  --line: #494D64;
+  --line-soft: #363A4F;
+  --line-bright: #5B6078;
+
+  --fg: #CAD3F5;
+  --fg-2: #B8C0E0;
+  --fg-3: #A5ADCB;
+  --fg-4: #8087A2;
+  --fg-5: #6E738D;
+
+  --accent: #C6A0F6;
+  --accent-deep: #9A7DC0;
+  --accent-soft: rgba(198, 160, 246, 0.14);
+  --accent-glow: rgba(198, 160, 246, 0.45);
+  --on-accent: #181926;
+
+  --magenta: #F5BDE6;
+  --cyan: #91D7E3;
+  --amber: #EED49F;
+  --lilac: #B7BDF8;
+  --rose: #ED8796;
+  --lime: #A6DA95;
+
+  --syntax-comment: #6E738D;
+  --syntax-key: #C6A0F6;
+  --syntax-str: #A6DA95;
+  --syntax-num: #F5A97F;
+  --syntax-fn: #8AADF4;
+  --syntax-tag: #ED8796;
+
+  --diff-add-bg: rgba(166, 218, 149, 0.12);
+  --diff-add-fg: #A6DA95;
+  --diff-rm-bg: rgba(237, 135, 150, 0.1);
+  --diff-rm-fg: #ED8796;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Catppuccin Mocha (dark) ─── */
+.theme-mocha {
+  --bg-app: #11111B;
+  --bg-window: #1E1E2E;
+  --bg-sidebar: #181825;
+  --bg-surface: #181825;
+  --bg-elevated: #282839;
+  --bg-input: #313244;
+  --bg-hover: #292A3B;
+  --bg-active: #3D3F51;
+
+  --line: #45475A;
+  --line-soft: #313244;
+  --line-bright: #585B70;
+
+  --fg: #CDD6F4;
+  --fg-2: #BAC2DE;
+  --fg-3: #A6ADC8;
+  --fg-4: #7F849C;
+  --fg-5: #6C7086;
+
+  --accent: #CBA6F7;
+  --accent-deep: #9E81C1;
+  --accent-soft: rgba(203, 166, 247, 0.14);
+  --accent-glow: rgba(203, 166, 247, 0.45);
+  --on-accent: #11111B;
+
+  --magenta: #F5C2E7;
+  --cyan: #89DCEB;
+  --amber: #F9E2AF;
+  --lilac: #B4BEFE;
+  --rose: #F38BA8;
+  --lime: #A6E3A1;
+
+  --syntax-comment: #6C7086;
+  --syntax-key: #CBA6F7;
+  --syntax-str: #A6E3A1;
+  --syntax-num: #FAB387;
+  --syntax-fn: #89B4FA;
+  --syntax-tag: #F38BA8;
+
+  --diff-add-bg: rgba(166, 227, 161, 0.12);
+  --diff-add-fg: #A6E3A1;
+  --diff-rm-bg: rgba(243, 139, 168, 0.1);
+  --diff-rm-fg: #F38BA8;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+.theme-latte { --wp-opacity: 0.07; }

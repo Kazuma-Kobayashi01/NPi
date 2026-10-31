@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="NPi">
+  <title>NPi</title>
+  <defs><mask id="stripes" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512"><rect width="512" height="512" fill="#fff"/><g stroke="#000" stroke-width="2.6" fill="none"><path d="M136 152.5H376"/><path d="M182 199V336"/><path d="M330 199V336"/></g></mask></defs>
+  <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#333330"/><stop offset="1" stop-color="#1B1B19"/></linearGradient>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <g transform="translate(512 512) scale(1.4112) translate(-256 -256)">
+  <g transform="translate(0 12)"><g fill="#F3EFE6" mask="url(#stripes)">
+      <rect x="116" y="116" width="280" height="14"/>
+      <rect x="136" y="136" width="240" height="34"/>
+      <rect x="158" y="169" width="48" height="11"/>
+      <polygon points="162,179 202,179 195,192 169,192"/>
+      <polygon points="169,191 195,191 199,343 165,343"/>
+      <rect x="156" y="341" width="52" height="14"/>
+      <rect x="306" y="169" width="48" height="11"/>
+      <polygon points="310,179 350,179 343,192 317,192"/>
+      <polygon points="317,191 343,191 347,343 313,343"/>
+      <rect x="304" y="341" width="52" height="14"/>
+      <rect x="124" y="353" width="264" height="10"/>
+      <rect x="104" y="361" width="304" height="11"/>
+      <circle cx="256" cy="272" r="15"/>
+    </g></g>
+  </g>
+</svg>

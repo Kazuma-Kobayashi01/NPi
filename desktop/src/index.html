@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NPi Desktop</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+  <!-- Design tokens — copied into src/design/ -->
+  <link rel="stylesheet" href="design/styles.css" />
+  <link rel="stylesheet" href="design/themes.css" />
+  <link rel="stylesheet" href="design/layout.css" />
+  <!-- xterm.js base styles (terminal panel) — vendored, see scripts/vendor-xterm.mjs -->
+  <link rel="stylesheet" href="xterm.css" />
+  <link rel="stylesheet" href="platform.css" />
+
+  <!-- Syntax highlighting theme (atom-one-dark) -->
+  <link rel="stylesheet" href="highlight-theme.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 19 + Babel — served locally, no CDN dependency. React 19 ships
+       no UMD builds; the React files are generated from the official npm
+       packages by scripts/vendor-react.mjs (never edit them by hand).
+       This file is what `tauri dev` serves: development React, JSX
+       compiled in the browser by Babel. Release builds embed dist/ instead,
+       written by scripts/build-frontend.mjs: production React, JSX compiled
+       ahead of time, no Babel. Keep the tags below in their exact form —
+       that script rewrites them and fails if it can't find them. -->
+  <script src="react.development.js"></script>
+  <script src="react-dom.development.js"></script>
+  <script src="babel.min.js"></script>
+
+  <!-- xterm.js for the terminal panel, vendored from npm by
+       scripts/vendor-xterm.mjs (never edit by hand). Both are UMD builds that
+       attach to window: xterm.js → window.Terminal (use `new Terminal(opts)`),
+       xterm-addon-fit.js → window.FitAddon, an object whose class is
+       FitAddon.FitAddon (use `new FitAddon.FitAddon()`). Their stylesheet is
+       linked in <head>. Read lazily (inside function bodies) by
+       app/terminal-xterm.js, so the position only has to precede it. -->
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+
+  <!-- Markdown + syntax highlighting — must load before design components.
+       marked-setup.js wires marked to hljs and escapes raw HTML / unsafe
+       link schemes; it needs both libs defined, so it comes right after.
+       It also defines window.OMP_MARKDOWN (fenceCode), which
+       app/message-queue.js calls. -->
+  <script src="marked.min.js"></script>
+  <script src="highlight.min.js"></script>
+  <script src="app/marked-setup.js"></script>
+  <script src="app/format.js"></script>
+  <script src="app/tooltip.js"></script>
+  <script src="app/ui-detail.js"></script>
+  <script src="app/model-pick.js"></script>
+  <script src="app/usage-view.js"></script>
+  <script src="app/wallpapers.js"></script>
+
+  <!-- App constants. Dependency-free IIFE, loaded before the design
+       components: profile-menu.jsx, chrome.jsx and thinking-menu.jsx
+       destructure DEFAULT_PROFILE_ID / THINKING_LEVELS at top level,
+       composer.jsx and chat/ask-*.jsx call its isSubmitEnter / isSubmitKey helpers,
+       app/extension-widgets.js and app/browser.js its truncateText, and
+       app-live.jsx destructures the rest. -->
+  <script src="app/constants.js"></script>
+  <!-- Keymap registry + chord algebra, and guestShouldBypass (which keys a
+       focused guest — terminal, browser panel — leaves to the app).
+       Dependency-free IIFE; must load before any Babel file (composer.jsx,
+       use-keymap.jsx, settings/shortcuts-editor.jsx). -->
+  <script src="app/keymap.js"></script>
+
+  <!-- Mention-parsing helpers. Dependency-free IIFE; composer.jsx
+       destructures window.OMP_MENTIONS at top level, so this must load
+       before it. -->
+  <script src="mentions.js"></script>
+
+  <!-- Image attach/paste helpers. Dependency-free IIFE; composer.jsx
+       destructures window.OMP_IMAGES at top level, so this must load
+       before it. -->
+  <script src="app/image-attach.js"></script>
+
+  <!-- Slash-command palette: local desktop list + RPC merge/filter helpers.
+       Dependency-free IIFE; composer.jsx destructures window.OMP_SLASH at
+       top level, so this must load before it. live.js also reads
+       OMP_SLASH.LOCAL_COMMANDS for the initial/reset command list, so this
+       must load before live.js too (see script order below). -->
+  <script src="app/slash-commands.js"></script>
+
+  <!-- Chat "stick to bottom" pin state machine. Dependency-free IIFE;
+       design/chat/chat-view.jsx destructures window.OMP_SCROLL_PIN at
+       top level, so this must load before it. -->
+  <script src="app/scroll-pin.js"></script>
+
+  <!-- Collapsible tool cards and thinking (#44): which blocks are collapsed.
+       Dependency-free IIFE; design/chat/chat-view.jsx, tool-card.jsx and
+       app-live.jsx destructure window.OMP_COLLAPSE at top level, so this
+       must load before them. -->
+  <script src="app/chat-collapse.js"></script>
+
+  <!-- Prompt history (issue #16): pure list/navigation helpers, in-memory
+       only. Dependency-free IIFE; composer.jsx references window.
+       OMP_PROMPT_HISTORY, and live.js reads it at its own top-level IIFE
+       init (not just inside a later-called function), so this must load
+       before live.js too (see script order below). -->
+  <script src="app/prompt-history.js"></script>
+
+  <!-- Subagent manager state: pure reducer over omp's subagent RPC frames +
+       selectors/formatters. Dependency-free IIFE; design/subagents/*.jsx
+       destructure window.OMP_SUBAGENTS at top level and live.js reads it at
+       its own top-level init, so this must load before both. -->
+  <script src="app/subagents.js"></script>
+
+
+  <!-- Attached-image viewer geometry (issue #25): pure fit/FLIP/step
+       helpers. Dependency-free IIFE; design/chat/image-lightbox.jsx
+       destructures window.OMP_LIGHTBOX at top level, so this must load
+       before it. -->
+  <script src="app/lightbox.js"></script>
+
+  <!-- Project navigation (issue #27): pure tab grouping/lookup helpers, plus
+       the history panel's per-project filter chips (#35). Dependency-free
+       IIFE; design/chrome.jsx, design/tab-group-chip.jsx,
+       design/project-sidebar.jsx and design/history-modal.jsx destructure
+       window.OMP_PROJECT_NAV at top level and live.js calls it, so it must
+       load before all of them. -->
+  <script src="app/project-nav.js"></script>
+
+  <!-- File preview (issue #39): which file and lines a read card or a chat
+       link points at, project confinement, highlighted lines. IIFE that
+       destructures window.OMP_MARKDOWN (app/marked-setup.js) and
+       window.OMP_PROJECT_NAV (above) at load; design/chat/tool-card.jsx,
+       design/chat/file-preview.jsx and app-live.jsx destructure
+       window.OMP_FILE_PREVIEW at top level, so this must load before them. -->
+  <script src="app/file-preview.js"></script>
+
+  <!-- Drag-to-reorder geometry (#40): the drop slot under the pointer.
+       Dependency-free IIFE; design/ui/use-drag-reorder.js destructures
+       window.OMP_DRAG_REORDER at load, so it must load before it. -->
+  <script src="app/drag-reorder.js"></script>
+
+
+  <!-- Per-tab composer draft + plan-mode state (issue #28): pure map and
+       transition helpers. Dependency-free IIFE; design/composer.jsx,
+       app/use-goal-mode.jsx and app-live.jsx destructure
+       window.OMP_SESSION_UI at top level, so it must load before them. -->
+  <script src="app/session-ui.js"></script>
+  <!-- Accent tokens (#37): the soft/glow/deep shades derived from a picked
+       accent. Dependency-free IIFE; app/use-bridge-snapshot.jsx's
+       useThemeEffect calls window.OMP_ACCENT at effect time. -->
+  <script src="app/accent.js"></script>
+
+  <!-- Steer / follow-up queue strip: pure helpers over omp's queue
+       snapshot. IIFE; its refusal note calls window.OMP_MARKDOWN
+       (marked-setup.js, above). design/queue-strip.jsx destructures
+       window.OMP_QUEUE at top level and live.js reads it at its own
+       top-level init, so it must load before both. -->
+  <script src="app/message-queue.js"></script>
+
+  <!-- omp's ask dialog (set_ask_dialog): request parsing, pick rules and
+       the `answers` reply. Dependency-free IIFE; design/chat/ask-dialog.jsx
+       and ask-bubble.jsx destructure window.OMP_ASK_DIALOG at top level and
+       live.js reads it at its top-level init, so it must load before them. -->
+  <script src="app/ask-dialog.js"></script>
+
+  <!-- Tool approval mode (#57): omp's --approval-mode per project / default,
+       the status-bar cell and which open tabs a change restarts.
+       Dependency-free IIFE (reads window.OMP_TURN_STATUS late-bound, at
+       call time); live.js reads window.OMP_APPROVAL_MODE at its top-level
+       init, the approvals panel and app-live.jsx inside function bodies. -->
+  <script src="app/approval-mode.js"></script>
+
+  <!-- Tool approvals (#42): the "Allow tool:" prompt split and the
+       auto-approval row. Dependency-free IIFE; design/chat/ask-bubble.jsx
+       and approval-row.jsx destructure window.OMP_APPROVAL at top level and
+       live.js reads it at its top-level init, so it must load before them. -->
+  <script src="app/approval.js"></script>
+
+  <!-- Conversation tree (prompt-cache navigator): pure model over the Rust
+       `conversation_tree` payload. IIFEs; conversation-tree-graph.js (the
+       entry index and lane layout, window.OMP_CONV_GRAPH) must precede
+       conversation-tree.js, which destructures it at load. window.OMP_CONV_TREE
+       is called at render time by app/use-conversation-tree.jsx. -->
+  <script src="app/conversation-tree-graph.js"></script>
+  <script src="app/conversation-tree.js"></script>
+
+  <!-- omp's goal mode: pure state/row/strip helpers. Dependency-free IIFE;
+       design/chat/goal-row.jsx, design/goal-strip.jsx and
+       app/use-goal-mode.jsx destructure window.OMP_GOAL at top level and
+       live.js reads it at its top-level init, so it must load before all
+       of them. -->
+  <script src="app/goal.js"></script>
+  <!-- Per-tab PR feedback deduplication and cancellable monitoring. -->
+  <script src="app/pr-automation.js"></script>
+
+  <!-- Rail widget plugin output contract (schema v1, insert/append text, run
+       bookkeeping). Dependency-free IIFE; app/use-widgets.jsx,
+       design/widgets/widget-blocks.jsx, design/widgets/widget-card.jsx and
+       app-live.jsx destructure window.OMP_WIDGETS at top level; composer.jsx
+       reads it late-bound. -->
+  <script src="app/widgets.js"></script>
+
+  <!-- omp extension status lines and text widgets (#52): pure keyed state,
+       escape stripping, card models. IIFE; live.js reads
+       window.OMP_EXT_WIDGETS at its top-level init and app-live.jsx at top
+       level, so it must load before both. Calls window.truncateText
+       (app/constants.js) at call time. -->
+  <script src="app/extension-widgets.js"></script>
+  <!-- Program path setting menu (Settings: terminal shell, browser
+       Chromium): programName and the menu rows. Dependency-free IIFE
+       (OMP_PROJECT_NAV at call time); app/terminal.js and app/browser.js
+       call it at call time. -->
+  <script src="app/path-setting.js"></script>
+  <!-- Terminal panel: pure per-tab panel state over Rust's shell status,
+       clipboard chords, shell label / menu (app/path-setting.js) and
+       height clamp. IIFE that calls
+       window.OMP_KEYMAP.detectMac() at load (so after app/keymap.js);
+       app/use-terminal.jsx and design/terminal-panel.jsx destructure
+       window.OMP_TERMINAL at top level, so it must load before them. -->
+  <script src="app/terminal.js"></script>
+  <!-- Terminal output sync: the pure reducer (instance adoption, seq dedupe,
+       gap → replay, queue while replaying, acks). Dependency-free IIFE;
+       app/use-terminal.jsx destructures window.OMP_TERMINAL_STREAM at top
+       level, so it must load before it. -->
+  <script src="app/terminal-stream.js"></script>
+  <!-- Terminal xterm setup: builds a tab's xterm and its key routing, the
+       ConPTY option, theme colours and the lines written into it. IIFE;
+       window.Terminal / window.FitAddon (above), window.OMP_TERMINAL and
+       window.OMP_KEYMAP are read at call time; app/use-terminal.jsx
+       destructures window.OMP_TERMINAL_XTERM at top level, so it must load
+       before it. -->
+  <script src="app/terminal-xterm.js"></script>
+  <!-- Git browser view helpers over the Rust git_browser_* payloads (tree
+       rows, filter, hunks, ages, edit-card paths). Dependency-free IIFE;
+       design/git/file-tree.jsx, file-view.jsx, history.jsx,
+       app/use-git-browser.jsx and app-live.jsx destructure
+       window.OMP_GIT_BROWSER at top level, so it must load before them. -->
+  <script src="app/git-browser.js"></script>
+
+  <!-- Widths of the resizable columns beside the chat (#41): bounds, the
+       fit to the window, drag and keyboard steps, CHAT_MIN. Dependency-free
+       IIFE; app/browser.js reads OMP_LAYOUT_WIDTHS.CHAT_MIN at load time,
+       ui/resize-handle.jsx and app/use-pane-widths.jsx destructure it. -->
+  <script src="app/layout-widths.js"></script>
+
+  <!-- Browser panel pure helpers (address normalisation, annotation text and
+       merge into the outgoing message, page coordinates, CDP key events,
+       per-session chips, width clamp, Settings chromium menu). Reads
+       OMP_IMAGES.MAX_ATTACHMENTS and OMP_LAYOUT_WIDTHS.CHAT_MIN at load
+       time (image-attach.js, layout-widths.js above), and
+       OMP_MARKDOWN.fenceCode, truncateText, OMP_SESSION_UI and
+       OMP_PATH_SETTING at call time; precedes
+       app/use-browser.jsx, design/settings/rows-programs.jsx and app-live.jsx. -->
+  <script src="app/browser.js"></script>
+  <!-- DOM side of the panel: paints the screencast on the canvas, forwards
+       input (createScreen).
+       Dependency-free IIFE; reads window.OMP_BROWSER and OMP_KEYMAP at
+       call time; app/use-browser.jsx destructures
+       window.OMP_BROWSER_SCREEN. -->
+  <script src="app/browser-screen.js"></script>
+  <!-- Settings page (#37): the sections and rows (search, modified, reset,
+       clamp) and the Settings app tab's open/active/section state.
+       IIFEs; bounds, fold modes and accent comparison are read late-bound
+       (OMP_COLLAPSE, OMP_PROMPT_HISTORY, OMP_SESSION_UI, OMP_ACCENT,
+       OMP_KEYMAP). design/settings/*.jsx and
+       app-live.jsx read window.OMP_SETTINGS / OMP_SETTINGS_TAB. -->
+  <script src="app/settings-schema.js"></script>
+  <script src="app/settings-tab.js"></script>
+
+  <!-- Tweak storage (localStorage `omp-desktop:tweaks`): useTweaks and the
+       OMP_TWEAKS_STORE reader live.js uses at its top-level init. IIFE. -->
+  <script src="design/tweaks/use-tweaks.js"></script>
+  <!-- Outside-click / Escape dismissal shared by the dropdown menus
+       (profile-menu.jsx, tab-group-chip.jsx, thinking-menu.jsx,
+       path-setting.jsx's PathPicker). -->
+  <script src="design/ui/use-popover-dismiss.js"></script>
+  <!-- Pointer drag-to-reorder (#40) for the tab bar, the group chip's
+       dropdown and the project sidebar: chrome.jsx and project-sidebar.jsx
+       call window.useDragReorder at render time, tab-group-chip.jsx gets
+       TabBar's. Destructures window.OMP_DRAG_REORDER at load. -->
+  <script src="design/ui/use-drag-reorder.js"></script>
+  <!-- A panel edge dragged to resize it: terminal-panel.jsx,
+       browser-dock.jsx and app/use-pane-widths.jsx call window.useEdgeDrag
+       at render time. -->
+  <script src="design/ui/use-edge-drag.js"></script>
+  <!-- A modal inside #root takes focus on open and returns it on close:
+       prompt-history-modal.jsx and confirm-close.jsx
+       call window.useModalFocus at render time. -->
+  <script src="design/ui/use-modal-focus.js"></script>
+  <!-- Keyboard-driven popup lists: useActiveRowIntoView (composer.jsx's
+       slash menu and mentions, history-modal.jsx, prompt-history-modal.jsx)
+       and useListKeys (the two history modals), called at render time. -->
+  <script src="design/ui/use-list-nav.js"></script>
+  <!-- The column resize line (#41); destructures
+       window.OMP_LAYOUT_WIDTHS at top level; browser-dock.jsx and
+       app-live.jsx destructure ResizeHandle at top level. -->
+  <script type="text/babel" src="design/ui/resize-handle.jsx"></script>
+  <script type="text/babel" src="design/ui/icons.jsx"></script>
+  <!-- Copy buttons (issue #33); markdown.jsx and the
+       chat/ components destructure its exports at top level. -->
+  <script type="text/babel" src="design/ui/copy-button.jsx"></script>
+  <!-- Expand/collapse control of tool cards and thinking (#44);
+       destructures window.Icon, and assistant-bubble.jsx and tool-card.jsx
+       destructure it at top level. -->
+  <script type="text/babel" src="design/ui/collapse-toggle.jsx"></script>
+  <script type="text/babel" src="design/ui/sparks.jsx"></script>
+  <!-- Markdown renderer; MarkdownLinkContext + useMarkdownClick (the
+       containers' delegated click: copy buttons, then the link handler
+       app-live.jsx provides). Destructures window.copyCodeBlockClick
+       (copy-button.jsx, above); plan-annotations.jsx destructures
+       useMarkdownClick at top level. -->
+  <script type="text/babel" src="design/ui/markdown.jsx"></script>
+  <script type="text/babel" src="design/ui/plan-annotations.jsx"></script>
+  <!-- Also ImageThumbs and useModalLayer; user-bubble.jsx, tool-card.jsx
+       and file-preview.jsx destructure them at top level. -->
+  <script type="text/babel" src="design/chat/image-lightbox.jsx"></script>
+  <!-- File preview modal (#39); destructures window.Icon, window.CopyButton
+       and window.useModalLayer (above). app-live.jsx destructures
+       window.FilePreview. -->
+  <script type="text/babel" src="design/chat/file-preview.jsx"></script>
+  <script type="text/babel" src="design/chat/user-bubble.jsx"></script>
+  <script type="text/babel" src="design/chat/eval-cell.jsx"></script>
+  <script type="text/babel" src="design/chat/assistant-bubble.jsx"></script>
+  <script type="text/babel" src="design/chat/tool-card.jsx"></script>
+  <!-- ask-bubble.jsx destructures window.AskDialog at top level. -->
+  <script type="text/babel" src="design/chat/ask-dialog.jsx"></script>
+  <script type="text/babel" src="design/chat/ask-bubble.jsx"></script>
+  <!-- chat-view.jsx destructures window.RetryRow, window.GoalRow and
+       window.ApprovalRow at top level. -->
+  <script type="text/babel" src="design/chat/retry-row.jsx"></script>
+  <script type="text/babel" src="design/chat/goal-row.jsx"></script>
+  <script type="text/babel" src="design/chat/approval-row.jsx"></script>
+  <script type="text/babel" src="design/chat/chat-view.jsx"></script>
+  <!-- Subagent manager UI. bits → controls → inspector (destructures the
+       controls) → pane (destructures the inspector) → rail card; all before
+       chrome.jsx, whose AmbientRail destructures SubagentRailCard at top level. -->
+  <script type="text/babel" src="design/subagents/subagent-bits.jsx"></script>
+  <script type="text/babel" src="design/subagents/subagent-controls.jsx"></script>
+  <script type="text/babel" src="design/subagents/subagent-inspector.jsx"></script>
+  <script type="text/babel" src="design/subagents/subagent-pane.jsx"></script>
+  <script type="text/babel" src="design/subagents/subagent-rail-card.jsx"></script>
+  <!-- Rail widget plugin cards (#49). widget-blocks.jsx destructures
+       window.Icon, window.useSaNow (subagent-bits.jsx) and window.OMP_WIDGETS;
+       widget-card.jsx destructures window.Icon, window.OMP_WIDGETS and
+       window.WidgetBlocks — order matters. -->
+  <script type="text/babel" src="design/widgets/widget-blocks.jsx"></script>
+  <script type="text/babel" src="design/widgets/widget-card.jsx"></script>
+  <!-- The Changes card's CI line; destructures window.OMP_PR_AUTOMATION
+       (app/pr-automation.js, plain block above) at top level. -->
+  <script type="text/babel" src="design/pr-checks.jsx"></script>
+  <!-- The Changes card's "⋮" menu; the card renders it at render time. -->
+  <script type="text/babel" src="design/pr-automation-menu.jsx"></script>
+  <script type="text/babel" src="design/pr-automation-card.jsx"></script>
+  <!-- Browser panel: browser-panel.jsx destructures window.BrowserToolbar
+       (browser-toolbar.jsx) at top level; the toolbar destructures
+       window.Icon and window.OMP_BROWSER. browser-dock.jsx (the panel's stage
+       slot and resize handle) destructures window.BrowserPanel. -->
+  <script type="text/babel" src="design/browser-toolbar.jsx"></script>
+  <script type="text/babel" src="design/browser-panel.jsx"></script>
+  <script type="text/babel" src="design/browser-dock.jsx"></script>
+  <script type="text/babel" src="design/mention-menu.jsx"></script>
+  <!-- Collapsed-paste chips + preview (#31), the steer / follow-up queue
+       strip, the thinking pill's level menu (#10) and the browser annotation
+       chips; composer.jsx renders all four by their global names. -->
+  <script type="text/babel" src="design/paste-strip.jsx"></script>
+  <script type="text/babel" src="design/queue-strip.jsx"></script>
+  <script type="text/babel" src="design/browser-chips.jsx"></script>
+  <!-- Goal strip above the composer: app/use-goal-mode.jsx destructures
+       window.GoalStrip at top level and hands it to composer.jsx as an element. -->
+  <script type="text/babel" src="design/goal-strip.jsx"></script>
+  <script type="text/babel" src="design/model-menu.jsx"></script>
+  <script type="text/babel" src="design/usage-popover.jsx"></script>
+  <script type="text/babel" src="design/composer.jsx"></script>
+  <!-- Per-tab profile selector — chrome.jsx destructures window.ProfileMenu
+       at top level, so this must load before it. -->
+  <script type="text/babel" src="design/profile-menu.jsx"></script>
+  <!-- Inline conversation-name editor (#32) — tab-group-chip.jsx, chrome.jsx
+       and project-sidebar.jsx destructure window.RenameField at top level,
+       so this must load before all three. -->
+  <script type="text/babel" src="design/rename-field.jsx"></script>
+  <!-- Grouped tab-bar chip (#27) — chrome.jsx destructures
+       window.TabGroupChip / window.TabRunDot / window.TabLabel at top level,
+       so this must load before it. -->
+  <!-- Run-state dot and tab label: composer.jsx, project-sidebar.jsx and
+       empty-workspace.jsx read them, so they load before those. -->
+  <script type="text/babel" src="design/tab-parts.jsx"></script>
+  <script type="text/babel" src="design/side-panel.jsx"></script>
+  <script type="text/babel" src="design/context-menu.jsx"></script>
+  <script type="text/babel" src="design/sidebar-account.jsx"></script>
+  <script type="text/babel" src="design/chat-sidebar.jsx"></script>
+  <script type="text/babel" src="design/chrome.jsx"></script>
+  <!-- Project sidebar (#27); reads window.TabRunDot / window.TabLabel
+       (tab-parts.jsx) and window.OMP_PROJECT_NAV at top level. -->
+  <script type="text/babel" src="design/project-sidebar.jsx"></script>
+  <!-- Session column with no tab open; destructures window.MarkdownContent
+       at top level. -->
+  <script type="text/babel" src="design/empty-workspace.jsx"></script>
+  <script type="text/babel" src="design/panels.jsx"></script>
+  <!-- Git browser: the files pane exports window.GitFileTree and
+       GIT_STATUS_META, which file-view.jsx destructures at top level;
+       git-browser.jsx destructures all three panes and calls
+       window.useGitBrowser (app/use-git-browser.jsx, below) at render time. -->
+  <script type="text/babel" src="design/git/file-tree.jsx"></script>
+  <script type="text/babel" src="design/git/file-view.jsx"></script>
+  <script type="text/babel" src="design/git/history.jsx"></script>
+  <script type="text/babel" src="design/git/git-browser.jsx"></script>
+  <!-- Approvals panel's mode section (#57); approval-rules-panel.jsx
+       destructures window.ApprovalModeSection at top level. -->
+  <script type="text/babel" src="design/approval-mode-section.jsx"></script>
+  <script type="text/babel" src="design/approval-rules-panel.jsx"></script>
+  <script type="text/babel" src="design/usage-stats-panel.jsx"></script>
+  <script type="text/babel" src="design/history-modal.jsx"></script>
+  <script type="text/babel" src="design/prompt-history-modal.jsx"></script>
+  <!-- "Close a working tab / quit?" (#37, confirmBusyClose); destructures
+       window.Icon at top level. app-live.jsx renders it from live.js's
+       closeConfirm snapshot field. -->
+  <script type="text/babel" src="design/confirm-close.jsx"></script>
+  <!-- Conversation tree pane: rows (formatters, graph, meter) → detail
+       footer → pane; the detail and the pane destructure the earlier
+       files' window exports at top level, so keep this order. -->
+  <script type="text/babel" src="design/conversation-tree-rows.jsx"></script>
+  <script type="text/babel" src="design/conversation-tree-detail.jsx"></script>
+  <script type="text/babel" src="design/conversation-tree.jsx"></script>
+  <!-- Per-tab terminal panel and the list app-live.jsx renders; destructures
+       window.Icon and window.OMP_TERMINAL (app/terminal.js, above) at top
+       level. -->
+  <script type="text/babel" src="design/terminal-panel.jsx"></script>
+  <!-- A program path setting (terminal shell, browser Chromium):
+       usePathSetting + PathPicker (button and menu); destructures
+       window.Icon (ui/icons.jsx, above) at top level. -->
+  <script type="text/babel" src="design/path-setting.jsx"></script>
+  <!-- Settings page (#37). controls.jsx (row frame + controls, destructures
+       window.Icon) first; the rows-*.jsx renderers and shortcuts-editor.jsx
+       (destructures window.OMP_KEYMAP) register window.OMP_SETTINGS_ROWS and
+       read the controls, PathPicker, ApprovalModeSection and the app/*
+       helpers at render time; page.jsx destructures the controls at top
+       level. app-live.jsx destructures window.SettingsPage. -->
+  <script type="text/babel" src="design/settings/controls.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-layout.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-programs.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-agent.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-models.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-wallpaper.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-chat.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-account.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-detail.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-approvals.jsx"></script>
+  <script type="text/babel" src="design/settings/shortcuts-editor.jsx"></script>
+  <script type="text/babel" src="design/settings/page.jsx"></script>
+
+  <!-- Live data layer (must load before app-live.jsx) -->
+  <script src="model-names.js"></script>
+  <!-- Run state and turn outcome: pure helpers over omp's prompt_result /
+       session_settled / agent_end frames. Dependency-free IIFE; adapter.js
+       calls window.OMP_TURN_STATUS and live.js reads it at its top-level
+       init, so it must load before both. -->
+  <script src="app/turn-status.js"></script>
+  <!-- Session behaviours (#37): reopen tabs, busy-close confirmation,
+       auto-naming, auto-compaction / retry. IIFE (OMP_TURN_STATUS at call
+       time); live.js reads window.OMP_SESSION_PREFS at its top-level init. -->
+  <script src="app/session-prefs.js"></script>
+  <!-- get_messages merge over a tab's live transcript. Dependency-free IIFE;
+       adapter.js calls window.OMP_TRANSCRIPT.tsOf inside adaptAgentMessages
+       and live.js destructures it at its top-level init, so it must load
+       before both. -->
+  <script src="app/transcript-merge.js"></script>
+  <script src="adapter.js"></script>
+  <!-- Session-name tab rename: pure gate/note/title helpers for the
+       after-first-turn auto `/rename`. Dependency-free IIFE; live.js
+       reads window.OMP_SESSION_TITLE at its top-level init, so it must
+       load before live.js. -->
+  <script src="app/session-title.js"></script>
+  <!-- Streaming message rebuilt from omp's delta message_update frames.
+       Dependency-free IIFE; live.js reads window.OMP_STREAM_DELTA at its
+       top-level init, so it must load before live.js. -->
+  <script src="app/stream-delta.js"></script>
+  <script src="live.js"></script>
+
+  <!-- App root — wired to OMP_BRIDGE, no demo effects -->
+  <!-- Cross-cutting hooks (must load before app-live.jsx) -->
+  <script type="text/babel" src="app/use-bridge-snapshot.jsx"></script>
+  <script type="text/babel" src="app/use-keymap.jsx"></script>
+  <script type="text/babel" src="app/use-subagent-manager.jsx"></script>
+  <!-- Goal mode in the composer; destructures window.GoalStrip,
+       window.OMP_SESSION_UI, window.OMP_GOAL and window.OMP_TURN_STATUS
+       at top level. -->
+  <script type="text/babel" src="app/use-goal-mode.jsx"></script>
+  <script type="text/babel" src="app/use-pr-automation.jsx"></script>
+  <!-- Rail widgets hook; destructures window.OMP_WIDGETS at top level. -->
+  <script type="text/babel" src="app/use-widgets.jsx"></script>
+  <!-- Per-tab terminal lifecycle (xterm instances, pty listeners);
+       destructures window.OMP_TERMINAL, window.OMP_TERMINAL_STREAM,
+       window.OMP_TERMINAL_XTERM and window.OMP_SESSION_UI at top level. -->
+  <script type="text/babel" src="app/use-terminal.jsx"></script>
+  <!-- Browser panel hook; destructures window.OMP_BROWSER and
+       window.OMP_BROWSER_SCREEN at top level. -->
+  <script type="text/babel" src="app/use-browser.jsx"></script>
+  <script type="text/babel" src="app/use-quotas.jsx"></script>
+  <script type="text/babel" src="app/use-conversation-tree.jsx"></script>
+  <!-- Git browser data flow; destructures window.OMP_GIT_BROWSER at top
+       level. -->
+  <script type="text/babel" src="app/use-git-browser.jsx"></script>
+  <!-- Resizable column widths (#41); destructures window.OMP_LAYOUT_WIDTHS
+       at top level, calls window.useEdgeDrag at render time. -->
+  <script type="text/babel" src="app/use-pane-widths.jsx"></script>
+
+  <script type="text/babel" src="app-live.jsx"></script>
+</body>
+</html>
