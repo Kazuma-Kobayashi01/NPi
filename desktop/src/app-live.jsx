@@ -187,17 +187,20 @@ function App() {
     for (const w of ["narrow", "medium", "wide"]) root.classList.toggle(`chat-w-${w}`, (t.chatWidth ?? "narrow") === w);
   }, [t.uiDetail, t.chatWidth]);
   const [chatDir, setChatDir] = React.useState("");
+  const [chatDirs, setChatDirs] = React.useState([]);
   const [savedChats, setSavedChats] = React.useState([]);
-  React.useEffect(() => { let live = true; Promise.resolve(bridge?.chatDir?.()).then(d => { if (live && d) setChatDir(d); }); return () => { live = false; }; }, [bridge]);
-  const isChatTab = s => !!chatDir && s.path === chatDir;
+  React.useEffect(() => { let live = true; Promise.resolve(bridge?.chatDir?.()).then(d => { if (live && d) setChatDir(d); }); Promise.resolve(bridge?.chatDirs?.()).then(l => { if (live && Array.isArray(l)) setChatDirs(l); }); return () => { live = false; }; }, [bridge]);
+  const isChatTab = s => !!s.path && (s.path === chatDir || chatDirs.includes(s.path));
   const chatTabs = sessions.filter(isChatTab);
   const codeTabs = sessions.filter(s => !isChatTab(s));
   React.useEffect(() => {
     if (!isChat || !chatDir) return undefined;
     let live = true;
-    Promise.resolve(bridge?.listSavedSessions?.(chatDir)).then(l => { if (live && Array.isArray(l)) setSavedChats(l); });
+    Promise.all((chatDirs.length ? chatDirs : [chatDir]).map(d => bridge?.listSavedSessions?.(d))).then(lists => {
+      if (live) setSavedChats(lists.flatMap(l => (Array.isArray(l) ? l : [])));
+    });
     return () => { live = false; };
-  }, [bridge, isChat, chatDir, chatTabs.length]);
+  }, [bridge, isChat, chatDir, chatDirs, chatTabs.length]);
   React.useEffect(() => {
     bridge?.setPromptHistoryLimit(t.promptHistoryLimit ?? window.OMP_PROMPT_HISTORY.DEFAULT_LIMIT);
   }, [bridge, t.promptHistoryLimit]);
@@ -1003,7 +1006,7 @@ function App() {
                 onArchiveTab={tab => handleCloseTab(tab.id)}
                 onDeleteTab={tab => trashConversation(tab.id, tab.sessionFile)}
                 activeId={activeSessionId}
-                recents={recentRows(recentProjects, sessions, activeProfileId).filter(r => r.path !== chatDir)}
+                recents={recentRows(recentProjects, sessions, activeProfileId).filter(r => r.path !== chatDir && !chatDirs.includes(r.path))}
                 profileLabel={profileLabel}
                 onSelectTab={handleSelectTab}
                 onCloseTab={handleCloseTab}

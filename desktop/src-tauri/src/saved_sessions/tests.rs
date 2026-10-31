@@ -412,7 +412,7 @@ fn validate_resume_rejects_path_outside_root() {
 #[test]
 fn canonical_id_from_stem_extracts_uuid_from_real_shaped_filename() {
     let path = Path::new(
-        "/home/user/.omp/agent/sessions/-devel-project/\
+        "/home/user/.local/share/npi/agent/sessions/-devel-project/\
          2026-09-12T18-16-44-966Z_01a096d6-0aa6-75d7-804c-088913a441e6.jsonl",
     );
     assert_eq!(
@@ -455,17 +455,17 @@ fn pi_coding_agent_dir_applies_to_the_builtin_profile_only() {
     // never writes - and potentially at another profile's history.
     assert_eq!(
         sessions_root_for(home, Some("work"), Some(env)),
-        Path::new("/home/u/.omp/profiles/work/agent/sessions")
+        Path::new("/home/u/.local/share/npi/profiles/work/agent/sessions")
     );
     // No override: both fall back to the per-profile layout.
     assert_eq!(
         sessions_root_for(home, None, None),
-        Path::new("/home/u/.omp/agent/sessions")
+        Path::new("/home/u/.local/share/npi/agent/sessions")
     );
     // An exported-but-empty value is not an override.
     assert_eq!(
         sessions_root_for(home, None, Some(OsStr::new(""))),
-        Path::new("/home/u/.omp/agent/sessions")
+        Path::new("/home/u/.local/share/npi/agent/sessions")
     );
 }
 
@@ -473,12 +473,12 @@ fn pi_coding_agent_dir_applies_to_the_builtin_profile_only() {
 fn an_empty_profile_id_reads_the_builtin_tree_like_omp_args_writes_it() {
     // `omp_args` filters `Some("")` to no flag, so the child writes the
     // built-in tree; the read side must agree rather than resolving to
-    // `~/.omp/profiles/agent`. Unreachable via `resolve`, asserted so the
+    // `~/.local/share/npi/profiles/agent`. Unreachable via `resolve`, asserted so the
     // two sides can't drift.
     let home = Path::new("/home/u");
     assert_eq!(
         sessions_root_for(home, Some(""), None),
-        Path::new("/home/u/.omp/agent/sessions")
+        Path::new("/home/u/.local/share/npi/agent/sessions")
     );
     // And an empty id must not suppress the env override either.
     assert_eq!(

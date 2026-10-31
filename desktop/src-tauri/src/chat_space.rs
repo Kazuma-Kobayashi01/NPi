@@ -30,12 +30,29 @@ pub struct Profile {
 pub struct ChatSpace {
     dir: PathBuf,
     config: PathBuf,
+    /// Where chats lived before the workspace folder existed; still read as chats.
+    legacy: Option<PathBuf>,
 }
 
 impl ChatSpace {
     /// `dir`: the chat folder; `config`: the folder for the instructions file.
     pub fn new(dir: PathBuf, config: PathBuf) -> Self {
-        Self { dir, config }
+        Self { dir, config, legacy: None }
+    }
+
+    /// Also treat `legacy` as a chat folder.
+    pub fn with_legacy(mut self, legacy: PathBuf) -> Self {
+        self.legacy = Some(legacy);
+        self
+    }
+
+    /// Every folder whose conversations are chats: the current one first.
+    pub fn dirs(&self) -> Vec<&Path> {
+        let mut out = vec![self.dir.as_path()];
+        if let Some(l) = self.legacy.as_deref().filter(|l| *l != self.dir && l.exists()) {
+            out.push(l);
+        }
+        out
     }
 
     /// Creates the chat folder if needed.
@@ -202,6 +219,17 @@ mod tests {
         assert!(text.contains("Call the user: Kazuma"));
         assert!(text.contains("Their work: Engineering"));
         assert!(!text.contains("About them"));
+    }
+
+    #[test]
+    fn the_legacy_folder_counts_only_while_it_exists() {
+        let (d, s) = space();
+        let legacy = d.path().join("old");
+        let s = s.with_legacy(legacy.clone());
+        assert_eq!(s.dirs().len(), 1);
+        std::fs::create_dir_all(&legacy).unwrap();
+        assert_eq!(s.dirs().len(), 2);
+        assert_eq!(s.dirs()[0], d.path().join("Chats"));
     }
 
     #[test]

@@ -31,12 +31,12 @@ impl TmpHome {
     }
 
     fn agent_dir(&self) -> PathBuf {
-        self.path.join(".omp").join("agent")
+        self.path.join(".local/share/npi").join("agent")
     }
 
     fn named_agent_dir(&self, id: &str) -> PathBuf {
         self.path
-            .join(".omp")
+            .join(".local/share/npi")
             .join("profiles")
             .join(id)
             .join("agent")
@@ -83,7 +83,7 @@ fn pi_coding_agent_dir_applies_only_to_built_in_profile() {
     assert_eq!(
         result,
         home.path
-            .join(".omp")
+            .join(".local/share/npi")
             .join("profiles")
             .join("work")
             .join("agent")
@@ -95,7 +95,7 @@ fn empty_profile_id_is_treated_as_built_in() {
     let home = TmpHome::new();
     // The `filter(|id| !id.is_empty())` guard.
     let result = agent_dir_for(&home.path, Some(""), None);
-    assert_eq!(result, home.path.join(".omp").join("agent"));
+    assert_eq!(result, home.path.join(".local/share/npi").join("agent"));
 }
 
 // ── config_path probe order ──────────────────────────────────────────────────

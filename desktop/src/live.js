@@ -4481,6 +4481,11 @@
       if (!window.__TAURI__) return "";
       return (await _invokeSafe("chat_dir", {}, "")) || "";
     },
+    /** Every folder whose conversations are chats (the current one first). */
+    async chatDirs() {
+      if (!window.__TAURI__) return [];
+      return (await _invokeSafe("chat_dirs", {}, [])) || [];
+    },
     /** `{ instructions, memory }` of the Chat space, or null. */
     async chatPrefs() { return _invokeSafe("chat_prefs_get", {}, null); },
     /** Sidebar actions on a saved conversation (deleted for good) / a folder. Resolve to `{ ok }`. */

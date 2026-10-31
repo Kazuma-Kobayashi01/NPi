@@ -88,15 +88,19 @@ pub fn is_default(id: &str) -> bool {
     id.is_empty() || id == DEFAULT_PROFILE_ID
 }
 
+/// NPi's data root, relative to the home folder (the `npi` command line uses the
+/// same one; project-local `.omp` folders are unchanged).
+pub const DATA_ROOT: &str = ".local/share/npi";
+
 /// omp's agent directory for a *resolved* profile (see
-/// [`ProfileStore::resolve`]; `None` = built-in): `<home>/.omp/agent` for the
-/// built-in one, `<home>/.omp/profiles/<id>/agent` for a named one. Mirrors
+/// [`ProfileStore::resolve`]; `None` = built-in): `<home>/.local/share/npi/agent` for the
+/// built-in one, `<home>/.local/share/npi/profiles/<id>/agent` for a named one. Mirrors
 /// the layout the installed omp binary creates for `--profile`.
 pub fn agent_dir(home: &Path, profile: Option<&str>) -> PathBuf {
-    let omp = home.join(".omp");
+    let root = home.join(DATA_ROOT);
     profile.map_or_else(
-        || omp.join("agent"),
-        |id| omp.join("profiles").join(id).join("agent"),
+        || root.join("agent"),
+        |id| root.join("profiles").join(id).join("agent"),
     )
 }
 
@@ -995,10 +999,10 @@ mod tests {
     #[test]
     fn agent_dir_isolates_named_profiles_only() {
         let home = Path::new("/home/u");
-        assert_eq!(agent_dir(home, None), Path::new("/home/u/.omp/agent"));
+        assert_eq!(agent_dir(home, None), Path::new("/home/u/.local/share/npi/agent"));
         assert_eq!(
             agent_dir(home, Some("work")),
-            Path::new("/home/u/.omp/profiles/work/agent")
+            Path::new("/home/u/.local/share/npi/profiles/work/agent")
         );
     }
 

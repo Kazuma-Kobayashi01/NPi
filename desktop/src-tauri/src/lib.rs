@@ -757,6 +757,12 @@ fn chat_dir(space: State<'_, chat_space::ChatSpace>) -> Result<String, String> {
     space.ensure_dir().map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Every folder whose conversations are chats (the current one first).
+#[tauri::command]
+fn chat_dirs(space: State<'_, chat_space::ChatSpace>) -> Vec<String> {
+    space.dirs().into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+}
+
 #[derive(serde::Serialize)]
 struct ChatPrefs {
     instructions: String,
@@ -834,6 +840,14 @@ async fn list_project_files(
     off_ipc(move || files::list(&cwd, &query, limit)).await?
 }
 
+/// The default folder for new work: `~/Documents/NPi`, created on demand.
+fn workspace_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    use tauri::Manager;
+    let dir = app.path().document_dir().ok()?.join("NPi");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
 /// Native folder picker — returns the chosen path or null.
 ///
 /// On macOS, `AppKit` requires all `NSOpenPanel` calls to originate from
@@ -849,10 +863,12 @@ async fn list_project_files(
 async fn open_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = std::sync::mpsc::channel();
-    app.dialog()
-        .file()
-        .set_title("Open Project Folder")
-        .pick_folder(move |result| {
+    let dialog = app.dialog().file().set_title("Open Project Folder");
+    let dialog = match workspace_dir(&app) {
+        Some(dir) => dialog.set_directory(dir),
+        None => dialog,
+    };
+    dialog.pick_folder(move |result| {
             let _ = tx.send(result);
         });
     off_ipc(move || {
@@ -1430,10 +1446,11 @@ fn setup(app: &tauri::App) {
     // fallback: another account could plant a `yolo` there; without a config
     // dir the choice stays in memory.
     app.manage(app_mode::AppModeStore::new());
+    let legacy_chats = app.path().app_data_dir().map_or_else(|_| std::env::temp_dir().join("npi"), |d| d).join("Chats");
     app.manage(chat_space::ChatSpace::new(
-        app.path().app_data_dir().map_or_else(|_| std::env::temp_dir().join("npi"), |d| d).join("Chats"),
+        app.path().document_dir().map_or_else(|_| legacy_chats.clone(), |d| d.join("NPi").join("Chats")),
         app.path().app_config_dir().map_or_else(|_| std::env::temp_dir().join("npi-config"), |d| d),
-    ));
+    ).with_legacy(legacy_chats));
     app.manage(Arc::new(ApprovalModeStore::load(config_file(
         "approval-mode.json",
     ))));
@@ -1649,6 +1666,7 @@ pub fn run() {
             session_actions::delete_saved_session,
             session_actions::reveal_path,
             chat_dir,
+            chat_dirs,
             chat_prefs_get,
             chat_prefs_set,
             chat_profile_get,
