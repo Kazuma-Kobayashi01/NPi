@@ -3856,7 +3856,7 @@ dependencies = [
 
 [[package]]
 name = "omp-desktop"
-version = "1.1.0-client"
+version = "1.2.0-client"
 dependencies = [
  "base64 0.22.1",
  "gix",
