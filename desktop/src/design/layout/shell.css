@@ -646,3 +646,10 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .project-sidebar .psb-name, .project-sidebar .psb-navitem, .project-sidebar .psb-main, .project-sidebar .psb-account-name { font-size: calc(var(--d-text) - 2px); }
 .project-sidebar .psb-parent, .project-sidebar .psb-empty, .project-sidebar .psb-section, .project-sidebar .chs-day,
 .project-sidebar .psb-account-plan, .project-sidebar .tab-count, .project-sidebar .tab-profile { font-size: calc(var(--d-text-sm) - 2px); }
+
+/* ── Type pass: titles and card heads a step smaller ── */
+.chrome-name { font-size: calc(var(--d-text) - 2px); font-weight: 400; }
+.chrome-branch { font-size: calc(var(--d-text-sm) - 1px); }
+.sp-title { font-size: calc(var(--d-text) - 2px); }
+.sp-big { font-size: calc(var(--d-text) - 1px); }
+.tool-card { font-size: calc(var(--d-text) - 2px); }
