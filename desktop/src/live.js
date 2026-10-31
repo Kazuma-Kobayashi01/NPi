@@ -4347,6 +4347,19 @@
     branchAt(entryId) {
       return _moveToNewFile(() => _sendWithResponse({ type: "branch", entryId }));
     },
+    /** Rewind to a user message of this tab's conversation: finds its entry by
+     *  text (`dup`: how many earlier prompts had the same text), then `branchAt`.
+     *  Resolves like `branchAt` (`{ ok, text }` / `{ ok: false, error }`). */
+    async rewindToPrompt(text, dup = 0) {
+      const entry = sessionRegistry.get(activeSessionId);
+      if (!entry?.sessionFile) return { ok: false, error: "This conversation has no saved file yet." };
+      const res = await _invokeResult("conversation_tree", { sessionFile: entry.sessionFile, profile: entry.profile });
+      if (!res.ok) return res;
+      const same = (res.value.entries ?? []).filter(e => e.kind === "user" && !e.agent && e.inCurrent && String(e.text ?? "").trim() === String(text ?? "").trim());
+      const hit = same[dup] ?? same[same.length - 1];
+      if (!hit) return { ok: false, error: "Could not find that message in the saved conversation." };
+      return _moveToNewFile(() => _sendWithResponse({ type: "branch", entryId: hit.id }));
+    },
     /** Continue after a message (a turn's last reply): same move as
      *  `branchAt`, nothing to re-ask. omp refuses (`session_busy`) unless idle. */
     forkAt(entryId) {

@@ -692,6 +692,12 @@ function App() {
 
   // Close tab → kills that session's omp process; bridge updates tab list.
   // Guarded: with `confirmBusyClose` a working tab asks first (live.js).
+  // Rewind: back to before a message, its text returned to the prompt box.
+  const handleRewind = async (msg, dup) => {
+    const res = await bridge?.rewindToPrompt?.(msg.text, dup);
+    if (res?.ok) setPromptInsert({ text: res.text, nonce: Date.now() });
+    else if (res && !res.cancelled) console.warn("[app] rewind failed:", res.error);
+  };
   const handleCloseTab = id => { bridge?.closeSessionGuarded(id); };
   // Manual rename (#32): omp's `/rename <title>` via the bridge, which
   // activates a background tab first and keeps the transcript clean.
@@ -1045,6 +1051,7 @@ function App() {
                     followOutput={t.followOutput}
                     submitKey={t.submitKey}
                     wallpaper={t.wallpaper !== false ? window.OMP_WALLPAPERS.pick(t.wallpaperArt, activeSessionId).file : null}
+                    onRewind={streaming ? null : handleRewind}
                   />
                   <Composer
                     sessionId={planKey}

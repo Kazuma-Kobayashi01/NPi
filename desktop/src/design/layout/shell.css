@@ -370,7 +370,7 @@ html.tauri-native .window {
    wrapper taller than the text and pushed the line above the row's centre. */
 .composer-input textarea, .welcome-ta {
   display: block; padding: 0;
-  font-size: calc(var(--d-text) + 1px); line-height: 26px; min-height: 26px;
+  font-size: calc(var(--d-text) - 1px); line-height: 26px; min-height: 26px;
 }
 .welcome-box:not(.open) .welcome-ta { align-self: center; }
 
@@ -660,3 +660,11 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .composer-input textarea { min-height: calc(var(--u) * 1.375); }
 .sp-fold { appearance: none; border: 0; background: transparent; width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0; cursor: pointer; font: inherit; text-align: left; }
 .sp-fold:hover { color: var(--fg); }
+
+/* ── A user message: wide card, time and actions under it at the right ── */
+.row.user { flex-direction: column; align-items: stretch; }
+.row.user .user-bubble { max-width: 100%; align-self: stretch; }
+.user-foot { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 6px 4px 0; color: var(--fg-4); font-size: calc(var(--d-text-sm) - 1px); }
+.user-time { margin-right: 6px; }
+.user-act { appearance: none; border: 0; background: transparent; color: var(--fg-4); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.user-act:hover { color: var(--fg); background: var(--bg-hover); }
