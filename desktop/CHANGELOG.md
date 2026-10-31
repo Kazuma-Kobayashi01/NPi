@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] - 2026-10-31
+
+First NPi Desktop release (macOS, Apple silicon).
+
+### Added
+
+- A humanist, minimalist interface: native macOS window and sidebar, single top bar, Chat and Code modes, themes (Graphite, Ivory, Catppuccin), Noto fonts, chat wallpapers, five interface-detail steps, three chat widths.
+- Chat space with its own conversations, instructions, profile and memory; Settings for Account, Chat, Models, Agent, Code and Advanced.
+- Model picker by vendor, plan usage and spend, right panel, terminal and subagents as columns, sidebar right-click menu, hover tips, run status.
+- The bundled `npi` command line (a reworked omp): settings tiered into everyday, "show more" and Advanced.
+
+### Removed
+
+- Remote access, the in-app updater and the upstream themes.
+
 ## [Unreleased]
 
 ### Added
