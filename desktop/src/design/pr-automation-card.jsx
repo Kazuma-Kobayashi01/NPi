@@ -42,10 +42,15 @@ function PrAutomationCard({ automation, available = true, bridge }) {
     if (await window.copyText(pr.url)) close();
     else setActionError("Could not copy the PR link.");
   };
-  const error = automation.error || automation.discoveryError;
+  const rawError = automation.error || automation.discoveryError;
+  // A folder that is not a Git repository is not a failure: say so, quietly.
+  const notRepo = /not a git repository|could not find a git repository/i.test(rawError || "");
+  const error = notRepo ? "" : rawError;
   const summary = !available
     ? "Open a connected project tab to see its pull request."
-    : automation.loading
+    : notRepo
+      ? "This folder is not a Git repository."
+      : automation.loading
       ? "Updating the current branch's pull request…"
       : error
         ? "Could not update pull request."

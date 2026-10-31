@@ -137,7 +137,7 @@ function WindowChrome({
 // The tool buttons that used to sit in the footer status bar.
 
 // ── Toolbar: the two code-mode tools, then everything else under "More" ──
-function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen }) {
+function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen }) {
   return (
     <div className="chrome-toolbar">
       {!chat && <button className={`chrome-btn ${terminalOpen ? "on" : ""}`} aria-pressed={!!terminalOpen}
@@ -147,6 +147,17 @@ function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = 
       {!chat && <button className="chrome-btn" title="Changes" onClick={onChanges}>
         <Icon name="diff2" size={15} />
       </button>}
+      {!chat && onBrowser && (
+        <button className={`chrome-btn ${browserOpen ? "on" : ""}`} aria-pressed={!!browserOpen}
+          title={`Browser panel${browserHint ? ` (${browserHint})` : ""}`} onClick={onBrowser}>
+          <Icon name="web" size={15} />
+        </button>
+      )}
+      {!chat && onSubagents && (
+        <button className={`chrome-btn ${subagentsOpen ? "on" : ""}`} aria-pressed={!!subagentsOpen} title="Subagents" onClick={onSubagents}>
+          <Icon name="agent" size={15} />
+        </button>
+      )}
       <MoreMenu items={moreItems} />
       {onPanel && (
         <button className={`chrome-btn ${panelOpen ? "on" : ""}`} aria-pressed={!!panelOpen} title="Side panel" onClick={onPanel}>

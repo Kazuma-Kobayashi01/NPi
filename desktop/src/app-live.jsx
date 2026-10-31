@@ -926,8 +926,6 @@ function App() {
   const moreItems = [
     { label: "Todo and plan", icon: "plan", hint: todoCounts.total > 0 ? `${todoCounts.done}/${todoCounts.total}` : "", onClick: () => setPlanOpen(true) },
     { label: "Conversation tree", icon: "branch", on: side === "tree", onClick: () => toggleSide("tree") },
-    { label: "Browser panel", icon: "web", on: side === "browser", hint: keyHint("desktop.browser.toggle"), onClick: () => toggleSide("browser") },
-    { label: "Subagents", icon: "agent", on: showSplit, onClick: subagentUi.togglePane },
     { label: "Goal mode", icon: "goal", on: goalUi.mode, onClick: () => { if (!goalUi.goalBlocked || goalUi.mode) goalUi.toggle(); } },
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
     "-",
@@ -968,6 +966,11 @@ function App() {
                 onChanges={() => setGitOpen({ path: null })}
                 moreItems={moreItems}
                 chat={t.appMode === "chat"}
+                onBrowser={() => toggleSide("browser")}
+                browserOpen={side === "browser"}
+                browserHint={keyHint("desktop.browser.toggle")}
+                onSubagents={subagentUi.togglePane}
+                subagentsOpen={showSplit}
                 panelOpen={floatingOn}
                 onPanel={() => setTweak("layout", floatingOn ? "focus" : "rail")}
               />
