@@ -1004,7 +1004,7 @@ function App() {
                 onSelectTab={handleSelectTab} onCloseTab={handleCloseTab}
                 onResume={handleResumeSession}
                 onNew={() => setHome(true)} onHide={toggleSidebar}
-                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountCall || t.accountName} plan={window.OMP_USAGE.quotaFor(quotas?.rows, model?.provider).mine?.plan} onClick={() => openSettings("account")} />}
+                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} plan={window.OMP_USAGE.quotaFor(quotas?.rows, model?.provider).mine?.plan} onClick={() => openSettings("account")} />}
               />
             )}
             {showSidebar && !isChat && (
@@ -1026,7 +1026,7 @@ function App() {
                 onHide={toggleSidebar}
                 onHistory={() => setHistoryOpen(true)}
                 onReorder={handleReorder}
-                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountCall || t.accountName} plan={window.OMP_USAGE.quotaFor(quotas?.rows, model?.provider).mine?.plan} onClick={() => openSettings("account")} />}
+                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} plan={window.OMP_USAGE.quotaFor(quotas?.rows, model?.provider).mine?.plan} onClick={() => openSettings("account")} />}
               />
             )}
             <div ref={stageRef} style={stageStyle} className={`stage ${side === "browser" ? `with-browser${browserFull ? " browser-full" : ""}` : sideRail ? `with-${sideRail}` : ""}`}>
@@ -1037,7 +1037,7 @@ function App() {
                     recents={welcomeProjects}
                     onPickFolder={() => bridge?.pickFolder()}
                     onStart={handleStartFromWelcome}
-                    chat={isChat ? chatDir : ""} appMode={isChat ? "chat" : "code"} userName={t.accountCall || t.accountName}
+                    chat={isChat ? chatDir : ""} appMode={isChat ? "chat" : "code"} userName={t.accountCall}
                     bridge={bridge} approvalModes={approvalModes} profileId={activeProfileId}
                     wallpaper={null}
                     favorites={t.favoriteModels} onManageModels={() => openSettings("models")} />

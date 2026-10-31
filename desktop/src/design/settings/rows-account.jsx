@@ -38,15 +38,33 @@ function _SRA_Account({ row, ctx, query }) {
   const [draft, setDraft] = React.useState(null);
   const [state, setState] = React.useState("");
   const fileRef = React.useRef(null);
+  const syncTimer = React.useRef(0);
   React.useEffect(() => {
-    Promise.resolve(ctx.bridge?.chatProfile?.()).then(p => { const v = p ?? { call: "", work: "", interests: "", about: "" }; setSaved(v); setDraft(v); });
+    Promise.resolve(ctx.bridge?.chatProfile?.()).then(p => {
+      const v = p ?? { call: "", work: "", interests: "", about: "" };
+      setSaved(v); setDraft(v);
+      // A name saved before the field lived in the tweaks comes along.
+      if (v.call && !t.accountCall) ctx.setTweak("accountCall", v.call);
+    });
+    return () => clearTimeout(syncTimer.current);
   }, [ctx.bridge]);
-  const dirty = !!draft && !!saved && Object.keys(draft).some(k => draft[k] !== saved[k]);
+  // The name to call you is a tweak (the greeting reads it at once); the assistant's copy follows a moment later.
+  const setCall = (value) => {
+    ctx.setTweak("accountCall", value);
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      const base = saved ?? { call: "", work: "", interests: "", about: "" };
+      ctx.bridge?.setChatProfile?.({ ...base, ...(draft ?? {}), call: value.trim() });
+    }, 500);
+  };
+  // `call` lives apart from the Save button below.
+  const dirty = !!draft && !!saved && ["work", "interests", "about"].some(k => draft[k] !== saved[k]);
   const set = (k) => (e) => setDraft(d => ({ ...d, [k]: e.target.value }));
   const save = async () => {
     setState("saving");
-    const r = await ctx.bridge?.setChatProfile?.(draft);
-    if (r?.ok) { setSaved(draft); ctx.setTweak("accountCall", draft.call.trim()); setState("saved"); }
+    const full = { ...draft, call: String(t.accountCall ?? "").trim() };
+    const r = await ctx.bridge?.setChatProfile?.(full);
+    if (r?.ok) { setSaved(full); setDraft(full); setState("saved"); }
     else setState(String(r?.error ?? "could not save"));
   };
   const pick = async (e) => {
@@ -69,7 +87,7 @@ function _SRA_Account({ row, ctx, query }) {
         <input className="st-input" value={t.accountName ?? ""} aria-label="Full name" onChange={e => ctx.setTweak("accountName", e.target.value)} />
       </Row>
       <Row label="What should the assistant call you?" query={query}>
-        <input className="st-input" value={draft?.call ?? ""} disabled={!draft} aria-label="Name to call you" onChange={set("call")} />
+        <input className="st-input" value={t.accountCall ?? ""} aria-label="Name to call you" placeholder="Used in greetings and chats" onChange={e => setCall(e.target.value)} />
       </Row>
       <Row label="What best describes your work?" query={query}>
         <div className="st-modelsel">
