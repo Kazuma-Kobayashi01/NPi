@@ -2,15 +2,13 @@
   <img src="docs/assets/banner.png" alt="NPi — a humanist desktop for the omp coding agent" width="100%">
 </p>
 
-<h1 align="center">NPi Desktop</h1>
-
-<p align="center"><sub>NeoPi Desktop &nbsp;·&nbsp; 1.0.1 &nbsp;·&nbsp; for macOS on Apple silicon</sub></p>
-
 <p align="center"><em>What a piece of work is a man! How noble in reason, how infinite in faculty!</em><br>
 <sub>— William Shakespeare, <i>Hamlet</i>, II.ii</sub></p>
 
+<p align="center"><sub>NeoPi Desktop &nbsp;·&nbsp; 1.0.1 &nbsp;·&nbsp; for macOS on Apple silicon</sub></p>
+
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.1-C8A96A?style=flat-square&labelColor=1f1f1d" alt="version 1.0.1">
+  <img src="https://img.shields.io/badge/version-1.0.1-C8A96A?style=flat-square&labelColor=1f1f1d" alt=" Version 1.0.1">
   <img src="https://img.shields.io/badge/macOS-Apple%20silicon-6E7F99?style=flat-square&labelColor=1f1f1d&logo=apple&logoColor=E9E4D6" alt="macOS Apple silicon">
   <img src="https://img.shields.io/badge/Tauri-2-C8A96A?style=flat-square&labelColor=1f1f1d&logo=tauri&logoColor=E9E4D6" alt="Tauri 2">
   <img src="https://img.shields.io/badge/Rust-stable-8E8E88?style=flat-square&labelColor=1f1f1d&logo=rust&logoColor=E9E4D6" alt="Rust">
@@ -18,7 +16,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-6E7F99?style=flat-square&labelColor=1f1f1d&logo=typescript&logoColor=E9E4D6" alt="TypeScript">
   <img src="https://img.shields.io/badge/Bun-1.4-D8CBB0?style=flat-square&labelColor=1f1f1d&logo=bun&logoColor=E9E4D6" alt="Bun">
   <img src="https://img.shields.io/badge/omp-18.14%20core-A99BCF?style=flat-square&labelColor=1f1f1d" alt="omp 18.14 core">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-C8A96A?style=flat-square&labelColor=1f1f1d" alt="license MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-C8A96A?style=flat-square&labelColor=1f1f1d" alt="License MIT"></a>
 </p>
 
 <p align="center"><img src="docs/assets/divider.svg" width="420" alt="❦"></p>
