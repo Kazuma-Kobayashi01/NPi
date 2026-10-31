@@ -678,3 +678,4 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .st-archive-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-archive-meta { color: var(--fg-4); white-space: nowrap; }
 .session .chat-wrap, .session .chat-scroll { background: transparent; }
+.session .empty-ws { background: transparent; }
