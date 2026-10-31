@@ -6,8 +6,8 @@
 
 <p align="center"><sub>NeoPi Desktop &nbsp;·&nbsp; 1.0.1 &nbsp;·&nbsp; for macOS on Apple silicon</sub></p>
 
-<p align="center"><em>Homo sum, humani nihil a me alienum puto.</em><br>
-<sub>“I am human; nothing human is foreign to me.” — Terence, 163 BC</sub></p>
+<p align="center"><em>What a piece of work is a man! How noble in reason, how infinite in faculty!</em><br>
+<sub>— William Shakespeare, <i>Hamlet</i>, II.ii</sub></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.1-C8A96A?style=flat-square&labelColor=1f1f1d" alt="version 1.0.1">
@@ -38,11 +38,12 @@ Underneath sits a modern engine: a Rust shell, a React interface, and the
 
 ## Firmitas · Utilitas · Venustas
 
-> *Firmitas, utilitas, venustas* — strength, usefulness, beauty.
-> <br>— Vitruvius, *De architectura*, I.3
+> *Thou art more lovely and more temperate.*
+> <br>— William Shakespeare, Sonnet 18
 
-The Roman architect's three conditions of good building are the three promises
-of this product.
+The Roman architect Vitruvius named three conditions of good building —
+*firmitas, utilitas, venustas*: strength, usefulness, beauty. They are the three
+promises of this product.
 
 <table>
   <tr>
@@ -96,9 +97,9 @@ Switching rooms always lands on that room's start page, greeted by the hour —
 
 ## The craft
 
-> *Beauty is the reasoned harmony of all the parts, so that nothing may be added,
-> taken away or altered, save for the worse.*
-> <br>— Leon Battista Alberti, *De re aedificatoria*, VI (after the common English rendering)
+> *Suit the action to the word, the word to the action; with this special
+> observance, that you o'erstep not the modesty of nature.*
+> <br>— William Shakespeare, *Hamlet*, III.ii
 
 | | |
 |---|---|
@@ -155,7 +156,7 @@ npi --version        # npi/1.0.1
 
 ## Where things live
 
-> *Man is the measure of all things.* — Protagoras
+> *This above all: to thine own self be true.* — William Shakespeare, *Hamlet*, I.iii
 
 Your things stay where you can see them.
 
@@ -227,7 +228,8 @@ dist/       release builds (not tracked)
 
 ## Thanks
 
-> *Ars longa, vita brevis.* — Hippocrates, in Seneca's rendering
+> *How far that little candle throws his beams! So shines a good deed in a naughty world.*
+> <br>— William Shakespeare, *The Merchant of Venice*, V.i
 
 - **omp** by Mario Zechner and Stencil Labs, and **omp-desktop** by Miroslav
   Drbal — both MIT. NPi stands on their work; see `omp/LICENSE` and `desktop/LICENSE`.
