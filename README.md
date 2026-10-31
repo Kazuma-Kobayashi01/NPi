@@ -251,7 +251,3 @@ crates listed in [docs/licenses](docs/licenses/rust-crates.md)).
 <p align="center">
   <sub>Made with proportion, in the spirit of those who measured the world by the human figure.</sub>
 </p>
-
----
-
-*中文简介*：NPi 是基于 omp 的桌面应用和命令行，面向 macOS（Apple 芯片）。设计取向是人文主义与极简：Chat 用来日常对话，Code 用来做项目；数据存放在 `~/.local/share/npi`，工作区在 `~/Documents/NPi`，与 omp 完全隔离，没有远程访问，也没有联网自更新。
