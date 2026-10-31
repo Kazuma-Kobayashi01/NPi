@@ -1,3 +1,11 @@
-Noto Sans, Noto Serif, Noto Sans SC and Noto Serif SC
-Copyright 2022 The Noto Project Authors (https://github.com/notofonts)
-Licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org
+Bundled fonts (subset to woff2), each under the SIL Open Font License, Version 1.1
+(full text: licenses/OFL-1.1.txt at the repository root; https://openfontlicense.org)
+
+Noto Sans, Noto Serif
+  Copyright 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)
+
+Noto Sans SC
+  (c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+
+Noto Serif SC
+  (c) 2017-2024 Adobe (http://www.adobe.com/).

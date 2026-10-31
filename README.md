@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-6E7F99?style=flat-square&labelColor=1f1f1d&logo=typescript&logoColor=E9E4D6" alt="TypeScript">
   <img src="https://img.shields.io/badge/Bun-1.4-D8CBB0?style=flat-square&labelColor=1f1f1d&logo=bun&logoColor=E9E4D6" alt="Bun">
   <img src="https://img.shields.io/badge/omp-18.14%20core-A99BCF?style=flat-square&labelColor=1f1f1d" alt="omp 18.14 core">
-  <img src="https://img.shields.io/badge/license-MIT-C8A96A?style=flat-square&labelColor=1f1f1d" alt="license MIT">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-C8A96A?style=flat-square&labelColor=1f1f1d" alt="license MIT"></a>
 </p>
 
 <p align="center"><img src="docs/assets/divider.svg" width="420" alt="❦"></p>
@@ -223,6 +223,17 @@ dist/       release builds (not tracked)
 - Chat is a mode of the same agent: it carries its own prompt and memory, but the
   agent still has its tools. Ask it before it touches your files.
 - The command line's own test suite has not been brought up to the new name yet.
+
+<p align="center"><img src="docs/assets/divider.svg" width="420" alt="❦"></p>
+
+## License
+
+NPi Desktop is open source under the **[MIT License](LICENSE)** — use it, change
+it, share it, keep the notice. It stands on other open-source work, whose
+licenses travel with it: see **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)**
+(omp and omp-desktop under MIT; Noto fonts under the
+[SIL Open Font License](licenses/OFL-1.1.txt); Catppuccin under MIT; the Rust
+crates listed in [docs/licenses](docs/licenses/rust-crates.md)).
 
 <p align="center"><img src="docs/assets/divider.svg" width="420" alt="❦"></p>
 
