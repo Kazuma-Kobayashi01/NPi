@@ -653,3 +653,8 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .sp-title { font-size: calc(var(--d-text) - 2px); }
 .sp-big { font-size: calc(var(--d-text) - 1px); }
 .tool-card { font-size: calc(var(--d-text) - 2px); }
+
+/* ── Prompt box: thinner and wider ── */
+.composer { max-width: calc(var(--u) * 50); }
+.composer-row { min-height: calc(var(--u) * 2.5); }
+.composer-input textarea { min-height: calc(var(--u) * 1.375); }
