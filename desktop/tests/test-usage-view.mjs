@@ -71,6 +71,9 @@ check("time until a reset, and percent left", () => {
   assert.equal(U.leftPct({ remainingFraction: 0.745 }), 75);
   assert.equal(U.leftPct({ remainingFraction: 2 }), 100);
   assert.equal(U.leftPct({}), null);
+  assert.equal(U.usedPct({ remainingFraction: 0.745 }), 25, "used is what is not left");
+  assert.equal(U.usedPct({ remainingFraction: 0 }), 100);
+  assert.equal(U.usedPct({}), null);
 });
 
 check("token rows: input, output, cache read, cache write; reasoning only when used", () => {

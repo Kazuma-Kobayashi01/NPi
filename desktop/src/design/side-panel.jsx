@@ -103,14 +103,14 @@ function _SP2_Limits({ row }) {
   return (
     <div className="sp-limits">
       {row.limits.map((l, i) => {
-        const left = U.leftPct(l);
+        const used = U.usedPct(l);
         return (
           <div key={`${l.windowId ?? l.label}:${i}`} className="sp-limit">
             <div className="sp-trow">
               <span className="sp-label">{l.label || l.windowId || "Limit"}</span>
-              <span className="sp-num">{left === null ? "—" : `${left}% left`}</span>
+              <span className="sp-num">{used === null ? "—" : `${used}% used`}</span>
             </div>
-            <div className="sp-meter"><span style={{ width: `${left ?? 0}%`, background: left !== null && left < 15 ? "var(--rose)" : left !== null && left < 35 ? "var(--amber)" : "var(--accent)" }} /></div>
+            <div className="sp-meter"><span style={{ width: `${used ?? 0}%`, background: used !== null && used > 85 ? "var(--rose)" : used !== null && used > 65 ? "var(--amber)" : "var(--accent)" }} /></div>
             {l.resetsAt && <div className="sp-note">Resets in {U.untilReset(l.resetsAt, Date.now())}</div>}
           </div>
         );
@@ -148,7 +148,7 @@ function UsageCard({ provider, quotas, stats }) {
             {r.limits.map((l, i) => (
               <div key={i} className="sp-trow sp-small">
                 <span className="sp-dim">{l.label || l.windowId}</span>
-                <span className="sp-num">{U.leftPct(l) === null ? "—" : `${U.leftPct(l)}% left`}</span>
+                <span className="sp-num">{U.usedPct(l) === null ? "—" : `${U.usedPct(l)}% used`}</span>
               </div>
             ))}
           </div>

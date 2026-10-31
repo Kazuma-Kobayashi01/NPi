@@ -28,8 +28,7 @@ function UsagePopover({ provider, quotas, stats, context, onSeeAll, onClose }) {
           {onSeeAll && <button type="button" className="usage-all" onClick={() => { onClose(); onSeeAll(); }}>See all →</button>}
         </div>
         {mine.limits.map((l, i) => {
-          const left = U.leftPct(l);
-          const used = left === null ? null : 100 - left;
+          const used = U.usedPct(l);
           return (
             <div key={`${l.windowId ?? l.label}:${i}`} className="usage-limit">
               <div className="usage-line">

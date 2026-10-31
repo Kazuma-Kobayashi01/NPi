@@ -85,5 +85,11 @@
     return cost < 0.01 ? "<$0.01" : `$${cost.toFixed(2)}`;
   }
 
-  window.OMP_USAGE = { estimateTokens, contextBreakdown, quotaFor, untilReset, leftPct, tokenRows, formatCost };
+  /** Percent of a limit already used (0-100), or null when unknown. */
+  function usedPct(limit) {
+    const left = leftPct(limit);
+    return left === null ? null : 100 - left;
+  }
+
+  window.OMP_USAGE = { estimateTokens, contextBreakdown, quotaFor, untilReset, leftPct, usedPct, tokenRows, formatCost };
 })();
