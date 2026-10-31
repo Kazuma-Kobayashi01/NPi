@@ -53,7 +53,7 @@ function ChatSidebar({ tabs, saved, activeId, pinned = [], archived = [], unread
       ...(r.tab ? [{ label: "Mark as unread", key: "U", onClick: () => onMarkUnread(r.tab.id) }, { label: "Rename", key: "R", onClick: () => { onSelectTab(r.tab.id); setRenaming(r.tab.id); } }] : []),
       "-",
       { label: "Archive", key: "A", onClick: () => onArchive(r) },
-      { label: "Delete", key: "D", danger: true, confirm: "Move to Trash?", onClick: () => onDelete(r) },
+      { label: "Delete", key: "D", danger: true, confirm: "Delete permanently?", onClick: () => onDelete(r) },
     ];
   };
   return (

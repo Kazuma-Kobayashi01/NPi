@@ -28,7 +28,7 @@ function ProjectSidebar({
     { label: "Rename", key: "R", onClick: () => startRename(t.id) },
     "-",
     { label: "Archive", key: "A", onClick: () => onArchiveTab(t) },
-    { label: "Delete", key: "D", danger: true, confirm: "Move to Trash?", onClick: () => onDeleteTab(t) },
+    { label: "Delete", key: "D", danger: true, confirm: "Delete permanently?", onClick: () => onDeleteTab(t) },
   ];
   // Group keys the user folded. Not persisted: tab ids (and so pathless
   // groups' keys) don't survive a restart anyway.

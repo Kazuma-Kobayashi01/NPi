@@ -4483,7 +4483,7 @@
     },
     /** `{ instructions, memory }` of the Chat space, or null. */
     async chatPrefs() { return _invokeSafe("chat_prefs_get", {}, null); },
-    /** Sidebar actions on a saved conversation / a folder. Resolve to `{ ok }`. */
+    /** Sidebar actions on a saved conversation (deleted for good) / a folder. Resolve to `{ ok }`. */
     async deleteSavedSession(path) {
       if (!window.__TAURI__) return { ok: false, error: "not connected" };
       try { await window.__TAURI__.core.invoke("delete_saved_session", { path, profile: _activeProfileId() }); return { ok: true }; }

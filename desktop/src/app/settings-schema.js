@@ -86,6 +86,10 @@
       ] },
     ] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "How tool calls and thinking show up in the transcript.", groups: [
+      { name: "Archive", rows: [
+        custom("archive", "Archived conversations", "Conversations you archived from the sidebar. Restore brings one back to the list; Delete removes it from the disk and cannot be undone.", "archive archived restore delete conversations history",
+          { keys: ["archivedSessions"] }),
+      ] },
       { name: "Chat assistant", rows: [
         custom("chatInstructions", "Instructions for Chat", "Standing instructions the assistant keeps in mind in every chat in Chat mode: tone, language, format. Applies to chats started or restarted after saving.", "instructions system prompt tone style persona"),
         custom("chatMemory", "Memory", "What the assistant remembers about you across chats. It reads this at the start of each chat and can add to it when you ask it to remember something.", "memory remember notes"),

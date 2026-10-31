@@ -851,6 +851,9 @@ function App() {
   const activeIsChat = isChatTab(activeProject);
   // The other mode's tab is not shown: this mode's start page is.
   const showHome = noTab || home || (sessions.length > 0 && activeIsChat !== isChat);
+  // One artwork behind the whole column, the prompt box included.
+  const sessionWallpaper = t.wallpaper === false ? null
+    : window.OMP_WALLPAPERS.pick(t.wallpaperArt, showHome ? `home-${new Date().toDateString()}` : activeSessionId).file;
   // Switching modes always lands on the start page of the mode.
   const handleMode = m => {
     if (m === t.appMode) return;
@@ -1016,6 +1019,7 @@ function App() {
             )}
             <div ref={stageRef} style={stageStyle} className={`stage ${side === "browser" ? `with-browser${browserFull ? " browser-full" : ""}` : sideRail ? `with-${sideRail}` : ""}`}>
               <main className="session" onFocusCapture={prAutomation.onConversationFocus}>
+                {sessionWallpaper && <div className="wallpaper" style={{ "--wp": `url("${new URL(sessionWallpaper, document.baseURI).href}")` }} aria-hidden="true" />}
                 {showHome ? (
                   <EmptyWorkspace notes={workspaceNotes}
                     recents={welcomeProjects}
@@ -1023,7 +1027,7 @@ function App() {
                     onStart={handleStartFromWelcome}
                     chat={isChat ? chatDir : ""}
                     bridge={bridge} approvalModes={approvalModes} profileId={activeProfileId}
-                    wallpaper={t.wallpaper !== false ? window.OMP_WALLPAPERS.pick(t.wallpaperArt, `home-${new Date().toDateString()}`).file : null}
+                    wallpaper={null}
                     favorites={t.favoriteModels} onManageModels={() => openSettings("models")} />
                 ) : (<>
                   <ChatView key={activeSessionId} messages={messages}
@@ -1048,7 +1052,7 @@ function App() {
                     onToggleCollapse={handleToggleCollapse}
                     followOutput={t.followOutput}
                     submitKey={t.submitKey}
-                    wallpaper={t.wallpaper !== false ? window.OMP_WALLPAPERS.pick(t.wallpaperArt, activeSessionId).file : null}
+                    wallpaper={null}
                     onRewind={streaming ? null : handleRewind}
                   />
                   <Composer

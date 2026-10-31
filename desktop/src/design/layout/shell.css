@@ -668,3 +668,13 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .user-time { margin-right: 6px; }
 .user-act { appearance: none; border: 0; background: transparent; color: var(--fg-4); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .user-act:hover { color: var(--fg); background: var(--bg-hover); }
+
+/* The artwork spans the whole session column (chat and prompt box). */
+.session { position: relative; isolation: isolate; }
+.session > .wallpaper { z-index: -1; }
+.chat-wrap.has-wallpaper .chat-scroll { background: transparent; }
+.st-archive { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.st-archive-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.st-archive-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-archive-meta { color: var(--fg-4); white-space: nowrap; }
+.session .chat-wrap, .session .chat-scroll { background: transparent; }
