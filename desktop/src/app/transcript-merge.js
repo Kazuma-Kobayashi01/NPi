@@ -67,14 +67,13 @@
    *  context (it keeps its `ts`), and leftovers before a trailing prompt
    *  still in flight. omp's order, not `ts`: a steer or follow-up carries
    *  the time it was sent but joins the context when it is delivered,
-   *  after replies stamped later. With `trimmed` (`_trimMessages` cut the
-   *  live transcript's head), entries before the first message both sides
-   *  share stay out.
+   *  after replies stamped later. History is never discarded to fit a UI
+   *  widget: all older persisted entries remain accessible.
    *  A streaming entry has a copy only if its message ended while its frames
    *  were lost (omp adds a message to the context at `message_end`): that
    *  copy takes its place. Any other streaming entry is left out — the
    *  caller re-appends its streaming bubble. */
-  function mergeTranscript(live, persisted, { trimmed = false } = {}) {
+  function mergeTranscript(live, persisted) {
     const slots = new Map(); // key → indices into `persisted`, in omp's order
     persisted.forEach((p, i) => {
       const key = messageKey(p);
@@ -85,11 +84,10 @@
     });
     const copyOf = live.map(m => slots.get(messageKey(m))?.shift() ?? -1);
     const claimed = new Set(copyOf);
-    const first = Math.min(...copyOf.filter(i => i !== -1));
     // Indices into `persisted`, in order, that no live entry stands for.
     const missed = [];
     persisted.forEach((p, i) => {
-      if (!claimed.has(i) && !(trimmed && i < first)) missed.push(i);
+      if (!claimed.has(i)) missed.push(i);
     });
     // For each live position, the copy index of the next matched entry.
     const nextCopy = new Array(live.length);

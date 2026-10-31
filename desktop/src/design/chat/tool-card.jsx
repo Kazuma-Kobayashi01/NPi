@@ -1,8 +1,7 @@
 /* chat/tool-card.jsx — Linear/Raycast-style card for one tool call,
    plus ScrubbableDiff (shown for `edit` tools with a parsed diff). */
 
-const { Icon: _TC_Icon, TOOL_META: _TC_TOOL_META, EvalCell: _TC_EvalCell, CopyButton: _TC_Copy, CopyHost: _TC_CopyHost, CollapseToggle: _TC_Collapse, ImageThumbs: _TC_Thumbs } = window;
-const { bashPreview: _TC_bashPreview } = window.OMP_COLLAPSE;
+const { Icon: _TC_Icon, TOOL_META: _TC_TOOL_META, EvalCell: _TC_EvalCell, CopyButton: _TC_Copy, CopyHost: _TC_CopyHost, ImageThumbs: _TC_Thumbs } = window;
 const { readTarget: _TC_readTarget, inProject: _TC_inProject } = window.OMP_FILE_PREVIEW;
 const { formatBytes: _TC_size } = window.OMP_FORMAT;
 
@@ -190,13 +189,12 @@ function TaskPanel({ subagents, onInspect }) {
   );
 }
 
-// `collapsed`: true/false when the body has a toggle, undefined when it is
-// too short to collapse (app/chat-collapse.js). Collapsed, the body keeps a
-// few lines in view: bash its last ones, everything else its first.
+// A tool call is a summary disclosure. Collapsed bodies are unmounted:
+// no hidden code, copy controls, or file links remain in the tab order.
 function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPreviewFile, projectRoot, collapsed, onToggleCollapse }) {
   const meta    = _TC_TOOL_META[msg.tool] || { color: "var(--fg-3)", icon: "circle", label: msg.tool };
   const running = msg.status === "running";
-  const bashLines = collapsed && msg.output ? _TC_bashPreview(msg.output) : msg.output;
+  const bodyId = React.useId();
   return (
     <div className={`row tool fade-up${highlighted ? " mm-hot" : ""}`} data-msg-idx={idx}>
       <div className="ass-rail">
@@ -205,29 +203,33 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
         </div>
         <div className="ass-thread" />
       </div>
-      <div className={`tool-card ${running ? "running" : "ok"}`}>
-        <div className="tool-card-head">
+      <div className={`tool-card${collapsed ? " is-folded" : ""} ${running ? "running" : msg.isError ? "failed" : "ok"}`}>
+        <button type="button" className="tool-card-head tool-disclosure"
+          aria-expanded={!collapsed} aria-controls={bodyId}
+          onClick={() => onToggleCollapse?.(msg._id, !!collapsed)}>
           <span className="tool-tag" style={{ color: meta.color, background: `color-mix(in oklab, ${meta.color} 14%, transparent)`, borderColor: `color-mix(in oklab, ${meta.color} 30%, var(--line))` }}>
             {meta.label}
           </span>
           <span className="tool-title selectable">{msg.title}</span>
+          {(msg.tool === "edit" || msg.tool === "write") && msg.adds > 0 && <span className="tool-diff-count mono" style={{ color: "var(--diff-add-fg)" }}>+{msg.adds}</span>}
+          {msg.tool === "edit" && msg.rems > 0 && <span className="tool-diff-count mono" style={{ color: "var(--diff-rm-fg)" }}>−{msg.rems}</span>}
           <div className="tool-card-spacer" />
           {running ? (
             <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
               <span className="dot live" /> running
             </span>
+          ) : msg.isError ? (
+            <span className="chip" style={{ color: "var(--rose)" }}>failed</span>
           ) : (
             <span className="chip muted">
               <span className="mono">{msg.duration}ms</span>
             </span>
           )}
-          <span className="chip muted mono">{msg.time}</span>
-          {collapsed !== undefined && (
-            <_TC_Collapse collapsed={collapsed} onToggle={() => onToggleCollapse(msg._id, collapsed)} />
-          )}
-        </div>
+          {!collapsed && <span className="chip muted mono">{msg.time}</span>}
+          <_TC_Icon name={collapsed ? "chevR" : "chev"} size={11} color="var(--fg-3)" />
+        </button>
 
-        <div className={collapsed ? `collapse-clip${msg.tool === "bash" ? " from-end" : ""}` : undefined}>
+        {!collapsed && <div id={bodyId}>
           {msg.tool === "search" && msg.preview && (
             <div className="tool-search">
               {msg.preview.map((p, i) => (
@@ -261,11 +263,11 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
             </div>
           )}
 
-          {msg.tool === "bash" && bashLines && (
+          {msg.tool === "bash" && msg.output && (
             // Copies the whole output, not just the lines shown.
             <_TC_CopyHost label="Copy output" text={msg.outputText}>
               <pre className="tool-bash mono selectable">
-                {bashLines.map((l, i) => (
+                {msg.output.map((l, i) => (
                   <div key={i} style={{ color: `var(--${l.color})` }}>{l.line}</div>
                 ))}
               </pre>
@@ -280,7 +282,7 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
           {msg.tool === "task" && msg.subagents?.length > 0 && (
             <TaskPanel subagents={msg.subagents} onInspect={onInspectSubagent} />
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );

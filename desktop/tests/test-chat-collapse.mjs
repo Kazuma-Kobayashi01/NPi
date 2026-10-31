@@ -13,6 +13,7 @@ const src  = readFileSync(join(root, "src/app/chat-collapse.js"), "utf8");
 const win  = {};
 // eslint-disable-next-line no-new-func
 new Function("window", src)(win);
+new Function("window", readFileSync(join(root, "src/app/ui-detail.js"), "utf8"))(win);
 const C = win.OMP_COLLAPSE;
 
 let passed = 0;
@@ -53,9 +54,10 @@ check("a short block keeps its toggle but never collapses on its own; it still a
   assert.deepEqual(C.collapseStates(msgs, { after: 2 }), { 1: false, 2: true, 3: false, 4: false });
 });
 
-check("a block with nothing to hide gets no toggle and does not age older ones", () => {
+check("short tool calls have disclosure controls without aging older blocks", () => {
   const msgs = [bash(1, LONG), bash(2, TINY), bash(3, TINY), { _id: 4, kind: "tool", tool: "read", status: "ok" }];
-  assert.deepEqual(C.collapseStates(msgs, { after: 1 }), { 1: false });
+  assert.deepEqual(C.collapseStates(msgs, { after: 1 }), { 1: false, 2: false, 3: false, 4: false });
+  assert.deepEqual(C.collapseStates(msgs, { tool: "folded" }), { 1: true, 2: true, 3: true, 4: true });
 });
 
 check("the user's toggle wins in both directions", () => {
@@ -103,9 +105,10 @@ check("folded tool output: every card starts collapsed, short and newest ones to
   assert.deepEqual(C.collapseStates(msgs, { tool: "folded", after: 30 }), { 1: true, 2: true, 3: true });
 });
 
-check("folded tool output keeps a running card, an edit's diff and a failed call open", () => {
+check("folded tools include running calls and edit diffs but expose errors", () => {
   const msgs = [edit(1), bash(2, LONG, { isError: true }), bash(3, LONG, { status: "running" }), bash(4, LONG)];
-  assert.deepEqual(C.collapseStates(msgs, { tool: "folded", after: 1 }), { 1: false, 2: false, 3: false, 4: true });
+  assert.deepEqual(C.collapseStates(msgs, { tool: "folded", after: 1 }), { 1: true, 2: false, 3: true, 4: true });
+  assert.equal(C.collapseStates(msgs, { tool: "folded", overrides: { 2: true } })[2], true);
 });
 
 check("auto collapses an old edit and an old failed call like any other card", () => {
@@ -191,28 +194,27 @@ check("clampAfter keeps the tweak in range", () => {
   assert.equal(C.clampAfter(undefined), C.DEFAULT_AFTER);
 });
 
-check("a collapsed bash card shows its last non-blank lines, notices included", () => {
-  const out = ["18", "19", "20", "", "", "Wall time: 0.04 seconds", ""].map(line => ({ line, color: "fg-3" }));
-  assert.deepEqual(C.bashPreview(out).map(l => l.line), ["19", "20", "Wall time: 0.04 seconds"]);
-  assert.deepEqual(C.bashPreview([{ line: "", color: "fg" }]), []);
+
+check("Standard folds tool calls and Full expands them; explicit choices still win", () => {
+  for (const [uiDetail, folded] of [[3, true], [5, false]]) {
+    const modes = C.foldModes({ uiDetail });
+    const messages = [bash(1, 1), edit(2), { _id: 3, kind: "tool", tool: "write", targets: ["x.js"] }];
+    assert.deepEqual(C.collapseStates(messages, modes), { 1: folded, 2: folded, 3: folded });
+    const preset = win.OMP_UI_DETAIL.levelOf(uiDetail);
+    assert.deepEqual(C.collapseStates(messages, C.foldModes({ uiDetail, ...preset.patch })), { 1: folded, 2: folded, 3: folded });
+  }
+  assert.deepEqual(C.foldModes({ uiDetail: 3, foldTools: "open" }), { thinking: "folded", tool: "open" });
+  assert.deepEqual(C.foldModes({ uiDetail: 5, foldTools: "folded" }), { thinking: "open", tool: "folded" });
 });
 
-check("foldModes: a picked mode wins; unset or unknown falls back to the old auto-collapse switch", () => {
-  assert.deepEqual(C.foldModes({}), { thinking: "auto", tool: "auto" });
-  assert.deepEqual(C.foldModes(undefined), { thinking: "auto", tool: "auto" });
-  assert.deepEqual(C.foldModes({ foldThinking: null, foldTools: null, autoCollapse: false }), { thinking: "open", tool: "open" });
-  assert.deepEqual(C.foldModes({ foldThinking: "folded", foldTools: "bogus", autoCollapse: false }), { thinking: "folded", tool: "open" });
-  assert.deepEqual(C.foldModes({ foldTools: "folded", autoCollapse: true }), { thinking: "auto", tool: "folded" });
-});
-
-check("overridesForAll sets every block with a toggle, skips tiny and hidden ones; later blocks follow the modes", () => {
+check("Collapse all includes short tools, skips hidden ones; later blocks follow the modes", () => {
   const msgs = [bash(1, LONG), bash(2, TINY), think(3), bash(4, LONG, { superseded: true }), bash(5, SHORT)];
   const hidden = m => !!m.superseded;
   const all = C.overridesForAll(msgs, true, { hidden });
-  assert.deepEqual(all, { 1: true, 3: true, 5: true });
-  assert.deepEqual(C.overridesForAll(msgs, false, { hidden }), { 1: false, 3: false, 5: false });
+  assert.deepEqual(all, { 1: true, 2: true, 3: true, 5: true });
+  assert.deepEqual(C.overridesForAll(msgs, false, { hidden }), { 1: false, 2: false, 3: false, 5: false });
   const later = [...msgs, bash(6, LONG)];
-  assert.deepEqual(C.collapseStates(later, { after: 30, overrides: all, hidden }), { 1: true, 3: true, 5: true, 6: false });
+  assert.deepEqual(C.collapseStates(later, { after: 30, overrides: all, hidden }), { 1: true, 2: true, 3: true, 5: true, 6: false });
 });
 
 check("Expand all covers a running card still too short for a toggle: it stays expanded once it grows", () => {

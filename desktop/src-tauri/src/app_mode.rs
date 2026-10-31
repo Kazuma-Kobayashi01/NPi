@@ -17,6 +17,8 @@ and format only as much as the content needs. Ask one short question when a requ
 instead of guessing. You have tools (files, shell, web) and skills: use them when they clearly help \
 the user, say what you did, and never treat an ordinary conversation as a programming task. Do not \
 make irreversible changes (deleting files, sending things out) without the user's clear go-ahead. \
+Always confirm the current git branch is correct before any modification or deletion. \
+Never engage in excessive testing, redundant runs, or repetitive verification that waste resources for minimal return. \
 Be honest about what you do not know or could not check.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

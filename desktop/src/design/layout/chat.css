@@ -47,7 +47,10 @@
 
 .row { display: flex; gap: 12px; }
 .row.user { justify-content: flex-end; }
-
+/* Tight spacing between consecutive tool call rows */
+.row.tool + .row.tool {
+  margin-top: calc(-1 * var(--u, 14px) * 1.1875 + 1px);
+}
 /* assistant left rail with thread */
 .ass-rail {
   position: relative;
@@ -95,8 +98,13 @@
 /* Collapsed (#44, see "Collapsible blocks" below). */
 .thought.is-collapsed .thought-text {
   display: -webkit-box; -webkit-box-orient: vertical;
-  -webkit-line-clamp: var(--collapse-lines); line-clamp: var(--collapse-lines);
+  -webkit-line-clamp: 1; line-clamp: 1;
   overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.thought:not(.is-collapsed) .thought-text {
+  white-space: pre-wrap;
 }
 .thought .collapse-toggle { margin: -2px -4px 0 0; }
 
@@ -217,6 +225,68 @@
   font-size: var(--d-text-sm);
   background: linear-gradient(180deg, color-mix(in oklab, var(--bg-elevated) 60%, transparent), transparent);
 }
+.tool-disclosure {
+  width: 100%; border: 0; color: inherit; text-align: left;
+  font-family: inherit; cursor: pointer;
+}
+.tool-disclosure:hover { background: var(--bg-elevated); }
+.tool-disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tool-disclosure .tool-title { min-width: 0; }
+.tool-disclosure .tool-tag, .tool-disclosure .chip,
+.tool-diff-count, .tool-disclosure > svg { flex-shrink: 0; }
+.tool-card.is-folded {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tool-card.is-folded .tool-disclosure {
+  background: transparent;
+  padding: 3px 6px;
+  border-radius: 4px;
+  gap: 8px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  line-height: 1.5;
+}
+.tool-card.is-folded .tool-disclosure:hover {
+  background: color-mix(in oklab, var(--fg-4) 10%, transparent);
+  color: var(--fg-2);
+}
+.tool-card.is-folded .tool-tag {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0;
+  text-transform: capitalize;
+  font-size: var(--d-text-xs);
+  font-weight: 500;
+  color: var(--fg-4);
+}
+.tool-card.is-folded .tool-title {
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  font-weight: 400;
+}
+.tool-card.is-folded:hover .tool-title {
+  color: var(--fg-2);
+}
+.tool-card.is-folded .chip {
+  font-size: 11px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  color: var(--fg-4);
+}
+.tool-card.is-folded .chip.accent {
+  background: color-mix(in oklab, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+.tool-card.is-folded .tool-diff-count {
+  font-size: var(--d-text-xs);
+  font-weight: 500;
+}
+.tool-card.failed { border-color: color-mix(in oklab, var(--rose) 35%, var(--line)); }
 .tool-tag {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 1px 7px;

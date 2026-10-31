@@ -177,4 +177,41 @@ function UsageCard({ provider, quotas, stats }) {
   );
 }
 
-Object.assign(window, { SideCard, EnvironmentCard, ContextCard, UsageCard });
+function TodoPlanCard({ counts, onOpen }) {
+  const hasTasks = counts && counts.total > 0;
+  const inProgress = counts && counts.inProg > 0;
+  return (
+    <div className="sp-card sp-todo-card" style={{ marginTop: "auto" }}>
+      <button
+        type="button"
+        className="sp-head"
+        style={{ cursor: "pointer", width: "100%", textDecoration: "none" }}
+        onClick={onOpen}
+        title="Open Todo and plan"
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <_SP2_Icon name="plan" size={13} color="var(--accent)" />
+            {inProgress && (
+              <span style={{
+                position: "absolute", top: -2, right: -2, width: 6, height: 6,
+                borderRadius: "50%", background: "var(--accent)",
+              }} />
+            )}
+          </span>
+          <span className="sp-title">Todo and plan</span>
+        </span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+          {hasTasks ? (
+            <span className="chip muted mono">{counts.done}/{counts.total}</span>
+          ) : (
+            <span className="chip muted mono" style={{ fontSize: "11px" }}>idle</span>
+          )}
+          <_SP2_Icon name="chevR" size={9} color="var(--fg-4)" />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+Object.assign(window, { SideCard, EnvironmentCard, ContextCard, UsageCard, TodoPlanCard });

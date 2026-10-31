@@ -10,6 +10,21 @@
 - **Job rows**: the `async-result` custom message (the job result that wakes the agent) adds one live-only `kind: "job"` row per job (`finishedJobsOf`) above the reply it triggers. No omp message stands behind a row, so the merge keeps it in place; a relaunch drops it.
 - Not used: `prompt_result` for the auto-rename gates (`lastTurnOk` from `message_end` also covers runs no prompt started, such as a job's wake-up) and `get_state.isSettled`. The planned consumer of an id-correlated `prompt_result` plus `session_settled` is #18's on-close routine.
 
+## Complete chat history
+
+`live.js` keeps the full displayed transcript; the minimap does not impose a
+169-entry history limit. Switching tabs and resuming a session requests
+`get_messages { fullHistory: true }`: all persisted message entries on the
+current branch, including those before context compaction. Sibling branches
+are not mixed into the chat. This is display history, not a change to what
+the model receives as context.
+
+`mergeTranscript` restores missing older messages without duplicating matched
+live bubbles or dropping their stable IDs, tool cards, or pending prompts.
+`ChatView` allows scrolling to the first message and retains the reader's
+position when new output arrives while they are reading history.
+
+
 ## Remote status for all tabs
 
 `src-tauri/src/remote/tracker.rs` keeps process-level busy and open-dialog

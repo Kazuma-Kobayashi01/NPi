@@ -93,7 +93,7 @@ body { font-feature-settings: normal; }
 /* ── Conversation ────────────────────────────────────────────────────── */
 /* A centred reading column; no timeline rail, no per-message meta line. */
 .chat-pad {
-  max-width: var(--chat-w, calc(var(--u) * 44)); margin: 0 auto; width: 100%;
+  max-width: var(--chat-w, calc(var(--u) * 48)); margin: 0 auto; width: 100%;
   padding: calc(var(--u) * 1.625) calc(var(--u) * 1.375) calc(var(--u) * 1);
   gap: calc(var(--u) * 1.1875);
 }
@@ -172,6 +172,28 @@ html.tauri-native, html.tauri-native body, .tauri-native .app-backdrop, .tauri-n
 }
 .tauri-native .stage { background: var(--bg-window); }
 
+/* Fullscreen: solid color mode for sidebar and window, eliminating desktop bleed-through */
+@media (display-mode: fullscreen) {
+  html.tauri-native, html.tauri-native body, .tauri-native .app-backdrop, .tauri-native .window {
+    background: var(--bg-window) !important;
+  }
+  .tauri-native .chrome { background: var(--bg-window) !important; }
+  .tauri-native .chrome-left { background: var(--bg-sidebar) !important; }
+  .tauri-native .project-sidebar { background: var(--bg-sidebar) !important; }
+}
+html.is-fullscreen.tauri-native, html.is-fullscreen.tauri-native body,
+.is-fullscreen.tauri-native .app-backdrop, .is-fullscreen.tauri-native .window,
+html.is-fullscreen, .is-fullscreen .window {
+  background: var(--bg-window) !important;
+}
+html.is-fullscreen.tauri-native .project-sidebar,
+.is-fullscreen .project-sidebar {
+  background: var(--bg-sidebar) !important;
+}
+html.is-fullscreen.tauri-native .chrome-left,
+.is-fullscreen .chrome-left {
+  background: var(--bg-sidebar) !important;
+}
 /* ── Composer: no outer box; the mode pills sit in a row above the input ── */
 .composer, .composer.plan-on, .composer.goal-on, .composer.goal-draft {
   display: flex; flex-direction: column;
@@ -655,7 +677,7 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .tool-card { font-size: calc(var(--d-text) - 2px); }
 
 /* ── Prompt box: thinner and wider ── */
-.composer { max-width: var(--composer-w, calc(var(--u) * 50)); }
+.composer { max-width: var(--composer-w, calc(var(--u) * 54)); }
 .composer-row { min-height: calc(var(--u) * 2.5); }
 .composer-input textarea { min-height: calc(var(--u) * 1.375); }
 .sp-fold { appearance: none; border: 0; background: transparent; width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0; cursor: pointer; font: inherit; text-align: left; }
@@ -681,6 +703,7 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .session .empty-ws { background: transparent; }
 
 /* ── Chat width: three steps (narrow is the default) ── */
+html.chat-w-narrow { --chat-w: calc(var(--u) * 48); --composer-w: calc(var(--u) * 54); }
 html.chat-w-medium { --chat-w: calc(var(--u) * 56); --composer-w: calc(var(--u) * 62); }
 html.chat-w-wide { --chat-w: calc(var(--u) * 68); --composer-w: calc(var(--u) * 74); }
 

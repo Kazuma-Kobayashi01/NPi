@@ -35,8 +35,8 @@ function useSubagentManager({ bridge, layout, setTweak, activeSessionId, subagen
   const togglePane = () => (paneOpen ? closePane() : setTweak("layout", "split"));
 
   // Scroll the chat to the task call that spawned an agent and flash it via
-  // the same highlight the minimap hover uses. A call already trimmed out of
-  // the live window (live.js MINIMAP_MAX) has nothing to scroll to.
+  // the same highlight the minimap hover uses. Calls absent from this
+  // conversation (for example after branching) have nothing to scroll to.
   const flashRef = React.useRef(null);
   React.useEffect(() => () => clearTimeout(flashRef.current), []);
   const jumpToCall = callId => {

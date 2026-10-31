@@ -69,7 +69,10 @@
     "confirmBusyClose": false,
     "autoName": true,
     "autoCompaction": true,
-    "autoRetry": true
+    "autoRetry": true,
+    "subagentModelMode": "auto",
+    "subagentCustomModel": "",
+    "subagentDelegation": "moderate"
   }/*EDITMODE-END*/;
 
   const NULL_MODEL    = { id: "", name: "–", provider: "", note: "", latency: 0, current: false };

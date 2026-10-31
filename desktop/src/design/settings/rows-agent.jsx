@@ -73,8 +73,71 @@ function _SRA_Usage({ row, ctx, query }) {
   );
 }
 
+function _SRA_SubagentModel({ row, ctx, query }) {
+  const { SettingsRow: Row, SettingsSeg: Seg } = window;
+  const M = window.OMP_MODELS;
+  const { t, setTweak, bridge } = ctx;
+  const mode = t.subagentModelMode || "auto";
+  const customModel = t.subagentCustomModel || "";
+  const [catalog, setCatalog] = React.useState([]);
+
+  React.useEffect(() => {
+    bridge?.modelsCatalog?.().then(cat => {
+      if (cat?.ok && Array.isArray(cat.value)) setCatalog(cat.value);
+    });
+  }, [bridge]);
+
+  const groups = React.useMemo(() => (M && catalog.length ? M.groupByVendor(catalog) : []), [catalog, M]);
+
+  return (
+    <Row stack label={row.label} desc={row.desc} query={query}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <Seg
+          options={[
+            { value: "auto", label: "auto (follow primary)" },
+            { value: "custom", label: "custom" },
+          ]}
+          value={mode}
+          onChange={v => {
+            setTweak("subagentModelMode", v);
+            if (v === "auto") {
+              bridge?.setSubagentModel?.("");
+            } else if (customModel) {
+              bridge?.setSubagentModel?.(customModel);
+            }
+          }}
+        />
+        {mode === "custom" && (
+          <div className="st-modelsel">
+            <select
+              value={customModel}
+              aria-label="Subagent designated model"
+              onChange={e => {
+                const val = e.target.value;
+                setTweak("subagentCustomModel", val);
+                bridge?.setSubagentModel?.(val);
+              }}
+            >
+              <option value="">{catalog.length ? "Select a model…" : "Loading models…"}</option>
+              {groups.map(g => (
+                <optgroup key={g.vendor} label={g.vendor}>
+                  {g.models.map(m => {
+                    const k = M.keyOf(m);
+                    return <option key={k} value={k}>{m.name || k}</option>;
+                  })}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+    </Row>
+  );
+}
+
 Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
   usage: _SRA_Usage,
   startupProfile: _SRA_StartupProfile,
   goalContinue: _SRA_GoalContinue,
+  subagentModel: _SRA_SubagentModel,
 });

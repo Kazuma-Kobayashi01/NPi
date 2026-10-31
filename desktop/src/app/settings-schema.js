@@ -191,6 +191,11 @@
         tweak("autoCompaction", "toggle", "Auto-compact context", "omp summarises older turns when the context fills up. Off: you run `/compact` yourself.", "compaction context window"),
         tweak("autoRetry", "toggle", "Retry failed requests", "omp retries a request the provider refused or dropped, with a retry row you can stop.", "retry error rate limit"),
       ] },
+      { name: "Subagents", rows: [
+        custom("subagentModel", "Subagent default model", "Default model used when delegating tasks to subagents: automatic (following primary model) or manually designated.", "subagent model worker delegate", { keys: ["subagentModelMode", "subagentCustomModel"] }),
+        tweak("subagentDelegation", "seg", "Subagent appetite", "How eagerly the agent delegates tasks to subagents: unlimited, aggressive, moderate, conservative, or off.", "delegation appetite subagent task parallel",
+          { options: opts(["unlimited", "aggressive", "moderate", "conservative", "off"]) }),
+      ] },
     ] },
     { id: "session", icon: "clock", title: "Session", blurb: "Tabs across restarts, closing, naming and app updates.", groups: [
       { name: "Tabs", rows: [

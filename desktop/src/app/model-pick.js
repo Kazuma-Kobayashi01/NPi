@@ -33,6 +33,9 @@
     kimi: "Kimi",
     zai: "Z.AI",
     minimax: "MiniMax",
+    "alibaba-cn": "Alibaba(China)",
+    alibaba: "Alibaba(China)",
+    dashscope: "Alibaba(China)",
   };
 
   const titleCase = (s) => s.replace(/\b[a-z]/g, (c) => c.toUpperCase());

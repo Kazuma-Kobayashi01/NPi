@@ -70,10 +70,10 @@ function App() {
   // live.js's pending "close a working tab / quit?" question, or null.
   const [closeConfirm, setCloseConfirm] = React.useState(null);
   const [planOpen,    setPlanOpen]    = React.useState(false);
-  // The column beside the chat, per tab (`side` below): the ambient rail,
-  // the conversation tree (prompt-cache navigator; design/conversation-tree.jsx,
-  // app/use-conversation-tree.jsx) or the browser panel — one at a time.
+  // The column beside the chat, per tab (`side` below): the ambient rail or browser panel.
   const [sides, setSides] = React.useState({});
+  const [treeOpen, setTreeOpen] = React.useState(false);
+  const toggleTree = React.useCallback(() => setTreeOpen(v => !v), []);
   // Plan mode is per tab (issue #28; app/session-ui.js): one entry per
   // session id, read through `plan` and written through `updatePlan` below.
   const [plans, setPlans] = React.useState({});
@@ -608,7 +608,7 @@ function App() {
   // draft). `sessionFile` comes with every snapshot's tab entry: it changes
   // when branch/fork/new move the process onto another file, which refetches.
   const convTree = useConversationTree({
-    bridge, open: side === "tree", sessionId: activeProject.id, sessionFile: activeProject.sessionFile ?? null,
+    bridge, open: treeOpen, sessionId: activeProject.id, sessionFile: activeProject.sessionFile ?? null,
     profileId: activeProfileId, processStartedAt: activeProject.processStartedAt ?? null,
     streaming, onBranchText: text => setPromptInsert({ text, nonce: Date.now() }),
   });
@@ -624,7 +624,7 @@ function App() {
     else if (c.name === "todo")      { setPlanOpen(true); }
     else if (c.name === "browser")   { handleBrowserCommand(args); }
     else if (c.name === "compact")   { bridge?.compact(); }
-    else if (c.name === "tree" || c.name === "branch") { setSide("tree"); }
+    else if (c.name === "tree" || c.name === "branch") { setTreeOpen(true); }
     else if (c.name === "export")    { bridge?.exportHtml(); }
     else if (c.name === "thinking")  { cycleThinking(); }
     else if (c.name === "model")     { openBridge("models"); }
@@ -822,6 +822,8 @@ function App() {
     "desktop.chat.expandAll":  () => handleCollapseAll(false),
     "desktop.terminal.toggle": () => terminal.toggle(planKey),
     "desktop.browser.toggle":  () => toggleSide("browser"),
+    "desktop.tree.toggle":     toggleTree,
+    "desktop.conversationTree.toggle": toggleTree,
   };
 
   // Profile switch applies to the active tab only: its omp process is
@@ -890,25 +892,28 @@ function App() {
   const browserFull = side === "browser" && browser.fullView;
   const splitShown = showSplit && !browserFull;
   // No side column on the welcome page: there is no session to describe.
-  const sideRail = showHome ? null : side === "tree" ? "tree" : side !== "browser" && showRail ? "rail" : null;
-  const termShown = !showHome && !browserFull && t.appMode !== "chat" && t.appMode !== "chat" && _TERM_entryOf(terminal.state, planKey).open;
-  // Columns after the chat, left to right: the side panel (rail / tree /
-  // browser), the subagent pane, the terminal; a new one opens at the far right.
+  const sideRail = showHome ? null : side !== "browser" && showRail ? "rail" : null;
+  const treeShown = !showHome && !browserFull && treeOpen;
+  const termShown = !showHome && !browserFull && t.appMode !== "chat" && _TERM_entryOf(terminal.state, planKey).open;
+  // Columns after the chat, left to right: the side panel (rail /
+  // browser), the subagent pane, the conversation tree, the terminal; a new one opens at the far right.
   const stageCols = ["minmax(0, 1fr)"];
   if (!browserFull) {
     if (side === "browser") stageCols.push("auto");
-    else if (sideRail) stageCols.push(sideRail === "tree" ? "var(--w-tree, min(540px, 50%))" : "var(--w-rail, 280px)");
+    else if (sideRail) stageCols.push("var(--w-rail, 280px)");
     if (splitShown) stageCols.push("var(--w-split, 320px)");
+    if (treeShown) stageCols.push("var(--w-tree, min(540px, 50%))");
   }
   if (termShown) stageCols.push("var(--w-term, 480px)");
   const stageStyle = { gridTemplateColumns: stageCols.join(" ") };
   // The grid line each handle sits at: the column it is the left edge of.
   const hasSide = !browserFull && (side === "browser" || !!sideRail);
-  const splitCol = hasSide ? 3 : 2;
-  const termCol = 2 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0);
+  const splitCol = 1 + (hasSide ? 1 : 0) + 1;
+  const treeCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + 1;
+  const termCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (treeShown ? 1 : 0) + 1;
   const panes = usePaneWidths({
     tweaks: t, setTweak, workspaceRef,
-    open: [showSidebar && "sidebar", splitShown && "split", sideRail, termShown && "term"].filter(Boolean),
+    open: [showSidebar && "sidebar", splitShown && "split", sideRail && "rail", treeShown && "tree", termShown && "term"].filter(Boolean),
     reserve: side === "browser" && !browserFull ? _AL_BROWSER_MIN : 0,
   });
 
@@ -931,6 +936,7 @@ function App() {
     goal: { profileId: activeProfileId },
     openApprovals: () => setRulesOpen(true),
     openStats: () => { closeSettings(); setStatsOpen(true); },
+    openLogin: () => { closeSettings(); openBridge("login"); },
     onLogin: handlePickLogin,
     profileId: activeProfileId,
     section: stab.section,
@@ -943,7 +949,7 @@ function App() {
   const floatingOn = t.layout !== "focus";
   const moreItems = [
     { label: "Todo and plan", icon: "plan", hint: todoCounts.total > 0 ? `${todoCounts.done}/${todoCounts.total}` : "", onClick: () => setPlanOpen(true) },
-    { label: "Conversation tree", icon: "branch", on: side === "tree", onClick: () => toggleSide("tree") },
+    { label: "Conversation tree", icon: "branch", on: treeShown, onClick: toggleTree },
     { label: "Goal mode", icon: "goal", on: goalUi.mode, onClick: () => { if (!goalUi.goalBlocked || goalUi.mode) goalUi.toggle(); } },
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
     "-",
@@ -990,6 +996,8 @@ function App() {
                 browserHint={keyHint("desktop.browser.toggle")}
                 onSubagents={subagentUi.togglePane}
                 subagentsOpen={showSplit}
+                onTree={toggleTree}
+                treeOpen={treeShown}
                 panelOpen={floatingOn}
                 onPanel={() => setTweak("layout", floatingOn ? "focus" : "rail")}
               />
@@ -1124,14 +1132,6 @@ function App() {
               {sideRail && <ResizeHandle key={sideRail} className="at-side" style={{ gridColumn: 2 }} {...panes.handle(sideRail)} />}
               {side === "browser" ? (
                 <BrowserDock ui={browser} stageRef={stageRef} room={panes.browserRoom} />
-              ) : side === "tree" ? (
-                <ConversationTree
-                  model={convTree.model} currentFile={convTree.currentFile} error={convTree.error}
-                  loading={convTree.loading} treeKey={convTree.key} now={convTree.now} since={convTree.since}
-                  streaming={streaming}
-                  onRefresh={convTree.refresh} onClose={() => setSide("rail")}
-                  onBranch={convTree.branch} onFork={convTree.fork} onOpenFile={convTree.openFile}
-                />
               ) : showRail && !showHome && (
                 <AmbientRail
                   project={activeProject}
@@ -1145,6 +1145,8 @@ function App() {
                   onOpenSubagent={subagentUi.open}
                   onToggleSubagentPane={subagentUi.togglePane}
                   show={{ subagents: t.showSubagents ?? true }}
+                  todoCounts={todoCounts}
+                  onOpenPlan={() => setPlanOpen(true)}
                 >
                   {/* Hidden without the GitHub CLI; the hook keeps checking on
                       focus, so installing gh brings it back. */}
@@ -1187,6 +1189,16 @@ function App() {
                 />
               )}
 
+              {treeShown && <ResizeHandle className="at-tree" style={{ gridColumn: treeCol }} {...panes.handle("tree")} />}
+              {treeShown && (
+                <ConversationTree
+                  model={convTree.model} currentFile={convTree.currentFile} error={convTree.error}
+                  loading={convTree.loading} treeKey={convTree.key} now={convTree.now} since={convTree.since}
+                  streaming={streaming}
+                  onRefresh={convTree.refresh} onClose={() => setTreeOpen(false)}
+                  onBranch={convTree.branch} onFork={convTree.fork} onOpenFile={convTree.openFile}
+                />
+              )}
 
               {termShown && <ResizeHandle className="at-term" style={{ gridColumn: termCol }} {...panes.handle("term")} />}
               <TerminalPanels sessions={sessions} activeId={showHome ? null : planKey} terminal={terminal} />

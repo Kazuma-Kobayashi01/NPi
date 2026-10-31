@@ -1,12 +1,10 @@
 // Collapsible tool cards and thinking blocks in the chat (#44, #43).
 //
 // Thinking and tool output each have a mode (Settings → Chat):
-// - "auto": every block starts expanded; once `after` newer collapsible
-//   blocks have followed it, a long block collapses on its own to a few
-//   lines of preview; a short one never does.
+// - "auto": long blocks collapse once `after` newer blocks follow.
 // - "open": never collapses on its own.
-// - "folded": collapsed from the start, except a tool card the reader needs
-//   to see: a running one, an edit's diff, a failed call.
+// - "folded": tool calls show only their summary, including running calls
+//   and edits. Failed calls remain open so errors are not hidden.
 // The user's own toggle on a block always wins and is kept per tab, keyed by
 // the message's `_id` (live.js assigns it, and the get_messages merge
 // carries it over, app/transcript-merge.js).
@@ -34,13 +32,14 @@
   /** A tab with no toggles yet. Shared, so a render without one compares equal. */
   const NO_OVERRIDES = Object.freeze({});
 
-  /** `{ thinking, tool }` modes from the tweaks (`foldThinking`,
-   *  `foldTools`). A mode not set yet comes from the switch it replaced:
-   *  `autoCollapse: false` (auto-collapse off) means "open". */
+  /** Explicit per-kind preferences win; otherwise use the detail preset.
+   *  Preserve an explicitly stored legacy auto-collapse preference. */
   function foldModes(tweaks) {
     const legacy = tweaks?.autoCollapse === false ? "open" : "auto";
-    const mode = v => (MODES.includes(v) ? v : legacy);
-    return { thinking: mode(tweaks?.foldThinking), tool: mode(tweaks?.foldTools) };
+    const preset = window.OMP_UI_DETAIL?.levelOf(tweaks?.uiDetail).patch;
+    const fallback = key => typeof tweaks?.autoCollapse === "boolean" ? legacy : (preset?.[key] ?? legacy);
+    const mode = (key) => MODES.includes(tweaks?.[key]) ? tweaks[key] : fallback(key);
+    return { thinking: mode("foldThinking"), tool: mode("foldTools") };
   }
 
   /** Coerces the tweak into [MIN_AFTER, MAX_AFTER]; anything non-numeric
@@ -98,20 +97,9 @@
     return n;
   }
 
-  /** A collapsed bash card's lines: the last PREVIEW_LINES that are not
-   *  blank. omp ends the output with blank lines and its notices (exit code,
-   *  wall time), so a plain tail could show nothing but empty lines. */
-  function bashPreview(output) {
-    const out = [];
-    for (let i = output.length - 1; i >= 0 && out.length < PREVIEW_LINES; i--) {
-      if (output[i].line.trim()) out.unshift(output[i]);
-    }
-    return out;
-  }
 
-  // A tool card "folded" still shows: running output, an edit's diff (what
-  // changed is the point of the card), a failed call (omp's `isError`).
-  const keepsOpen = m => m.kind === "tool" && (isLive(m) || m.tool === "edit" || !!m.isError);
+  // Errors stay visible by default; running state remains in the summary.
+  const keepsOpen = m => m.kind === "tool" && !!m.isError;
 
   // Whether a block with a toggle starts collapsed under `mode`; `aged`:
   // enough newer blocks follow it.
@@ -145,11 +133,11 @@
       const m = messages[i];
       if (m._id == null || hidden(m)) continue;
       const lines = measuredLines(m);
-      if (lines <= PREVIEW_LINES) continue;
+      if (m.kind !== "tool" && lines <= PREVIEW_LINES) continue;
       out[m._id] = Object.hasOwn(overrides, m._id)
         ? overrides[m._id]
         : _collapsedBy(m.kind === "tool" ? tool : thinking, m, lines, newer >= wait);
-      if (i <= horizon) newer++;
+      if (lines > PREVIEW_LINES && i <= horizon) newer++;
     }
     return out;
   }
@@ -164,7 +152,7 @@
     const out = {};
     for (const m of messages) {
       if (m._id == null || hidden(m)) continue;
-      if (!isLive(m) && measuredLines(m) <= PREVIEW_LINES) continue;
+      if (m.kind !== "tool" && !isLive(m) && measuredLines(m) <= PREVIEW_LINES) continue;
       out[m._id] = collapsed;
     }
     return out;
@@ -172,6 +160,6 @@
 
   window.OMP_COLLAPSE = {
     PREVIEW_LINES, SHORT_LINES, DEFAULT_AFTER, MIN_AFTER, MAX_AFTER, MODES, NO_OVERRIDES,
-    foldModes, clampAfter, bodyLines, bashPreview, collapseStates, overridesForAll,
+    foldModes, clampAfter, bodyLines, collapseStates, overridesForAll,
   };
 })();

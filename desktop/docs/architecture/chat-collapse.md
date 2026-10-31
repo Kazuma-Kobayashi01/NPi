@@ -18,13 +18,13 @@ A *block* is a tool card's body or an assistant reply's thinking. `bodyLines(msg
 
 `collapseStates(messages, { thinking, tool, after, overrides, horizonId, hidden })` → `_id → collapsed` for every block with a toggle. Thinking and tool cards each follow their own mode (Settings → Chat *Thinking* / *Tool output*, tweak keys `foldThinking` / `foldTools`):
 
-- **auto** (default): everything starts expanded. A long block collapses once `after` newer blocks (tweak *collapse after*, 1–30, default 5) follow it; a running tool card or a streaming reply never collapses on its own. Blocks of both kinds count as newer, whatever their own mode.
+- **auto**: blocks start expanded. A long block collapses once `after` newer blocks (tweak *collapse after*, 1–30, default 5) follow it; a running tool card or a streaming reply never collapses on its own. Blocks longer than `PREVIEW_LINES` count as newer, whatever their own mode.
 - **open**: never collapses on its own.
-- **folded**: collapsed from the start, short blocks and a streaming reply's thinking included — except a tool card the reader needs: a running one, an edit (its diff is the point), and a call omp reported as failed (`isError` from `tool_execution_end`, kept on the card by `adapter.js` `finalizeToolCard`).
+- **folded**: tool calls and thinking start collapsed, short blocks and a streaming reply's thinking included. Failed tool calls (`isError`) remain open so errors are not hidden.
 
 The user's toggle (`overrides`) always wins, both ways, in every mode. Messages the chat hides (`OMP_TURN_STATUS.isHidden`) neither collapse nor count.
 
-`foldModes(tweaks)` reads the two keys. `TWEAK_DEFAULTS` leaves them `null` until picked, so a stored `autoCollapse: false` (the switch the modes replaced) still means "open" for both.
+`foldModes(tweaks)` reads explicit `foldThinking` / `foldTools` preferences first, then the active interface-detail step (`OMP_UI_DETAIL`, where Standard sets `foldTools: "folded"` and Full sets `foldTools: "open"`). An explicitly stored legacy `autoCollapse` boolean still takes precedence over an unset key.
 
 ## Collapse all / Expand all
 
@@ -36,12 +36,8 @@ While the view is unpinned (the user scrolled up, `app/scroll-pin.js`), ChatView
 
 ## Toggles per tab
 
-`app-live.jsx` keeps `sessionId → { _id → collapsed }` (`OMP_SESSION_UI.entryOf`/`updateEntry`/`pruneEntries`, like plan mode), so a tab switch — which remounts ChatView — keeps them. `_id` is live.js's per-message counter; `mergeTranscript` copies the live entry's `_id` onto its get_messages copy (`_withLiveFields`), or the merge after a tab switch would re-key the bubble and drop its toggle. Closing a tab drops its toggles; `_trimMessages` leaves stale ids behind, which are harmless.
+`app-live.jsx` keeps `sessionId → { _id → collapsed }` (`OMP_SESSION_UI.entryOf`/`updateEntry`/`pruneEntries`, like plan mode), so a tab switch — which remounts ChatView — keeps them. `_id` is live.js's per-message counter; `mergeTranscript` copies the live entry's `_id` onto its get_messages copy (`_withLiveFields`), or the merge after a tab switch would re-key the bubble and drop its toggle. Closing a tab drops its toggles. History is not evicted to fit the minimap.
 
 ## Rendering
 
-Collapsed, a block keeps `--collapse-lines` (= `PREVIEW_LINES`, set on `.chat-pad`) in view behind a fade (`.collapse-clip`, `-webkit-mask-image` for WebKit). bash shows its *last* non-blank lines (`bashPreview`: omp ends the output with blank lines and its exit-code/wall-time notices, so a plain tail could be empty); its clip (`.from-end`) bottom-aligns them, so when they wrap the overflow is cut at the top and the final line stays in view, and the floating copy button (which still copies the whole output) sits at the bottom, out of the fade. Everything else shows its first lines. Thinking uses a line clamp. Each block's props are a boolean and a stable callback, so the `React.memo` wrappers in `chat-view.jsx` still skip unchanged bubbles.
-
-Clipped content stays in the DOM, so controls below the preview (later eval cells' copy buttons, subagent rows) remain focusable. Not made `inert` on purpose: that would also block selecting the preview text and the bash copy button.
-
-The toggle shows what a click does: the `chev` icon (down, "expand") on a collapsed block, turned up by CSS (`aria-expanded="true"`, "collapse") on an open one. Button and icon are sized in `em` of the button's rem-based text size, so they grow with the font-size tweak and the density.
+Tool calls render as summary disclosures (`button.tool-disclosure` with `aria-expanded` and `aria-controls`): a collapsed tool card unmounts its body instead of clipping a multi-line preview, leaving the tool name, target, diff line counts (`+N −M`), status/duration, and chevron on one line. Clicking the summary toggles the body. Thinking continues to use `CollapseToggle` and a line clamp.

@@ -120,10 +120,12 @@ function _SRM_Vendors({ row, ctx, query }) {
   const groups = React.useMemo(() => M.groupByVendor(cat.models), [cat.models]);
 
   const login = async (p) => {
-    setBusy(p.id);
-    try { await ctx.onLogin?.(p); } finally { setBusy(""); }
-    cat.reload();
-    loadProviders();
+    if (ctx.close) ctx.close();
+    if (p) {
+      await ctx.onLogin?.(p);
+    } else if (ctx.openLogin) {
+      ctx.openLogin();
+    }
   };
 
   return (
@@ -154,6 +156,13 @@ function _SRM_Vendors({ row, ctx, query }) {
           </div>
         ))}
         {connected && <div className="st-fav-empty">A vendor that uses an API key signs in from a terminal: run <code>npi login</code>.</div>}
+        {connected && (
+          <div style={{ marginTop: "10px" }}>
+            <Button onClick={() => { if (ctx.close) ctx.close(); ctx.openLogin?.(); }}>
+              Open /login menu…
+            </Button>
+          </div>
+        )}
       </div>
     </Row>
   );

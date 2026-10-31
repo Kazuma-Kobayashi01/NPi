@@ -218,11 +218,6 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
       {wallpaper && <div className="wallpaper" style={{ "--wp": `url("${new URL(wallpaper, document.baseURI).href}")` }} aria-hidden="true" />}
       <div className="chat-scroll selectable" ref={scrollRef} onScroll={onScroll}>
         <div className="chat-pad" style={_CV_PAD_STYLE}>
-          {/* Note: after a trim, idx shifts for all surviving messages, causing a full
-             re-render of memo'd bubbles in that notify cycle (bounded at MINIMAP_MAX -
-             MINIMAP_COLS = 156). Streaming re-renders are unaffected. Driving annotable
-             and scroll-targeting off _id instead of idx would make trim zero-cost for
-             history, but requires a larger refactor. */}
           {messages.map((m, i) => {
             const hl = hoveredMsgIdx === i;
             if (window.OMP_TURN_STATUS.isHidden(m)) return null;

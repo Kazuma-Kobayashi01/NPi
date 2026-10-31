@@ -75,8 +75,6 @@
     // `hasPendingAsyncWork` (agent_end always asks for one), cleared by
     // `session_settled`. Drives the "background" run state.
     asyncPending:   false,
-    // `_trimMessages` cut the transcript's head (see the get_messages merge).
-    trimmed:        false,
     // Subagent manager (src/app/subagents.js). Terminal agents are kept here
     // for the life of the session — omp's own registry forgets them.
     subagents:           SUB.emptySubagents(),
@@ -138,9 +136,6 @@
   let subagentInspecting = false;
   let _transcriptReq = 0; // monotonic token: only the latest load per agent may write
 
-  // ── Minimap / message-history trim ───────────────────────────────────────
-  const MINIMAP_COLS = 13;
-  const MINIMAP_MAX  = MINIMAP_COLS * MINIMAP_COLS; // 169 — one full 13×13 grid
 
   // ── Session registry ───────────────────────────────────────────────────────
   // Tracks all open tabs. The tab list in the UI is derived from this.
@@ -301,25 +296,6 @@
   // ── Subscriber system ─────────────────────────────────────────────────────
   const subscribers = new Set();
 
-  // Drop the oldest row of messages once the 13×13 grid is full and the
-  // current turn is complete. Only called from notify() so the trim is
-  // always reflected in the same snapshot that React receives.
-  // Active tool-card indices are shifted so in-flight updates stay correct;
-  // completed cards are already removed from the map and are unaffected.
-  // `state.trimmed` tells the get_messages merge that the head is gone on
-  // purpose, so it does not bring the cut history back.
-  function _trimMessages() {
-    if (state.isStreaming) return;                  // wait for clean turn boundary
-    if (state.messages.length <= MINIMAP_MAX) return;
-    const drop = MINIMAP_COLS;                      // evict one full row (13)
-    state.messages = state.messages.slice(drop);
-    state.trimmed = true;
-    for (const [id, idx] of activeToolCards) {
-      const shifted = idx - drop;
-      if (shifted < 0) activeToolCards.delete(id); // guard: possible on abort (no tool_execution_end)
-      else activeToolCards.set(id, shifted);
-    }
-  }
 
   // Memo for a session's run state (`TURN.runStateOf`, app/turn-status.js),
   // keyed on the messages array's identity.
@@ -335,9 +311,8 @@
   // the key for the same reason).
   // A backgrounded tab's array is frozen for as long as it
   // stays backgrounded, so those tabs become a map lookup; only the active
-  // tab, whose array is replaced as it streams, still scans — and that scan
-  // is bounded by MINIMAP_MAX. A WeakMap means a closed tab's cached entry
-  // is collected with its messages.
+  // tab, whose array is replaced as it streams, still scans. A WeakMap means
+  // a closed tab's cached entry is collected with its messages.
   const _runStateMemo = new WeakMap();
   // Shared so a never-activated tab keys the memo stably instead of
   // allocating a fresh (always-missing) array on every notify.
@@ -700,10 +675,9 @@
   }
 
   function notify() {
-    _trimMessages();
     // Stamp stable IDs on any message that doesn't have one yet (new pushes,
-    // restored sessions, or messages from get_messages). O(N) but N ≤ 169 and
-    // is a no-op for already-stamped entries — essentially free.
+    // restored sessions, or messages from get_messages). Already-stamped
+    // entries retain their identity across history refreshes.
     for (const m of state.messages) {
       if (!m._id) m._id = ++_msgSeq;
     }
@@ -791,7 +765,6 @@
       currentTps:    0,
       exitReason:    null,
       asyncPending:  false,
-      trimmed:       false,
       subagents:           SUB.emptySubagents(),
       subagentTranscripts: {},
       queue:         QUEUE.EMPTY_QUEUE,
@@ -842,7 +815,6 @@
       currentTps:    state.currentTps,
       exitReason:    state.exitReason,
       asyncPending:  state.asyncPending,
-      trimmed:       state.trimmed,
       // Last-turn outcome for the auto-rename gate (see _applyRpcState):
       // survives tab switches so a snapshot-restored session does not
       // forget a failed first exchange and re-arm the one-shot.
@@ -889,7 +861,6 @@
       currentTps:    snap.currentTps,
       exitReason:    snap.exitReason ?? null,
       asyncPending:  snap.asyncPending ?? false,
-      trimmed:       snap.trimmed ?? false,
       subagents:     snap.subagents ?? SUB.emptySubagents(),
       subagentTranscripts: {},
       queue:         snap.queue ?? QUEUE.EMPTY_QUEUE,
@@ -2026,7 +1997,7 @@
       // `retries` chip of omp's automatic retries).
       // activeToolCards indices are rebuilt so in-flight
       // tool_execution_update events keep landing on the right array slot.
-      const merged = mergeTranscript(state.messages, completed, { trimmed: state.trimmed });
+      const merged = mergeTranscript(state.messages, completed);
       // Rebuild activeToolCards — merged entries may have moved
       activeToolCards = new Map();
       for (let i = 0; i < merged.length; i++) {
@@ -2914,7 +2885,7 @@
         if (!sessionPrefs.autoRetry) _send({ type: "set_auto_retry", enabled: false });
         _send({ type: "get_state" });
         _send({ type: "get_session_stats" });
-        _send({ type: "get_messages" });
+        _send({ type: "get_messages", fullHistory: true });
         _send({ type: "get_available_models" });
         _send({ type: "get_available_commands" });
         // Subscription level is per process and survives tab switches, but a
@@ -3092,6 +3063,16 @@
     const win  = getCurrentWindow();
     const isWin = navigator.userAgent.includes("Windows") || navigator.platform.startsWith("Win");
 
+    const checkFullscreen = () => {
+      win.isFullscreen?.().then(fs => {
+        document.documentElement.classList.toggle("is-fullscreen", !!fs);
+      }).catch(() => {});
+    };
+    checkFullscreen();
+    win.onResized?.(checkFullscreen);
+    document.addEventListener("fullscreenchange", () => {
+      document.documentElement.classList.toggle("is-fullscreen", !!document.fullscreenElement);
+    });
     // Drag: delegate from document so it works regardless of React render timing.
     // startDragging() must be called synchronously within the mousedown handler.
     document.addEventListener("mousedown", e => {

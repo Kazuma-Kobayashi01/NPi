@@ -27,6 +27,7 @@ check("provider ids become vendor names; vendors of one company share a name", (
   assert.equal(M.vendorLabel("openai-codex"), "OpenAI");
   assert.equal(M.vendorLabel("openai"), "OpenAI");
   assert.equal(M.vendorLabel("google-antigravity"), "Google");
+  assert.equal(M.vendorLabel("alibaba-cn"), "Alibaba(China)");
   assert.equal(M.vendorLabel("my-gateway"), "My Gateway", "an unknown id is title-cased");
   assert.equal(M.vendorLabel(""), "Other");
   assert.equal(M.vendorLabel(undefined), "Other");

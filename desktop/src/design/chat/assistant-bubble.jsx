@@ -110,7 +110,7 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
         </div>
         {msg.thought && (
           <div className={`thought selectable${thoughtCollapsed ? " is-collapsed" : ""}`}>
-            <div className="thought-text">
+            <div className="thought-text" onClick={() => onToggleCollapse?.(msg._id, thoughtCollapsed)} style={{ cursor: "pointer" }} title={thoughtCollapsed ? "Click to expand thinking" : "Click to collapse thinking"}>
               <span className="mono" style={{ color: "var(--fg-4)" }}>// </span>
               <span style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{msg.thought}</span>
             </div>
