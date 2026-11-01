@@ -16,6 +16,7 @@
 - Agent 默认实现入口是 `omp/packages/coding-agent/`；模型客户端、运行时和模型目录分别在 `packages/ai/`、`packages/agent/`、`packages/catalog/`。
 - 桌面调用链：React → `desktop/src/live.js` → `desktop/src-tauri/src/agent/` → 每标签页独立的 `npi --mode rpc-ui` 进程。
 - 核实当前分支、工作区与实际代码，不把历史记录中的版本或环境状态当作当前事实。
+- 服务端适配职责铁律：服务端的所有适配（Bot Gateway、多端/多协议兼容、Linux 容器/沙箱运维产物等）全权在 `omp`（NPi-Kernel）仓库中维护，不在 NPi Desktop（根仓库）中更改；根仓库仅维护桌面端客户端。原 `1.1.0-server` 阶段已停止支持。
 
 ## Rust 必须使用 DevStore
 
