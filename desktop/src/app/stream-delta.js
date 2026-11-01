@@ -53,7 +53,10 @@
         if (Number.isInteger(i) && ev.toolCall) blocks[i] = ev.toolCall;
         return false;
       case "image_end":
-        if (Number.isInteger(i) && ev.content) blocks[i] = ev.content;
+        if (Number.isInteger(i) && ev.content) {
+          blocks[i] = ev.content;
+          return true;
+        }
         return false;
       default:
         // toolcall_delta, done, error: nothing the bubble shows.
@@ -67,18 +70,28 @@
     return Array.isArray(message?.content) ? message.content.map(b => (b && typeof b === "object" ? { ...b } : b)) : [];
   }
 
-  /** What the bubble shows of `blocks`: the last non-blank thinking (and the
-   *  `lead` it gives), and the non-empty text blocks (one empty text block
-   *  while there is none yet). */
+  /** What the bubble shows of `blocks`: all non-blank thinking in order (and
+   *  the `lead` it gives), and the non-empty text and native image blocks
+   *  in exact order (one empty text block while there is none yet). */
   function view(blocks) {
-    let thought = null;
-    const text = [];
+    const thoughts = [];
+    const displayBlocks = [];
     for (const block of blocks) {
       if (!block) continue;
-      if (block.type === "thinking" && block.thinking?.trim()) thought = block.thinking;
-      else if (block.type === "text" && block.text) text.push({ type: "text", text: block.text });
+      if (block.type === "thinking" && block.thinking?.trim()) {
+        thoughts.push(block.thinking);
+      } else if (block.type === "text" && block.text) {
+        displayBlocks.push({ type: "text", text: block.text });
+      } else if (block.type === "image" && (block.data || block.mimeType)) {
+        displayBlocks.push({ ...block });
+      }
     }
-    return { thought, lead: thought ? "thinking" : null, blocks: text.length > 0 ? text : [{ type: "text", text: "" }] };
+    const thought = thoughts.length > 0 ? thoughts.join("\n\n") : null;
+    return {
+      thought,
+      lead: thought ? "thinking" : null,
+      blocks: displayBlocks.length > 0 ? displayBlocks : [{ type: "text", text: "" }],
+    };
   }
 
   /**

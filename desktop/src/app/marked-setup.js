@@ -44,7 +44,196 @@
     const s = String(href ?? '');
     return DRIVE_PATH.test(s) || BARE_FILE_LINE.test(s);
   }
+  // LaTeX delimiter grammar (ported from omp/packages/utils/src/math-delimiters.ts)
+  const MATH_BLOCK_DOLLAR = / {0,3}\$\$[ \t]*\r?\n([\s\S]+?)\r?\n {0,3}\$\$[ \t]*(?:\r?\n|$)/y;
+  const MATH_BLOCK_BRACKET = / {0,3}\\\[[ \t]*\r?\n([\s\S]+?)\r?\n {0,3}\\\][ \t]*(?:\r?\n|$)/y;
+
+  function mathOpenerAt(source, at) {
+    const first = source.charCodeAt(at);
+    if (first === 0x24 /* $ */) return source.charCodeAt(at + 1) === 0x24 ? "$$" : "$";
+    if (first !== 0x5c /* \ */) return undefined;
+    const second = source.charCodeAt(at + 1);
+    if (second === 0x28 /* ( */) return "\\(";
+    if (second === 0x5b /* [ */) return "\\[";
+    return undefined;
+  }
+
+  function mathStartIndex(source, from = 0) {
+    for (let at = from; at < source.length; at++) {
+      if (mathOpenerAt(source, at) !== undefined) return at;
+    }
+    return undefined;
+  }
+
+  function escapedAt(source, index, from = 0) {
+    let backslashes = 0;
+    for (let at = index - 1; at >= from && source.charCodeAt(at) === 0x5c; at--) backslashes++;
+    return backslashes % 2 === 1;
+  }
+
+  function dollarOpens(source, open) {
+    const after = source[open + 1];
+    return !(after === undefined || after === " " || after === "\t" || after === "\n" || after === "$");
+  }
+
+  function scanDollar(source, open) {
+    if (!dollarOpens(source, open)) return { close: -1, stop: open + 1 };
+    for (let at = open + 1; at < source.length; at++) {
+      const char = source[at];
+      if (char === "\\") { at++; continue; }
+      if (char === "\n") return { close: -1, stop: at };
+      if (char !== "$") continue;
+      const before = source[at - 1];
+      if (before === " " || before === "\t") return { close: -1, stop: at };
+      const next = source[at + 1];
+      if (next !== undefined && next >= "0" && next <= "9") continue;
+      return { close: source.slice(open + 1, at).trim().length > 0 ? at : -1, stop: at };
+    }
+    return { close: -1, stop: source.length };
+  }
+
+  function closerIndex(source, opener, from) {
+    const closer = opener === "\\(" ? "\\)" : opener === "\\[" ? "\\]" : opener;
+    for (let at = source.indexOf(closer, from); at !== -1; at = source.indexOf(closer, at + 1)) {
+      if (!escapedAt(source, at, from)) return at;
+    }
+    return -1;
+  }
+
+  function spanOf(source, opener, bodyStart, closeAt) {
+    if (closeAt === -1) return undefined;
+    const body = source.slice(bodyStart, closeAt);
+    if (opener === "$$" && body.trim() === "") return undefined;
+    return { opener, display: opener === "$$" || opener === "\\[", end: closeAt + opener.length, body };
+  }
+
+  function mathSpanAt(source, at, from = 0) {
+    const opener = mathOpenerAt(source, at);
+    if (opener === undefined || escapedAt(source, at, from)) return undefined;
+    const bodyStart = at + opener.length;
+    return spanOf(
+      source,
+      opener,
+      bodyStart,
+      opener === "$" ? scanDollar(source, at).close : closerIndex(source, opener, bodyStart)
+    );
+  }
+
+  function mathBlockAt(source) {
+    MATH_BLOCK_DOLLAR.lastIndex = 0;
+    MATH_BLOCK_BRACKET.lastIndex = 0;
+    const m = MATH_BLOCK_DOLLAR.exec(source) || MATH_BLOCK_BRACKET.exec(source);
+    return (m && m[1].trim() !== "") ? { raw: m[0], body: m[1] } : undefined;
+  }
+
+  class MathSpans {
+    #source;
+    #dollarOpen = -1;
+    #dollarStop = -1;
+    #dollarClose = -1;
+    #dollarSolid = -1;
+    #searchedFrom = { $$: Infinity, "\\(": Infinity, "\\[": Infinity };
+    #closer = { $$: -1, "\\(": -1, "\\[": -1 };
+
+    constructor(source) {
+      this.#source = source;
+    }
+
+    spanAt(at, end = this.#source.length) {
+      const source = this.#source;
+      const opener = mathOpenerAt(source, at);
+      if (opener === undefined) return undefined;
+      const bodyStart = at + opener.length;
+      const close = opener === "$" ? this.#dollarCloser(at) : this.#closerFrom(opener, bodyStart);
+      if (close === -1 || close + opener.length > end) return undefined;
+      return spanOf(source, opener, bodyStart, close);
+    }
+
+    #dollarCloser(open) {
+      const source = this.#source;
+      if (this.#dollarOpen < open && open < this.#dollarStop) {
+        if (this.#dollarClose === -1 || !dollarOpens(source, open)) return -1;
+        return this.#dollarSolid > open ? this.#dollarClose : -1;
+      }
+      const { close, stop } = scanDollar(source, open);
+      this.#dollarOpen = open;
+      this.#dollarStop = stop;
+      this.#dollarClose = close;
+      if (close !== -1) {
+        let solid = close - 1;
+        while (/\s/.test(source[solid])) solid--;
+        this.#dollarSolid = solid;
+      }
+      return close;
+    }
+
+    #closerFrom(opener, bodyStart) {
+      const found = this.#closer[opener];
+      if (this.#searchedFrom[opener] <= bodyStart && (found === -1 || bodyStart <= found)) return found;
+      const close = closerIndex(this.#source, opener, bodyStart);
+      this.#searchedFrom[opener] = bodyStart;
+      this.#closer[opener] = close;
+      return close;
+    }
+  }
+
+  class MathBlockScan {
+    #source;
+    #unclosedDollarFrom = Infinity;
+    #unclosedBracketFrom = Infinity;
+
+    constructor(source) {
+      this.#source = source;
+    }
+
+    at(from) {
+      const opener = mathOpenerAt(this.#source, from);
+      if (opener !== "$$" && opener !== "\\[") return undefined;
+      const unclosedFrom = opener === "$$" ? this.#unclosedDollarFrom : this.#unclosedBracketFrom;
+      if (unclosedFrom <= from) return undefined;
+      const grammar = opener === "$$" ? MATH_BLOCK_DOLLAR : MATH_BLOCK_BRACKET;
+      grammar.lastIndex = from;
+      const match = grammar.exec(this.#source);
+      if (!match) {
+        if (opener === "$$") this.#unclosedDollarFrom = from;
+        else this.#unclosedBracketFrom = from;
+        return undefined;
+      }
+      return (match[1].trim() !== "") ? { raw: match[0], body: match[1] } : undefined;
+    }
+  }
+
+  const spansByContext = new WeakMap();
+  function mathSpanInContext(context, src) {
+    const source = context.source ?? src;
+    const end = context.end ?? source.length;
+    let spans = spansByContext.get(context);
+    if (!spans) spansByContext.set(context, (spans = new MathSpans(source)));
+    const at = end - src.length;
+    const span = spans.spanAt(at, end);
+    return span && { ...span, end: span.end - at };
+  }
+
+  const blockScansByContext = new WeakMap();
+  function mathBlockInContext(context, src) {
+    const source = context.source;
+    if (source === undefined) return mathBlockAt(src);
+    let scan = blockScansByContext.get(context);
+    if (!scan) blockScansByContext.set(context, (scan = new MathBlockScan(source)));
+    return scan.at((context.end ?? source.length) - src.length);
+  }
+
   window.OMP_MARKDOWN = { fenceCode, isSchemeLikeFilePath };
+  window.OMP_MATH = {
+    mathStartIndex,
+    mathOpenerAt,
+    mathSpanAt,
+    mathBlockAt,
+    MathSpans,
+    MathBlockScan,
+    mathSpanInContext,
+    mathBlockInContext
+  };
 
   if (!window.marked || !window.hljs) return;
   // Since marked 15, renderers get raw token fields: `href`, `title`,
@@ -79,7 +268,64 @@
         return v.length <= 2 ? v : ref;
       })
     : s;
+
+  function renderMath(token) {
+    const text = token.text ?? '';
+    const display = Boolean(token.display);
+    if (!window.katex) {
+      const raw = token.raw ?? (display ? `$$\n${text}\n$$` : `$${text}$`);
+      return display
+        ? `<div class="katex-display-container"><span class="katex-raw">${escapeHtml(raw)}</span></div>\n`
+        : `<span class="katex-raw">${escapeHtml(raw)}</span>`;
+    }
+    try {
+      const rendered = window.katex.renderToString(text, {
+        displayMode: display,
+        throwOnError: false,
+        trust: false,
+        strict: false
+      });
+      return display
+        ? `<div class="katex-display-container"><span class="tr-math">${rendered}</span></div>\n`
+        : `<span class="tr-math-inline">${rendered}</span>`;
+    } catch (_) {
+      const raw = token.raw ?? (display ? `$$\n${text}\n$$` : `$${text}$`);
+      return display
+        ? `<div class="katex-display-container"><span class="katex-raw">${escapeHtml(raw)}</span></div>\n`
+        : `<span class="katex-raw">${escapeHtml(raw)}</span>`;
+    }
+  }
+
   window.marked.use({
+    extensions: [
+      {
+        name: "mathBlock",
+        level: "block",
+        tokenizer(src) {
+          const block = mathBlockInContext(this, src);
+          if (!block) return undefined;
+          return { type: "mathBlock", raw: block.raw, text: block.body, display: true };
+        },
+        renderer(token) {
+          return renderMath(token);
+        }
+      },
+      {
+        name: "mathInline",
+        level: "inline",
+        start(src) {
+          return mathStartIndex(src);
+        },
+        tokenizer(src) {
+          const span = mathSpanInContext(this, src);
+          if (!span || span.body.includes("`")) return undefined;
+          return { type: "mathInline", raw: src.slice(0, span.end), text: span.body, display: span.display };
+        },
+        renderer(token) {
+          return renderMath(token);
+        }
+      }
+    ],
     renderer: {
       // One renderer for both token kinds: a block (`<div>…`, a comment, a
       // `<script>` element on its own lines) and an inline tag inside a
@@ -101,18 +347,26 @@
       text(token) {
         return token.escaped && !token.tokens ? escapeKeepingRefs(token.text) : false;
       },
-      code({ text, lang }) {
-        const code     = text ?? '';
-        const language = (lang ?? '').split(/\s/)[0];
+      code(token) {
+        const code     = token.text ?? '';
+        const lang     = (token.lang ?? '').trim().split(/\s/)[0].toLowerCase();
+        const raw      = token.raw ?? '';
+        const isClosed = /(?:^|\n)(?:`{3,}|~{3,})[ \t]*$/.test(raw);
+        if (lang === 'chart') {
+          return '<div class="md-slot md-slot-chart" data-slot-type="chart" data-spec="' + escapeHtml(code) + '" data-closed="' + (isClosed ? '1' : '0') + '"></div>';
+        }
+        if (lang === 'mermaid') {
+          return '<div class="md-slot md-slot-mermaid" data-slot-type="mermaid" data-code="' + escapeHtml(code) + '" data-closed="' + (isClosed ? '1' : '0') + '"></div>';
+        }
         let highlighted;
         try {
-          highlighted = language && hljs.getLanguage(language)
-            ? hljs.highlight(code, { language }).value
+          highlighted = lang && hljs.getLanguage(lang)
+            ? hljs.highlight(code, { language: lang }).value
             : hljs.highlightAuto(code).value;
         } catch (_) {
           highlighted = escapeHtml(code);
         }
-        const cls = language ? ' language-' + escapeHtml(language) : '';
+        const cls = lang ? ' language-' + escapeHtml(lang) : '';
         // Copy button (issue #33): plain markup, no handler — the release
         // CSP forbids inline ones. The markdown container's delegated
         // onClick (copyCodeBlockClick, ui/copy-button.jsx) copies the
@@ -147,6 +401,25 @@
         let out = '<a href="' + safeHref + '"';
         if (title) out += ' title="' + escapeHtml(decodeRefs(title)) + '"';
         return out + '>' + inner + '</a>';
+      },
+      image(token) {
+        const href      = token.href || '';
+        const text      = token.text || '';
+        const title     = token.title || '';
+        const url       = decodeRefs(href);
+        let scheme      = null;
+        try { scheme = new URL(url, 'https://omp-desktop.invalid/').protocol; }
+        catch (_) { /* leave scheme null */ }
+        if (scheme && scheme !== 'http:' && scheme !== 'https:' && scheme !== 'data:' && !isSchemeLikeFilePath(url)) {
+          return escapeHtml(text);
+        }
+        if (scheme === 'data:' && !url.startsWith('data:image/')) {
+          return escapeHtml(text);
+        }
+        const safeSrc   = escapeHtml(encodeURI(url).replace(/%25/g, '%'));
+        const safeAlt   = escapeHtml(text);
+        const titleAttr = title ? ' data-title="' + escapeHtml(decodeRefs(title)) + '"' : '';
+        return '<span class="md-slot md-slot-image" data-slot-type="image" data-src="' + safeSrc + '" data-alt="' + safeAlt + '"' + titleAttr + '></span>';
       }
     }
   });

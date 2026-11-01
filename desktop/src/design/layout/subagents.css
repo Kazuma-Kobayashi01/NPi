@@ -71,7 +71,7 @@
 .sa-level { font-size: 10px !important; padding: 0 6px !important; }
 .sa-level.events { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 30%, var(--line)); }
 
-.sa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.sa-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .sa-stat {
   padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-1);
   background: var(--bg-surface);
@@ -83,7 +83,7 @@
 /* swimlanes: one lane per agent over an adaptive 20s–2m window; ticks =
    the recent tool calls omp reports (last 5 per agent) */
 .sa-lanes { display: flex; flex-direction: column; gap: 3px; padding: 8px 8px 6px; }
-.sa-lane { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; cursor: pointer; }
+.sa-lane { display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 6px; cursor: pointer; }
 .sa-lane:hover .sa-lane-track { background: var(--bg-hover); }
 .sa-lane-label { font-family: var(--font-mono); font-size: 10px; color: var(--sa-hue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sa-lane-track { position: relative; height: 10px; border-radius: 3px; background: var(--line-soft); overflow: hidden; transition: background 120ms; }
@@ -96,7 +96,7 @@
 .sa-filter { cursor: pointer; }
 .sa-filter.on { color: var(--fg); border-color: var(--line-bright); background: var(--bg-active); }
 
-.sa-group { display: flex; flex-direction: column; gap: 4px; }
+.sa-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .sa-group-head {
   appearance: none; border: 0; background: transparent; text-align: left;
   display: flex; align-items: center; gap: 6px;
@@ -108,7 +108,7 @@
 
 .sa-row {
   position: relative;
-  appearance: none; text-align: left; width: 100%;
+  appearance: none; text-align: left; width: 100%; min-width: 0;
   display: flex; flex-direction: column; gap: 4px;
   padding: 8px 10px;
   border: 1px solid var(--line); border-radius: var(--r-2);
@@ -119,23 +119,32 @@
 .sa-row:hover { border-color: var(--line-bright); background: var(--bg-elevated); }
 .sa-row.running { border-color: color-mix(in oklab, var(--accent) 28%, var(--line)); }
 .sa-row.failed  { border-color: color-mix(in oklab, var(--rose) 35%, var(--line)); }
+.sa-row.completed { background: var(--bg-window); }
+.sa-row.completed .sa-name, .sa-row.completed .sa-row-desc {
+  color: var(--fg-3); font-style: italic; text-decoration: line-through;
+}
+.sa-row.completed .sa-name { font-weight: 400; }
+.sa-row.completed .sa-tube .status-bar-fill { background: var(--fg-4); }
 .sa-row[data-depth]:not([data-depth="0"])::before {
   content: ""; position: absolute; left: -9px; top: -5px; height: 22px; width: 8px;
   border-left: 1px solid var(--line-bright); border-bottom: 1px solid var(--line-bright);
   border-bottom-left-radius: 5px;
 }
-.sa-row-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.sa-kind { font-size: 10px !important; padding: 0 5px !important; }
+.sa-row-top { display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; }
+.sa-row-top .sa-name { flex: 1; }
+.sa-kind { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px !important; padding: 0 5px !important; }
 /* Falls back to the full task prompt until omp's label generation lands. */
 .sa-row-desc {
   font-size: var(--d-text-sm); color: var(--fg-2); line-height: 1.4;
+  min-width: 0; width: 100%; overflow-wrap: anywhere; white-space: normal;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.sa-row-now { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--d-text-xs); }
+.sa-row-now { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; font-size: var(--d-text-xs); }
 .sa-args { color: var(--fg-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--d-text-xs); }
 .sa-intent { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--d-text-xs); }
-.sa-row-err { font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--rose); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sa-row-foot { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); }
+.sa-row-err { font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--rose); min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-row-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; width: 100%; min-width: 0; font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); }
+.sa-row-foot > span:not(.sa-tube) { white-space: nowrap; }
 
 /* ── Inspector ──────────────────────────────────────────────────────── */
 .sa-insp { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: fadeUp 220ms var(--ease-out) both; }
@@ -156,12 +165,12 @@
 .sa-insp-foot { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 10px; border-top: 1px solid var(--line); }
 
 .sa-block-k { font-size: 10px; color: var(--fg-4); letter-spacing: 0.04em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
-.sa-desc { font-size: var(--d-text-sm); color: var(--fg); line-height: 1.45; }
+.sa-desc { font-size: var(--d-text-sm); color: var(--fg); line-height: 1.45; overflow-wrap: anywhere; }
 .sa-assign {
   margin: 0; padding: 8px 10px; max-height: 120px; overflow-y: auto;
   background: var(--bg-input); border: 1px solid var(--line); border-radius: var(--r-1);
   font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--fg-3);
-  white-space: pre-wrap; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5;
 }
 .sa-now {
   padding: 8px 10px; display: flex; flex-direction: column; gap: 5px;

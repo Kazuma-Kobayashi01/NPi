@@ -47,3 +47,20 @@ Script order **is** the dependency graph:
 10. `app-live.jsx` last.
 
 When adding a file, insert at the correct point — there is no resolver to catch ordering bugs.
+
+Rich replies also require `katex.min.js` and `mermaid.min.js` before
+`app/marked-setup.js`, plus local KaTeX styles/fonts and `design/rich-content.css`.
+Load `design/ui/chart-view.jsx`, `mermaid-view.jsx` and `markdown-image.jsx` before
+`markdown.jsx`; their runtime context/lightbox lookups are late-bound.
+`design/chat/assistant-image.jsx` follows `image-lightbox.jsx` and precedes
+`assistant-bubble.jsx`. `app-live.jsx` provides the conversation-bound media context.
+`scripts/vendor-mermaid.mjs` vendors Mermaid 10.9.8 from the official npm package,
+checks its SHA-512 integrity and copies the license from the matching upstream tag.
+Keep the patched version pinned; do not replace it with an older UMD build merely
+to simplify loading.
+
+Chat disclosures load `app/tool-groups.js` before `app/chat-collapse.js`; bulk
+collapse/expand uses the grouping helper at call time. Load
+`design/chat/tool-group.jsx` after `tool-card.jsx` and before `chat-view.jsx`.
+The grouping layer only projects existing messages; it does not change the RPC
+protocol or rich-content rendering.

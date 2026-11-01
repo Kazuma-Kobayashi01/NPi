@@ -16,6 +16,8 @@
 
   <!-- Syntax highlighting theme (atom-one-dark) -->
   <link rel="stylesheet" href="highlight-theme.css" />
+  <link rel="stylesheet" href="katex.min.css" />
+  <link rel="stylesheet" href="design/rich-content.css" />
 </head>
 <body>
   <div id="root"></div>
@@ -49,6 +51,8 @@
        app/message-queue.js calls. -->
   <script src="marked.min.js"></script>
   <script src="highlight.min.js"></script>
+  <script src="katex.min.js"></script>
+  <script src="mermaid.min.js"></script>
   <script src="app/marked-setup.js"></script>
   <script src="app/format.js"></script>
   <script src="app/tooltip.js"></script>
@@ -98,6 +102,7 @@
        Dependency-free IIFE; design/chat/chat-view.jsx, tool-card.jsx and
        app-live.jsx destructure window.OMP_COLLAPSE at top level, so this
        must load before them. -->
+  <script src="app/tool-groups.js"></script>
   <script src="app/chat-collapse.js"></script>
 
   <!-- Prompt history (issue #16): pure list/navigation helpers, in-memory
@@ -311,11 +316,15 @@
        app-live.jsx provides). Destructures window.copyCodeBlockClick
        (copy-button.jsx, above); plan-annotations.jsx destructures
        useMarkdownClick at top level. -->
+  <script type="text/babel" src="design/ui/chart-view.jsx"></script>
+  <script type="text/babel" src="design/ui/mermaid-view.jsx"></script>
+  <script type="text/babel" src="design/ui/markdown-image.jsx"></script>
   <script type="text/babel" src="design/ui/markdown.jsx"></script>
   <script type="text/babel" src="design/ui/plan-annotations.jsx"></script>
   <!-- Also ImageThumbs and useModalLayer; user-bubble.jsx, tool-card.jsx
        and file-preview.jsx destructure them at top level. -->
   <script type="text/babel" src="design/chat/image-lightbox.jsx"></script>
+  <script type="text/babel" src="design/chat/assistant-image.jsx"></script>
   <!-- File preview modal (#39); destructures window.Icon, window.CopyButton
        and window.useModalLayer (above). app-live.jsx destructures
        window.FilePreview. -->
@@ -324,6 +333,7 @@
   <script type="text/babel" src="design/chat/eval-cell.jsx"></script>
   <script type="text/babel" src="design/chat/assistant-bubble.jsx"></script>
   <script type="text/babel" src="design/chat/tool-card.jsx"></script>
+  <script type="text/babel" src="design/chat/tool-group.jsx"></script>
   <!-- ask-bubble.jsx destructures window.AskDialog at top level. -->
   <script type="text/babel" src="design/chat/ask-dialog.jsx"></script>
   <script type="text/babel" src="design/chat/ask-bubble.jsx"></script>

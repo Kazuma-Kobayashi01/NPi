@@ -145,6 +145,8 @@ pub struct Launch<'a> {
     pub config: Option<&'a std::path::Path>,
     /// Text for `--system-prompt`: the whole base prompt (the app mode's, `crate::app_mode`).
     pub prompt: Option<&'a str>,
+    /// Text for `--append-system-prompt`: capability hint for rich output (Chat and Code).
+    pub append_prompt: Option<&'a str>,
 }
 
 /// Manages one omp process per tab session.
@@ -212,8 +214,9 @@ impl AgentBridge {
             mode,
             config,
             prompt,
+            append_prompt,
         } = launch;
-        let (mut child, supervisor) = match spawn_omp(cwd, resume, profile, mode, config, prompt) {
+        let (mut child, supervisor) = match spawn_omp(cwd, resume, profile, mode, config, prompt, append_prompt) {
             Ok(c) => c,
             Err(e) => {
                 // Cached *and* returned: the caller gets the reason now, the

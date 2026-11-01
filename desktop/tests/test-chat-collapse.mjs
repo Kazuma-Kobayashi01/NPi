@@ -12,6 +12,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src  = readFileSync(join(root, "src/app/chat-collapse.js"), "utf8");
 const win  = {};
 // eslint-disable-next-line no-new-func
+new Function("window", readFileSync(join(root, "src/app/tool-groups.js"), "utf8"))(win);
 new Function("window", src)(win);
 new Function("window", readFileSync(join(root, "src/app/ui-detail.js"), "utf8"))(win);
 const C = win.OMP_COLLAPSE;
@@ -85,7 +86,7 @@ check("a streaming reply whose thinking grows in place gets its toggle, and ages
   // the transcript (after message_start, and after a get_messages merge).
   const streaming = { _id: 2, kind: "assistant", streaming: true, thought: "short" };
   const msgs = [bash(1, LONG), streaming];
-  assert.deepEqual(C.collapseStates(msgs, { after: 1 }), { 1: false });
+  assert.deepEqual(C.collapseStates(msgs, { after: 1 }), { 1: false, 2: false });
   streaming.thought = "word ".repeat(400);
   assert.deepEqual(C.collapseStates(msgs, { after: 1 }), { 1: true, 2: false });
 });
@@ -105,20 +106,31 @@ check("folded tool output: every card starts collapsed, short and newest ones to
   assert.deepEqual(C.collapseStates(msgs, { tool: "folded", after: 30 }), { 1: true, 2: true, 3: true });
 });
 
-check("folded tools include running calls and edit diffs but expose errors", () => {
+check("folded tools keep running calls and failures visible", () => {
   const msgs = [edit(1), bash(2, LONG, { isError: true }), bash(3, LONG, { status: "running" }), bash(4, LONG)];
-  assert.deepEqual(C.collapseStates(msgs, { tool: "folded", after: 1 }), { 1: true, 2: false, 3: true, 4: true });
+  assert.deepEqual(C.collapseStates(msgs, { tool: "folded", after: 1 }), { 1: true, 2: false, 3: false, 4: true });
   assert.equal(C.collapseStates(msgs, { tool: "folded", overrides: { 2: true } })[2], true);
 });
 
-check("auto collapses an old edit and an old failed call like any other card", () => {
+check("auto aging never hides a failed call", () => {
   const msgs = [edit(1), bash(2, LONG, { isError: true }), ...longRun(2, 3)];
-  assert.deepEqual(C.collapseStates(msgs, { after: 2 }), { 1: true, 2: true, 3: false, 4: false });
+  assert.deepEqual(C.collapseStates(msgs, { after: 2 }), { 1: true, 2: false, 3: false, 4: false });
 });
 
-check("folded thinking starts collapsed, even while the reply streams", () => {
-  const msgs = [think(1), think(2, { streaming: true })];
-  assert.deepEqual(C.collapseStates(msgs, { thinking: "folded", after: 30 }), { 1: true, 2: true });
+check("thinking stays open while active and folds after the actual phase ends", () => {
+  const msgs = [think(1), think(2, { streaming: true }), think(3, { streaming: true, thinkingActive: false })];
+  assert.deepEqual(C.collapseStates(msgs, { thinking: "folded" }), { 1: true, 2: false, 3: true });
+});
+
+check("short thinking is toggleable and manual state wins throughout completion", () => {
+  const active = { _id: 1, kind: "assistant", thought: "A real short thought.", streaming: true, thinkingActive: true };
+  const finished = { ...active, streaming: false, thinkingActive: false };
+  assert.equal(C.collapseStates([active], { thinking: "folded" })[1], false);
+  assert.equal(C.collapseStates([finished], { thinking: "folded" })[1], true);
+  assert.equal(C.collapseStates([active], { overrides: { 1: true } })[1], true);
+  assert.equal(C.collapseStates([finished], { overrides: { 1: false } })[1], false);
+  assert.deepEqual(C.collapseStates([{ _id: 2, kind: "assistant", streaming: true, blocks: [] }]), {});
+  assert.deepEqual(C.overridesForAll([finished], false), { 1: false });
 });
 
 check("each kind follows its own mode", () => {
@@ -211,8 +223,12 @@ check("Collapse all includes short tools, skips hidden ones; later blocks follow
   const msgs = [bash(1, LONG), bash(2, TINY), think(3), bash(4, LONG, { superseded: true }), bash(5, SHORT)];
   const hidden = m => !!m.superseded;
   const all = C.overridesForAll(msgs, true, { hidden });
-  assert.deepEqual(all, { 1: true, 2: true, 3: true, 5: true });
-  assert.deepEqual(C.overridesForAll(msgs, false, { hidden }), { 1: false, 2: false, 3: false, 5: false });
+  assert.deepEqual(C.collapseStates(msgs, { thinking: "open", tool: "open", overrides: all, hidden }), { 1: true, 2: true, 3: true, 5: true });
+  const group = win.OMP_TOOL_GROUPS.groupMessages(msgs, { hidden })[0];
+  assert.equal(win.OMP_TOOL_GROUPS.isGroupCollapsed(group, { foldModes: { tool: "open" }, collapseOverrides: all }), true);
+  const expanded = C.overridesForAll(msgs, false, { hidden });
+  assert.equal(win.OMP_TOOL_GROUPS.isGroupCollapsed(group, { foldModes: { tool: "folded" }, collapseOverrides: expanded }), false);
+  assert.equal(all[4], undefined);
   const later = [...msgs, bash(6, LONG)];
   assert.deepEqual(C.collapseStates(later, { after: 30, overrides: all, hidden }), { 1: true, 2: true, 3: true, 5: true, 6: false });
 });

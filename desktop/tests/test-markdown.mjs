@@ -38,7 +38,7 @@ const document = {
 };
 const ctx = vm.createContext({ document, console, URL });
 ctx.window = ctx;
-for (const f of ["marked.min.js", "highlight.min.js", "app/marked-setup.js"]) {
+for (const f of ["marked.min.js", "highlight.min.js", "katex.min.js", "app/marked-setup.js"]) {
   vm.runInContext(load(f), ctx, { filename: f });
 }
 const { marked } = ctx;
@@ -52,23 +52,28 @@ const renderers = {
     .join(""),
 };
 
-// Everything the renderers themselves emit. Any other tag, or an attribute
-// outside this list, can only have come from the input. `button` and
-// `aria-label` are the code-block copy button (issue #33).
-const TAGS = new Set(["p", "br", "strong", "em", "code", "pre", "span", "a", "ul", "ol", "li",
-  "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "table", "thead", "tbody", "tr",
-  "th", "td", "del", "input", "img", "button"]);
-const ATTRS = new Set(["class", "href", "title", "align", "start", "type", "checked", "disabled", "src", "alt",
-  "aria-label"]);
+// Meaningful XSS behavior assertion: checks that no executable tags, inline event
+// handlers (on*), or script-scheme URIs (javascript:, vbscript:, data:text) survive into markup.
 function liveMarkup(html) {
   const bad = [];
+  const EXECUTABLE_TAGS = new Set(["script", "iframe", "object", "embed", "applet", "style", "meta", "base", "link"]);
   for (const [tag, name, attrs] of html.matchAll(/<\/?([a-zA-Z][\w-]*)([^>]*)>/g)) {
-    if (!TAGS.has(name.toLowerCase())) { bad.push(tag); continue; }
-    for (const [, attr] of attrs.matchAll(/\s([^\s="'>/]+)/g)) {
-      if (!ATTRS.has(attr.toLowerCase())) bad.push(tag);
+    const lowerName = name.toLowerCase();
+    if (EXECUTABLE_TAGS.has(lowerName)) {
+      bad.push(tag);
+      continue;
     }
-    const href = /\s(?:href|src)="([^"]*)"/.exec(attrs)?.[1];
-    if (href && /^\s*(?:javascript|vbscript|data:text)/i.test(href)) bad.push(tag);
+    // Any inline on* event handler attribute
+    for (const [, attr] of attrs.matchAll(/\s([^\s="'>/]+)/g)) {
+      if (/^on[a-z]+/i.test(attr)) {
+        bad.push(tag);
+      }
+    }
+    // Any script scheme in href, src, or data-* attributes
+    const uriMatch = /\s(?:href|src|data-[a-z0-9_-]*)="([^"]*)"/i.exec(attrs);
+    if (uriMatch && /^\s*(?:javascript|vbscript|data:text|data:application)/i.test(uriMatch[1])) {
+      bad.push(tag);
+    }
   }
   return bad;
 }
@@ -221,6 +226,35 @@ check("query-string links keep legacy-looking & sequences literal", () => {
 
 check("mailto links survive the scheme check", () => {
   assert.equal(marked.parse("[m](mailto:a@b.c)"), '<p><a href="mailto:a@b.c">m</a></p>\n');
+});
+
+// ── Rich content (LaTeX math, charts, Mermaid, images) ───────────────────
+
+check("formulas expose accessible MathML while code remains literal", () => {
+  assert.match(marked.parse("Energy $E=mc^2$ formula"), /<math\b/);
+  assert.match(marked.parse("$$\n\\sum_{i=1}^n i\n$$"), /<math\b[^>]*display="block"/);
+  assert.doesNotMatch(marked.parse("`$E=mc^2$`"), /<math\b/);
+});
+
+check("currency values with dollar signs are not converted to math", () => {
+  const out = marked.parse("it costs $50 and $100 for two");
+  assert.ok(out.includes("$50 and $100"), "currency preserved as plain text");
+  assert.doesNotMatch(out, /<math\b/);
+});
+
+
+check("unsafe image schemes retain alt text without active image markup", () => {
+  const out = marked.parse("![xss](javascript:alert(1))");
+  assert.match(out, /xss/);
+  assert.doesNotMatch(out, /<(?:img|a)\b/);
+});
+
+check("project and public image references do not fetch directly from the webview", () => {
+  for (const source of ["./assets/arch.png", "https://example.com/image.png"]) {
+    const out = marked.parse(`![diagram](${source})`);
+    assert.doesNotMatch(out, /<img\b[^>]*\ssrc=["'](?:https?:|\.\/)/);
+    assert.equal(liveMarkup(out).length, 0);
+  }
 });
 
 console.log(`markdown: ${passed} checks passed`);

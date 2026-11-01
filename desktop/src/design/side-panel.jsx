@@ -177,39 +177,41 @@ function UsageCard({ provider, quotas, stats }) {
   );
 }
 
-function TodoPlanCard({ counts, onOpen }) {
-  const hasTasks = counts && counts.total > 0;
-  const inProgress = counts && counts.inProg > 0;
+function TodoPlanCard({ counts, kanban }) {
+  const hasTasks = counts.total > 0;
+  const inProgress = kanban.some(col => col.tasks.some(task => task.status === "in_progress"));
+  const title = (
+    <span className="sp-todo-label">
+      <span className="sp-todo-icon">
+        <_SP2_Icon name="plan" size={13} color="var(--accent)" />
+        {inProgress && <span className="sp-todo-live" />}
+      </span>
+      <span>Todo and plan</span>
+    </span>
+  );
   return (
-    <div className="sp-card sp-todo-card" style={{ marginTop: "auto" }}>
-      <button
-        type="button"
-        className="sp-head"
-        style={{ cursor: "pointer", width: "100%", textDecoration: "none" }}
-        onClick={onOpen}
-        title="Open Todo and plan"
-      >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
-          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-            <_SP2_Icon name="plan" size={13} color="var(--accent)" />
-            {inProgress && (
-              <span style={{
-                position: "absolute", top: -2, right: -2, width: 6, height: 6,
-                borderRadius: "50%", background: "var(--accent)",
-              }} />
-            )}
-          </span>
-          <span className="sp-title">Todo and plan</span>
-        </span>
-        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-          {hasTasks ? (
-            <span className="chip muted mono">{counts.done}/{counts.total}</span>
-          ) : (
-            <span className="chip muted mono" style={{ fontSize: "11px" }}>idle</span>
-          )}
-          <_SP2_Icon name="chevR" size={9} color="var(--fg-4)" />
-        </span>
-      </button>
+    <div className="sp-todo-card">
+      <SideCard title={title} startOpen={false}
+        extra={<span className="chip muted mono">{hasTasks ? `${counts.done}/${counts.total}` : "idle"}</span>}>
+        {hasTasks ? kanban.map(col => (
+          <section key={col.id} className="sp-todo-phase">
+            <h3>{col.title}</h3>
+            <ul className="sp-todo-list">
+              {col.tasks.map(task => (
+                <li key={task.id} className={`sp-todo-task ${task.status}`}>
+                  <span className="sp-todo-mark" aria-label={task.status === "done" ? "Done" : task.status === "in_progress" ? "In progress" : "Pending"}>
+                    {task.status === "done" ? "✓" : task.status === "in_progress" ? "●" : "○"}
+                  </span>
+                  <span className="sp-todo-text">
+                    {task.text}
+                    {task.reason && <span className="sp-todo-reason">{task.reason}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )) : <div className="sp-dim">No tasks in this session.</div>}
+      </SideCard>
     </div>
   );
 }

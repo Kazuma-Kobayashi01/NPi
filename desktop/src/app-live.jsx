@@ -26,6 +26,7 @@ const {
   INTENT_FRAMING, APPROVAL_PROMPT,
   useBridgeSnapshot, useThemeEffect, useSubagentManager, useConversationTree, useGoalMode, useTerminal, TerminalPanels, timeNow,
   useKeymap, useKeymapDispatch, useBrowser, BrowserDock, MarkdownLinkContext: _AL_MdLinkCtx,
+  MarkdownMediaContext: _AL_MdMediaCtx,
   usePaneWidths, ResizeHandle, useQuotas, usePrAutomation, PrAutomationCard,
 } = window;
 const { routeSubmit: _routeSubmit } = window.OMP_SLASH;
@@ -957,8 +958,23 @@ function App() {
     { label: "Settings", icon: "cog", hint: keyHint("desktop.settings.open"), onClick: () => (stab.open ? closeSettings() : openSettings()) },
   ];
 
+  const mediaKey = JSON.stringify([activeProfileId, activeProject.sessionFile ?? activeProject.id]);
+  const markdownMedia = React.useMemo(() => {
+    const images = new Map();
+    return {
+      key: mediaKey,
+      resolveImage(source) {
+        if (!images.has(source)) {
+          images.set(source, bridge.chatImageRead(source, mediaKey, activeProject.id));
+        }
+        return images.get(source);
+      },
+    };
+  }, [bridge, mediaKey, activeProject.id]);
+
   // Chat links: project files to the preview, localhost to the browser panel.
   return (
+    <_AL_MdMediaCtx.Provider value={markdownMedia}>
     <_AL_MdLinkCtx.Provider value={handleChatLinkClick}>
       <div className="app-backdrop" />
       <div className="app">
@@ -1146,7 +1162,7 @@ function App() {
                   onToggleSubagentPane={subagentUi.togglePane}
                   show={{ subagents: t.showSubagents ?? true }}
                   todoCounts={todoCounts}
-                  onOpenPlan={() => setPlanOpen(true)}
+                  kanban={kanban}
                 >
                   {/* Hidden without the GitHub CLI; the hook keeps checking on
                       focus, so installing gh brings it back. */}
@@ -1299,6 +1315,7 @@ function App() {
         <ConfirmCloseDialog confirm={closeConfirm} onAnswer={handleCloseAnswer} />
       )}
     </_AL_MdLinkCtx.Provider>
+    </_AL_MdMediaCtx.Provider>
   );
 }
 

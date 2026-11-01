@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.1] - 2026-11-01
+
+### Added
+
+- Rich assistant replies: inline project/public HTTPS images with source links, persistent conversation-private image caching and click-to-enlarge viewing.
+- Offline LaTeX formulas, Mermaid diagrams, and declarative percentage-bar, pie, donut, bar and line charts, with streaming and theme-aware rendering.
+- Public-image downloads validate and pin destination IPs; Fake-IP DNS networks use a narrowly gated Cloudflare HTTPS DNS lookup without exposing full image URLs.
+
+### Changed
+
+- Chat uses four semantic text levels, with the requested dark palette and existing light-theme equivalents instead of opacity-based dimming.
+- Consecutive successful tool calls form compact, expandable groups. Running, failed and confirmation rows stay outside these groups; group and individual manual states remain independent.
+- Real thinking content has one accessible disclosure: open while thinking, folded when finished unless kept open by preference or manual override. Ordered thinking phases and reading position survive streamed updates.
+
+### Fixed
+
+- Native assistant image blocks are no longer dropped during streaming, message completion or history restoration.
+- Display-mode LaTeX formulas are centered in the chat reading column while preserving horizontal scrolling for wide expressions.
+
+## [1.3.0] - 2026-11-01
+
+### Changed
+
+- Code-mode engineering workflow now assesses scope, researches before deciding, and asks explicitly before substantial unapproved changes. Investigation-only requests remain read-only, and already-approved decisions are not asked again.
+- Alibaba(China) thinking choices and request parameters follow reviewed model-specific contracts, including native Qwen3.8 efforts and mandatory thinking.
+- Floating model menus use a responsive two-column layout; folded tool summaries use tighter spacing.
+- Completed subagent rows are muted, italic and struck through, with long text contained in narrow panes.
+- The bottom Todo and plan card expands its live task list in place instead of opening the full plan view.
+
+
 ## [1.0.1-hotfix01] - 2026-10-31
 
 ### Fixed
@@ -29,6 +59,8 @@ First NPi Desktop release (macOS, Apple silicon).
 
 ### Fixed
 
+- Subagent manager cards now contain long names, task summaries and metrics within their bounds, including narrow panes.
+- Alibaba(China) thinking choices now follow the bundled kernel's reviewed model contracts, including native Qwen3.8 effort levels and mandatory-thinking models that cannot be switched off.
 - Chat history no longer drops older messages after filling the 169-cell minimap. Users can scroll back to the first message; tab switches and resumed conversations also restore history from before context compaction on the current branch.
 
 ### Added
@@ -37,6 +69,10 @@ First NPi Desktop release (macOS, Apple silicon).
 
 ### Changed
 
+- Completed subagent rows now use muted gray, italic, struck-through names and summaries while remaining selectable; running and failed agents keep their distinct presentation.
+- The bottom **Todo and plan** rail card now expands and collapses its live task list in place instead of opening the full plan view.
+- The floating model menu shared by the composer and welcome page now arranges model choices in two columns, falling back to one column in narrow windows while preserving vendor navigation and selection shortcuts.
+- Folded tool summaries use tighter vertical padding and line height without changing expanded cards, failed-tool visibility, or ordinary message spacing.
 - Tool calls in chat now fold into one-line summary disclosures showing the tool, target, diff line counts and status, and unmount their body while folded. **Standard** interface detail starts tool calls folded (failed calls still open); **Full** opens them all.
 - Streaming replies use omp's delta `message_update` frames: each frame carries only the new text instead of the whole reply so far. Replaying a recorded 8.7 MB session into a release build: 944 MB → 25 MB sent from omp to the window, a background tab catches up 6.7× faster (11.5 s → 1.7 s) with 4× less window CPU, and the window's JavaScript memory drops from 3 GB to 150 MB. A tab that comes back to a reply still streaming after a long time in the background shows it whole.
 - OMP Desktop now requires omp 18.13.2 or newer. A tab started against an older omp does not start; its note names the installed and the required version, and an `omp update` takes effect for the next tab without restarting the app.

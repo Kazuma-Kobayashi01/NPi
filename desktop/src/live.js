@@ -2461,13 +2461,26 @@
       // until `message_end` (see get_messages).
       const step = DELTA.accFor(streamAcc, mid, streamSnapshot, lastSeq);
       if (step.changed && step.acc.seed) streamingBubble.ts = tsOf(step.acc.seed.message) ?? streamingBubble.ts;
+      if (step.changed) streamingBubble.thinkingActive = undefined;
       streamAcc = step.acc;
-      changed = step.changed || changed;
-      if (!step.skip) changed = DELTA.applyEvent(streamAcc.blocks, ev.assistantMessageEvent) || changed;
+      const ame = ev.assistantMessageEvent;
+      if (!step.skip) changed = DELTA.applyEvent(streamAcc.blocks, ame) || changed;
+      if (!step.skip && ame) {
+        if (ame.type === "thinking_start" || ame.type === "thinking_delta") {
+          if (streamingBubble.thinkingActive !== true) {
+            streamingBubble.thinkingActive = true;
+            changed = true;
+          }
+        } else if (ame.type === "thinking_end" || ame.type === "text_start" || ame.type === "text_delta" || ame.type === "toolcall_start") {
+          if (streamingBubble.thinkingActive !== false) {
+            streamingBubble.thinkingActive = false;
+            changed = true;
+          }
+        }
+      }
       if (!changed) return;
 
       Object.assign(streamingBubble, DELTA.view(streamAcc.blocks));
-
       const updated = { ...streamingBubble };
       // Find by streaming flag — indexOf fails after the first update because
       // each update replaces the entry with a new copy; ask bubbles may also
@@ -2499,8 +2512,9 @@
       // it (the get_messages merge sorts that bubble out by its `ts`).
       if (streamingBubble && msg?.role === "assistant") {
         const blocks = Array.isArray(msg.content) ? msg.content : [];
-        const thought = blocks.find(b => b.type === "thinking")?.thinking ?? streamingBubble.thought;
-        const designBlocks = blocks.filter(b => b.type === "text" && b.text?.trim()).map(b => ({ type: "text", text: b.text }));
+        const msgThoughts = blocks.filter(b => b?.type === "thinking" && b.thinking?.trim()).map(b => b.thinking);
+        const thought = msgThoughts.length > 0 ? msgThoughts.join("\n\n") : streamingBubble.thought;
+        const designBlocks = blocks.filter(b => b.type === "image" || (b.type === "text" && b.text?.trim()));
         // Find by streaming flag — extension_ui_request.select may have pushed
         // an ask bubble after the streaming bubble before message_end arrives.
         // A failed request is not shown yet (`pendingFailure`): omp may
@@ -2508,7 +2522,9 @@
         const pendingFailure = TURN.failureOf(msg);
         const completed = {
           ...streamingBubble,
-          streaming: false, thought,
+          streaming: false,
+          thinkingActive: false,
+          thought,
           lead:   thought ? "thinking" : null,
           blocks: designBlocks.length > 0 ? designBlocks : streamingBubble.blocks,
           tokens,
@@ -2529,7 +2545,7 @@
         }
         streamingBubble = null;
       } else if (streamingBubble && !msg) {
-        const completed2 = { ...streamingBubble, streaming: false, tokens };
+        const completed2 = { ...streamingBubble, streaming: false, thinkingActive: false, tokens };
         const eidx2 = state.messages.findLastIndex(m => m.streaming === true);
         if (eidx2 !== -1) {
           const msgs = [...state.messages];
@@ -3935,6 +3951,14 @@
     readProjectFile(path) {
       if (!activeSessionId) return Promise.resolve(null);
       return _invokeResult("project_file_read", { sessionId: activeSessionId, path });
+    },
+
+    /** Resolve an inline image through the host's conversation-private cache.
+     * Rejections stay visible in the Markdown image, not as empty thumbnails. */
+    chatImageRead(source, conversationKey, sessionId) {
+      return window.__TAURI__.core.invoke("chat_image_read", {
+        sessionId, conversationKey, source,
+      });
     },
 
     /** Stage a file's changes (`git add`). */

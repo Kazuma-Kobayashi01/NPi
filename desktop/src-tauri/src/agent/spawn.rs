@@ -351,6 +351,7 @@ pub(super) fn spawn_omp(
     mode: ApprovalMode,
     config: Option<&Path>,
     prompt: Option<&str>,
+    append_prompt: Option<&str>,
 ) -> Result<(Child, crate::supervisor::ProcessSupervisor), String> {
     let omp = Omp::locate()?;
     // Refused here rather than left to fail later: an omp too old for the
@@ -366,6 +367,11 @@ pub(super) fn spawn_omp(
         // Replaces omp's default prompt (omp still adds the skills list). Before the `--config` token, which stays last.
         let at = args.len() - usize::from(config.is_some());
         args.insert(at, format!("--system-prompt={text}"));
+    }
+    if let Some(text) = append_prompt {
+        // Appends to the system prompt (both Chat and Code modes). Before the `--config` token, which stays last.
+        let at = args.len() - usize::from(config.is_some());
+        args.insert(at, format!("--append-system-prompt={text}"));
     }
     // `Omp::command` defaults stdin to closed; a live RPC session needs it
     // piped. No `cmd /C` wrapper on Windows: killing cmd.exe would orphan

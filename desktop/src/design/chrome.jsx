@@ -220,7 +220,7 @@ function MoreMenu({ items }) {
 // Always for a tab; below them the running subagents, the branch's PR and the
 // user's widgets (passed as children).
 function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, provider, quotas,
-  subagents, subagentPaneOpen, onOpenSubagent, onToggleSubagentPane, show = {}, todoCounts, onOpenPlan, children }) {
+  subagents, subagentPaneOpen, onOpenSubagent, onToggleSubagentPane, show = {}, todoCounts, kanban, children }) {
   const hasAgents = Array.isArray(subagents) && subagents.length > 0;
   const { TodoPlanCard } = window;
   return (
@@ -233,9 +233,7 @@ function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, provid
           onOpen={onOpenSubagent} onTogglePane={onToggleSubagentPane} />
       )}
       {children}
-      {onOpenPlan && TodoPlanCard && (
-        <TodoPlanCard counts={todoCounts} onOpen={onOpenPlan} />
-      )}
+      <TodoPlanCard counts={todoCounts} kanban={kanban} />
     </aside>
   );
 }

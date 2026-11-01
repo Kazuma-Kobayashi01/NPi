@@ -41,6 +41,21 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
   const [levels, setLevels] = React.useState(null);
   const [recent, setRecent] = React.useState([]);
   const rootRef = React.useRef(null);
+  const popRef = React.useRef(null);
+
+  React.useLayoutEffect(() => {
+    if (!open) return undefined;
+    const fit = () => {
+      const pop = popRef.current;
+      pop.style.transform = "";
+      const rect = pop.getBoundingClientRect();
+      const shift = Math.max(12 - rect.left, Math.min(0, window.innerWidth - 12 - rect.right));
+      pop.style.transform = `translateX(${shift}px)`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [open]);
 
   const close = React.useCallback(() => { setOpen(false); setView("main"); }, []);
 
@@ -118,11 +133,11 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
     const group = M.groupByVendor(models ?? []).find(g => g.vendor === view.vendor);
     body = (<>
       {back(view.vendor, "vendors")}
-      {(group?.models ?? []).map(m => row(m, M.keyOf(m) === currentKey ? tick : null))}
+      <div className="mm-grid">{(group?.models ?? []).map(m => row(m, M.keyOf(m) === currentKey ? tick : null))}</div>
     </>);
   } else {
     body = (<>
-      {picks.map((m, i) => row(m, M.keyOf(m) === currentKey ? tick : <span className="mm-num">{i + 1}</span>))}
+      <div className="mm-grid">{picks.map((m, i) => row(m, M.keyOf(m) === currentKey ? tick : <span className="mm-num">{i + 1}</span>))}</div>
       {picks.length === 0 && <div className="mm-empty">No models available. Add a vendor in Settings → Models.</div>}
       {level && levels && levels.length > 0 && (<>
         <div className="mm-sep" />
@@ -152,7 +167,7 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
         <span className="mm-btn-name">{current?.name ?? current?.id ?? "Choose a model"}</span>
         {level && <span className="mm-btn-level">{_mmCap(level)}</span>}
       </button>
-      {open && <div className={`mm-pop ${up ? "up" : "down"}`} role="menu">{body}</div>}
+      {open && <div ref={popRef} className={`mm-pop mm-model-pop ${up ? "up" : "down"}`} role="menu">{body}</div>}
     </div>
   );
 }

@@ -3,8 +3,8 @@
 // Thinking and tool output each have a mode (Settings → Chat):
 // - "auto": long blocks collapse once `after` newer blocks follow.
 // - "open": never collapses on its own.
-// - "folded": tool calls show only their summary, including running calls
-//   and edits. Failed calls remain open so errors are not hidden.
+// - "folded": completed tools start collapsed; running calls and failures
+//   stay open. Thinking follows its actual lifecycle unless kept open.
 // The user's own toggle on a block always wins and is kept per tab, keyed by
 // the message's `_id` (live.js assigns it, and the get_messages merge
 // carries it over, app/transcript-merge.js).
@@ -98,14 +98,16 @@
   }
 
 
-  // Errors stay visible by default; running state remains in the summary.
-  const keepsOpen = m => m.kind === "tool" && !!m.isError;
+  const keepsOpen = m => m.kind === "tool" && (m.isError || m.status === "running");
 
-  // Whether a block with a toggle starts collapsed under `mode`; `aged`:
-  // enough newer blocks follow it.
+  function thinkingActive(m) {
+    return m.thinkingActive ?? !!(m.streaming && !m.blocks?.some(b => b.type === "text" && b.text?.trim()));
+  }
+
   function _collapsedBy(mode, m, lines, aged) {
-    if (mode === "open") return false;
-    if (mode === "folded") return !keepsOpen(m);
+    if (mode === "open" || keepsOpen(m)) return false;
+    if (m.kind === "assistant") return !thinkingActive(m);
+    if (mode === "folded") return true;
     return aged && lines > SHORT_LINES && !isLive(m);
   }
 
@@ -133,7 +135,7 @@
       const m = messages[i];
       if (m._id == null || hidden(m)) continue;
       const lines = measuredLines(m);
-      if (m.kind !== "tool" && lines <= PREVIEW_LINES) continue;
+      if (m.kind !== "tool" && (m.kind !== "assistant" || !m.thought)) continue;
       out[m._id] = Object.hasOwn(overrides, m._id)
         ? overrides[m._id]
         : _collapsedBy(m.kind === "tool" ? tool : thinking, m, lines, newer >= wait);
@@ -152,14 +154,15 @@
     const out = {};
     for (const m of messages) {
       if (m._id == null || hidden(m)) continue;
-      if (m.kind !== "tool" && !isLive(m) && measuredLines(m) <= PREVIEW_LINES) continue;
+      if (m.kind !== "tool" && (m.kind !== "assistant" || (!m.thought && !m.streaming))) continue;
       out[m._id] = collapsed;
     }
+    Object.assign(out, window.OMP_TOOL_GROUPS.groupOverrides(messages, collapsed, { hidden }));
     return out;
   }
 
   window.OMP_COLLAPSE = {
     PREVIEW_LINES, SHORT_LINES, DEFAULT_AFTER, MIN_AFTER, MAX_AFTER, MODES, NO_OVERRIDES,
-    foldModes, clampAfter, bodyLines, collapseStates, overridesForAll,
+    foldModes, clampAfter, bodyLines, thinkingActive, collapseStates, overridesForAll,
   };
 })();

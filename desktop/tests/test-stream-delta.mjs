@@ -167,5 +167,83 @@ check("accFor: a message recovered twice (tab left again mid-message) reseeds fr
   assert.equal(text(acc), "abcdefghijklmnopqrstuvwxyz");
   assert.equal(acc.seed, snap2);
 });
+check("image_end triggers a UI update and preserves the native image block", () => {
+  const blocks = [];
+  const imgBlock = { type: "image", data: "aW1n", mimeType: "image/png" };
+  const shown = run(blocks, [
+    { type: "image_end", contentIndex: 0, content: imgBlock },
+  ]);
+  assert.deepEqual(shown, [true]);
+  assert.deepEqual(blocks, [imgBlock]);
+});
+
+check("view preserves native image blocks in exact order among text and handles image-only", () => {
+  const img1 = { type: "image", data: "aW1nMQ==", mimeType: "image/png" };
+  const img2 = { type: "image", data: "aW1nMg==", mimeType: "image/jpeg" };
+  const interleaved = D.view([
+    { type: "thinking", thinking: "analyzing" },
+    { type: "text", text: "Before chart:" },
+    img1,
+    { type: "text", text: "After chart." },
+  ]);
+  assert.deepEqual(interleaved, {
+    thought: "analyzing",
+    lead: "thinking",
+    blocks: [
+      { type: "text", text: "Before chart:" },
+      img1,
+      { type: "text", text: "After chart." },
+    ],
+  });
+
+  const imageOnly = D.view([img2]);
+  assert.deepEqual(imageOnly, {
+    thought: null,
+    lead: null,
+    blocks: [img2],
+  });
+});
+
+check("dropped replay snapshot rebuild retains image blocks in view", () => {
+  const img = { type: "image", data: "Y2hhcnQ=", mimeType: "image/png" };
+  const snap = {
+    messageId: "msg-img",
+    seq: 5,
+    message: {
+      role: "assistant",
+      content: [
+        { type: "text", text: "Generated diagram:" },
+        img,
+      ],
+      timestamp: 42,
+    },
+  };
+  const { acc, changed } = D.accFor(null, "msg-img", snap, 6);
+  assert.equal(changed, true);
+  assert.deepEqual(D.view(acc.blocks).blocks, [
+    { type: "text", text: "Generated diagram:" },
+    img,
+  ]);
+});
+
+check("view accumulates multiple thinking blocks in order while preserving text and images", () => {
+  const img = { type: "image", data: "aW1n", mimeType: "image/png" };
+  const res = D.view([
+    { type: "thinking", thinking: "first plan" },
+    { type: "text", text: "step 1" },
+    { type: "thinking", thinking: "revised plan" },
+    img,
+    { type: "text", text: "step 2" },
+  ]);
+  assert.deepEqual(res, {
+    thought: "first plan\n\nrevised plan",
+    lead: "thinking",
+    blocks: [
+      { type: "text", text: "step 1" },
+      img,
+      { type: "text", text: "step 2" },
+    ],
+  });
+});
 
 console.log(`test-stream-delta: ${passed} checks passed`);

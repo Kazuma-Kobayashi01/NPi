@@ -247,4 +247,83 @@ check("a streaming entry is left out, unless its message already ended in omp", 
   assert.equal(merged[1], ended[1]);
 });
 
+check("adaptAgentMessages retains image-only assistant turns without dropping them", () => {
+  const imgBlock = { type: "image", data: "aW1nMQ==", mimeType: "image/png" };
+  const raw = [
+    userMsg("draw something", 1),
+    {
+      role: "assistant",
+      stopReason: "stop",
+      timestamp: 2,
+      content: [imgBlock],
+    },
+  ];
+  const adapted = adapt(raw);
+  assert.equal(adapted.length, 2);
+  assert.equal(adapted[1].kind, "assistant");
+  assert.deepEqual(Array.from(adapted[1].blocks, b => ({ ...b })), [imgBlock]);
+});
+
+check("adaptAgentMessages retains interleaved text-image-text in exact sequence", () => {
+  const imgBlock = { type: "image", data: "aW1nMg==", mimeType: "image/jpeg" };
+  const raw = [
+    {
+      role: "assistant",
+      stopReason: "stop",
+      timestamp: 10,
+      content: [
+        { type: "text", text: "Top explanation." },
+        imgBlock,
+        { type: "text", text: "Bottom summary." },
+      ],
+    },
+  ];
+  const adapted = adapt(raw);
+  assert.equal(adapted.length, 1);
+  assert.deepEqual(Array.from(adapted[0].blocks, b => ({ ...b })), [
+    { type: "text", text: "Top explanation." },
+    imgBlock,
+    { type: "text", text: "Bottom summary." },
+  ]);
+});
+
+check("mergeTranscript cleanly aligns and retains assistant image turns across tab switch", () => {
+  const imgBlock = { type: "image", data: "aW1nMw==", mimeType: "image/png" };
+  const persisted = adapt([
+    userMsg("show chart", 1),
+    {
+      role: "assistant",
+      stopReason: "stop",
+      timestamp: 2,
+      content: [
+        { type: "text", text: "Here:" },
+        imgBlock,
+      ],
+    },
+  ]);
+  const live = [
+    liveUser("show chart", 1),
+    {
+      kind: "assistant",
+      time: "live",
+      ts: 2,
+      thought: null,
+      lead: null,
+      streaming: false,
+      blocks: [
+        { type: "text", text: "Here:" },
+        imgBlock,
+      ],
+      _id: "live-bubble-2",
+    },
+  ];
+  const merged = mergeTranscript(live, persisted);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[1]._id, "live-bubble-2");
+  assert.deepEqual(Array.from(merged[1].blocks, b => ({ ...b })), [
+    { type: "text", text: "Here:" },
+    imgBlock,
+  ]);
+});
+
 console.log(`test-transcript-merge: ${passed} checks passed`);

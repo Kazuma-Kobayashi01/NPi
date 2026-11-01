@@ -21,6 +21,18 @@ Always confirm the current git branch is correct before any modification or dele
 Never engage in excessive testing, redundant runs, or repetitive verification that waste resources for minimal return. \
 Be honest about what you do not know or could not check.";
 
+/// Desktop-specific output syntax; appended without replacing either mode's workflow.
+pub const DESKTOP_RICH_OUTPUT_HINT: &str = "\
+# Desktop Rich Content
+- Formulas: LaTeX $...$ inline or $$...$$ display math.
+- Diagrams: fenced mermaid blocks for genuine workflows, relationships or sequences.
+- Charts: fenced chart blocks containing valid JSON. Supported types: percentage-bar, donut, pie, bar, line.
+  Example: {\"type\":\"donut\",\"title\":\"Usage\",\"data\":[{\"label\":\"Input\",\"value\":20},{\"label\":\"Output\",\"value\":80}]}
+  Data contains 1–50 items with string labels and finite numeric values. Proportions require non-negative values and a positive total; bar and line allow negative values. Optional title and unit are strings.
+- Images: ![caption](source) inserts an inline image with click-to-enlarge viewing. Use project-contained image paths or direct public HTTPS image URLs, not web-page URLs. Find real images with your available research tools; retain attribution and never invent image URLs or chart data.
+- Use these formats rather than executable HTML or JavaScript; rendering libraries are local and the webview's network policy remains strict.
+";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppMode {
     Chat,
@@ -134,4 +146,5 @@ mod tests {
         s.set(AppMode::Chat);
         assert_eq!(s.get(), AppMode::Chat);
     }
+
 }

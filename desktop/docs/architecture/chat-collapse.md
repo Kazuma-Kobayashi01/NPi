@@ -1,43 +1,94 @@
-# Collapsible tool cards and thinking (#44, #43)
+# Chat disclosures and text hierarchy
 
-Code: `src/app/chat-collapse.js` (rules, `window.OMP_COLLAPSE`), `src/design/ui/collapse-toggle.jsx` (control), `chat/tool-card.jsx` / `chat/assistant-bubble.jsx` (rendering), `chat/chat-view.jsx` (wiring), `app-live.jsx` (per-tab toggles, Collapse all / Expand all), Settings → Chat (`app/settings-schema.js`; `docs/architecture/settings.md`). Tests: `tests/test-chat-collapse.mjs`, `tests/test-tool-output.mjs` (`isError`).
+Code: `app/chat-collapse.js` (`OMP_COLLAPSE`), `app/tool-groups.js`
+(`OMP_TOOL_GROUPS`), `design/chat/tool-group.jsx`, `tool-card.jsx`,
+`assistant-bubble.jsx` and `chat-view.jsx`. `app-live.jsx` owns per-tab overrides.
+Tests: `test-chat-collapse.mjs`, `test-tool-groups.mjs`, `test-stream-delta.mjs`
+and `test-scroll-pin.mjs`.
 
-## Blocks
+## Four text levels
 
-A *block* is a tool card's body or an assistant reply's thinking. `bodyLines(msg)` estimates its rendered lines from the data (bash and eval lines wrapped at 100 chars as `pre-wrap` does, diff lines + header/track, search hits, subagent rows, thinking as prose wrapped at 100 chars), so the decision is known before layout.
+The dark chat surface overrides the existing semantic variables only within
+`.chat-wrap`: `--fg: #E5E7EB` for reply text, `--fg-2: #C0C4CC` for tool summaries
+and thinking, `--fg-3: #929AA6` for time/tokens/status metadata, and
+`--fg-4: #747C88` for inactive labels. `--fg-5` aliases the fourth level in chat.
+Ivory and Latte retain their corresponding light-theme text variables. Semantic
+warning/running colors remain intact. Parent opacity is not a hierarchy mechanism;
+the existing one-time entrance animation is unchanged.
 
-`collapseStates` runs on every streaming frame, so the estimate is cached per message object (`WeakMap`): a settled entry is never changed in place — live.js replaces it with a new object on every update — so it is measured once. A live entry (running tool, streaming reply) is measured afresh every time, because live.js grows `streamingBubble` in place and that object itself sits in the transcript after `message_start` and after a get_messages merge (`live.js` `[...merged, streamingBubble]`). A new in-place write to a settled transcript entry would leave its cached size stale.
+## Thinking
 
-| Lines | Toggle | Collapses in "auto" | Ages older blocks |
-|---|---|---|---|
-| ≤ `PREVIEW_LINES` (3) | no — nothing to hide | no | no |
-| ≤ `SHORT_LINES` (8) | yes | never | yes |
-| longer | yes | yes | yes |
+Only non-empty thinking text actually supplied by the backend is displayed.
+Live deltas and message completion concatenate the supplied thinking blocks in
+original order with the same paragraph separator used by restored history; raw
+messages and content blocks are not rewritten.
 
-## Rule
+The frontend tracks `thinkingActive` from existing `thinking_start`,
+`thinking_delta`, `thinking_end`, text and tool-call events. A phase change alone
+triggers a UI update. Events skipped after a dropped-replay snapshot cannot
+rewrite the phase. Unknown snapshot activity falls back to a streaming reply
+that has not started visible text; message completion ends the activity.
+This is frontend projection metadata, not a new backend protocol field.
 
-`collapseStates(messages, { thinking, tool, after, overrides, horizonId, hidden })` → `_id → collapsed` for every block with a toggle. Thinking and tool cards each follow their own mode (Settings → Chat *Thinking* / *Tool output*, tweak keys `foldThinking` / `foldTools`):
+Every non-empty thought, including a single line, has one disclosure button with
+`aria-expanded` and `aria-controls`. It says `思考中` while active and `已思考`
+when finished. Active thinking starts open; finished thinking starts folded in
+`auto` and `folded` modes. An explicit `open` preference and per-message manual
+overrides still win. Duration is shown only when explicit thinking-duration
+metadata exists; generic reply elapsed time is never substituted.
 
-- **auto**: blocks start expanded. A long block collapses once `after` newer blocks (tweak *collapse after*, 1–30, default 5) follow it; a running tool card or a streaming reply never collapses on its own. Blocks longer than `PREVIEW_LINES` count as newer, whatever their own mode.
-- **open**: never collapses on its own.
-- **folded**: tool calls and thinking start collapsed, short blocks and a streaming reply's thinking included. Failed tool calls (`isError`) remain open so errors are not hidden.
+The expanded body is plain pre-wrapped secondary text. Selecting or clicking its
+text does not toggle the disclosure. The body is memoized so subsequent reply
+text deltas do not rebuild unchanged thinking content.
 
-The user's toggle (`overrides`) always wins, both ways, in every mode. Messages the chat hides (`OMP_TURN_STATUS.isHidden`) neither collapse nor count.
+## Individual tools
 
-`foldModes(tweaks)` reads explicit `foldThinking` / `foldTools` preferences first, then the active interface-detail step (`OMP_UI_DETAIL`, where Standard sets `foldTools: "folded"` and Full sets `foldTools: "open"`). An explicitly stored legacy `autoCollapse` boolean still takes precedence over an unset key.
+Each tool keeps its existing summary disclosure and complete result renderer.
+Running calls and errors remain open by default in every mode; a deliberate
+manual toggle still wins. Completed calls follow `foldTools`: `open` keeps them
+open, `folded` folds them, and `auto` retains the existing age/line thresholds.
+`bodyLines` estimates output size, caching settled message objects in a WeakMap;
+live objects are measured afresh. Large eval/bash content is not rescanned on
+unrelated updates.
 
-## Collapse all / Expand all
+## Consecutive tool groups
 
-`/collapse-all`, `/expand-all` (palette and composer) and the unbound keymap actions `desktop.chat.collapseAll` / `desktop.chat.expandAll` replace the tab's toggles with `overridesForAll(messages, collapsed)`: one toggle per block that has one, plus every live block (running tool, streaming reply) even while it is still too short for one, so it keeps the asked-for state once it grows. A block that arrives later has no toggle, so it follows the modes again.
+`groupMessages` is a display-only projection. Only successful ordinary tool rows
+(`status: "ok"`, no `isError`) are grouped. Running, failed, waiting and visible
+non-tool rows break a group. Hidden retry rows neither render nor split visually
+adjacent calls. Original message references and transcript indices are retained.
 
-## Not collapsing under the reader
+Each run uses a stable `tool-group:<first message _id>` key, distinct from every
+individual tool key. Even one settled call keeps the same wrapper and body
+container, but no group header. At two or more calls, the header displays count,
+status, a short summary and the disclosure control. Appending a settled call
+does not remount the earlier tool cards.
 
-While the view is unpinned (the user scrolled up, `app/scroll-pin.js`), ChatView passes `horizonId` = the last message's `_id` when they left the bottom: blocks after it do not age older ones, so the text being read does not fold away. Re-pinning clears it and the backlog collapses while the view sticks to the bottom. A horizon no longer in the transcript freezes nothing.
+A completed group defaults folded unless the tool preference is `open` or a
+child has an explicit open override. A manual group override takes precedence;
+it does not overwrite individual call choices. Expanding shows full results by
+default, while retaining individual manual folds. Escape folds the group and
+returns focus to its header. Running and failed calls remain separate visible
+cards rather than disappearing inside a completed group.
 
-## Toggles per tab
+## State, global commands and scrolling
 
-`app-live.jsx` keeps `sessionId → { _id → collapsed }` (`OMP_SESSION_UI.entryOf`/`updateEntry`/`pruneEntries`, like plan mode), so a tab switch — which remounts ChatView — keeps them. `_id` is live.js's per-message counter; `mergeTranscript` copies the live entry's `_id` onto its get_messages copy (`_withLiveFields`), or the merge after a tab switch would re-key the bubble and drop its toggle. Closing a tab drops its toggles. History is not evicted to fit the minimap.
+`app-live.jsx` stores `sessionId → { key → collapsed }` through `OMP_SESSION_UI`.
+Message `_id` values survive get_messages merges (`mergeTranscript` carries the
+live IDs forward), preserving individual and derived group identities across tab
+switches. Closing the tab drops its overrides. History is not evicted to fit the
+minimap.
 
-## Rendering
+`/collapse-all` and `/expand-all` cover both individual blocks and existing group
+keys. Later calls follow defaults, while calls joining an existing group retain
+its manual state. Full and explicit open preferences remain supported.
 
-Tool calls render as summary disclosures (`button.tool-disclosure` with `aria-expanded` and `aria-controls`): a collapsed tool card unmounts its body instead of clipping a multi-line preview, leaving the tool name, target, diff line counts (`+N −M`), status/duration, and chevron on one line. Clicking the summary toggles the body. Thinking continues to use `CollapseToggle` and a line clamp.
+The existing pin state machine still follows output only while pinned. Manually
+expanding output is a reading action and unpins the view, so the next token does
+not pull the newly opened records away. `Jump to latest` restores following.
+While unpinned, ChatView records the top visible row and preserves its offset
+through layout updates above it. The existing horizon prevents aged tool output
+from collapsing underneath a history reader.
+
+No backend protocol, overall layout, image viewer or chart renderer is changed
+by this disclosure layer.

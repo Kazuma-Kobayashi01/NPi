@@ -6,3 +6,10 @@ The picker's `recently used` group is omp's own MRU, not desktop state: omp upse
 - `CommandBridge` fetches the keys **for** its `profileId` prop (app-live's `activeProfileId`), passed explicitly to `recentModels(profile)`, tags them with it, shows them only while that tag still matches, and refetches on a profile change while open (tab switch, `switchSessionProfile` respawn); a response for a profile left meanwhile is dropped. Don't let the request fall back to `_activeProfileId()`: during a respawn's detach `activeSessionId` is null, so it resolves to the startup profile and would put that profile's list under the new tag. An unlisted id is refused by `resolve_owned` and yields no group.
 - omp runs it in WAL mode. Open **read-only**, never `immutable=1` (that skips the WAL and reads stale pages), with a short `busy_timeout`, and **one connection per query** — a held read transaction pins the WAL and stalls omp's checkpoints. Never `SQLITE_OPEN_CREATE`: a missing database is a fresh profile.
 - It is omp's private schema, not RPC. Any failure reads as an empty list, which leaves the plain model list — never an error in the UI.
+
+## Floating model menu
+
+`src/design/model-menu.jsx` is shared by the conversation composer and the welcome page. Its main favorite/MRU list and each vendor's model list use a row-major two-column grid; when the available grid width is below 440px, the list becomes one column. Navigation, effort choices, vendor lists and management actions remain full-width. The popup width is capped at 640px and the viewport minus 24px, and its horizontal position is corrected on open and resize so either upward or downward menus stay on screen.
+
+The model ordering, `provider/id` identity, numeric shortcuts, native Tab order and Escape behavior are unchanged. This floating menu remains separate from `CommandBridge`'s searchable model view; the latter is not part of this layout change.
+

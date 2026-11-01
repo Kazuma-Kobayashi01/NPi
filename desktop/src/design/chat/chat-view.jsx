@@ -6,7 +6,7 @@
    minimap-hover cross-highlight (mm-hot) flows through here via the
    `hoveredMsgIdx` prop. */
 
-const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, RetryRow: _CV_RetryRow, GoalRow: _CV_GoalRow, ApprovalRow: _CV_ApprovalRow, Icon: _CV_Icon, TOOL_META: _CV_TOOL_META } = window;
+const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, RetryRow: _CV_RetryRow, GoalRow: _CV_GoalRow, ApprovalRow: _CV_ApprovalRow, Icon: _CV_Icon, TOOL_META: _CV_TOOL_META, ToolGroup: _CV_ToolGroup } = window;
 const { nextPinned: _CV_nextPinned, shouldRepin: _CV_shouldRepin, afterOutput: _CV_afterOutput } = window.OMP_SCROLL_PIN;
 const { collapseStates: _CV_collapseStates, PREVIEW_LINES: _CV_PREVIEW_LINES } = window.OMP_COLLAPSE;
 // Lines a collapsed block keeps in view, for chat.css; one object, so a
@@ -21,6 +21,8 @@ const _CV_UserBubble_M      = React.memo(_CV_UserBubble);
 const _CV_ToolCard_M        = React.memo(_CV_ToolCard);
 const _CV_AssistantBubble_M = React.memo(_CV_AssistantBubble);
 const _CV_AskBubble_M       = React.memo(_CV_AskBubble);
+
+const _CV_ToolGroup_M      = React.memo(_CV_ToolGroup);
 
 const CompactRow = React.memo(function CompactRow({ msg }) {
   const [open, setOpen] = React.useState(false);
@@ -134,6 +136,27 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
   // bottom. Newer blocks don't auto-collapse older ones meanwhile, so the
   // text being read doesn't fold away under the reader.
   const [collapseHorizon, setCollapseHorizon] = React.useState(null);
+  // Anchor for keeping reading position stable when blocks fold/extend above viewport
+  const anchorRef = React.useRef(null);
+
+  const updateAnchor = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || pinnedRef.current) {
+      anchorRef.current = null;
+      return;
+    }
+    const containerRect = el.getBoundingClientRect();
+    const rows = el.querySelectorAll(".chat-pad > .row, .chat-pad > .tool-group");
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i].getBoundingClientRect();
+      if (r.bottom > containerRect.top) {
+        anchorRef.current = { el: rows[i], offsetTop: r.top - containerRect.top };
+        return;
+      }
+    }
+    anchorRef.current = null;
+  }, []);
+
 
   const setPinned = (val) => {
     pinnedRef.current = val;
@@ -156,6 +179,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
     const pinned = _CV_nextPinned(pinnedRef.current, prevTopRef.current, el);
     prevTopRef.current = el.scrollTop;
     if (pinned !== pinnedRef.current) setPinned(pinned);
+    updateAnchor();
   };
 
   const jumpToLatest = () => {
@@ -164,6 +188,18 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
     stickToBottom(el);
     setPinned(true);
   };
+
+  // Expanding output is a reading action: the next token must not pull the
+  // just-opened records away. Keep the existing bottom-follow button.
+  const handleToggleCollapse = React.useCallback((id, collapsed) => {
+    if (collapsed) {
+      pinnedRef.current = false;
+      setShowJump(true);
+      setCollapseHorizon(lastIdRef.current);
+    }
+    updateAnchor();
+    onToggleCollapse(id, collapsed);
+  }, [onToggleCollapse, updateAnchor]);
 
   // Auto-scroll only while pinned and following output. A new message
   // block (tool card, new assistant turn, …) during a run must NOT itself
@@ -199,6 +235,22 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // Preserve reading anchor when elements above viewport fold/extend while unpinned
+  React.useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || pinnedRef.current) return;
+    const anchor = anchorRef.current;
+    if (anchor && anchor.el && el.contains(anchor.el)) {
+      const containerRect = el.getBoundingClientRect();
+      const currentOffset = anchor.el.getBoundingClientRect().top - containerRect.top;
+      const diff = currentOffset - anchor.offsetTop;
+      if (Math.abs(diff) > 0.5) {
+        el.scrollTop += diff;
+        prevTopRef.current = el.scrollTop;
+      }
+    }
+  });
+
 
   // Only the last completed assistant message is annotatable in plan mode
   let lastAsstIdx = -1;
@@ -213,12 +265,37 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
     horizonId: collapseHorizon, hidden: window.OMP_TURN_STATUS.isHidden,
   }), [messages, foldModes.thinking, foldModes.tool, collapseAfter, collapseOverrides, collapseHorizon]);
 
+  const rows = React.useMemo(() => {
+    if (window.OMP_TOOL_GROUPS?.groupMessages) {
+      return window.OMP_TOOL_GROUPS.groupMessages(messages, { hidden: window.OMP_TURN_STATUS.isHidden });
+    }
+    return messages.map((m, i) => ({ type: "message", msg: m, idx: i }));
+  }, [messages]);
+
   return (
     <div className={`chat-wrap${wallpaper ? " has-wallpaper" : ""}`}>
       {wallpaper && <div className="wallpaper" style={{ "--wp": `url("${new URL(wallpaper, document.baseURI).href}")` }} aria-hidden="true" />}
       <div className="chat-scroll selectable" ref={scrollRef} onScroll={onScroll}>
         <div className="chat-pad" style={_CV_PAD_STYLE}>
-          {messages.map((m, i) => {
+          {rows.map((row) => {
+            if (row.type === "tool_group") {
+              return (
+                <_CV_ToolGroup_M
+                  key={row.key}
+                  group={row}
+                  hoveredMsgIdx={hoveredMsgIdx}
+                  foldModes={foldModes}
+                  collapseOverrides={collapseOverrides}
+                  collapsedStates={collapsed}
+                  onToggleCollapse={handleToggleCollapse}
+                  onInspectSubagent={onInspectSubagent}
+                  onOpenFile={onOpenFile}
+                  onPreviewFile={onPreviewFile}
+                  projectRoot={projectRoot}
+                />
+              );
+            }
+            const { msg: m, idx: i } = row;
             const hl = hoveredMsgIdx === i;
             if (window.OMP_TURN_STATUS.isHidden(m)) return null;
             if (m.kind === "user")    return <_CV_UserBubble_M    key={m._id ?? i} idx={i} highlighted={hl} msg={m} onRewind={onRewind} dup={messages.slice(0, i).filter(x => x.kind === "user" && x.text === m.text).length} />;
@@ -228,13 +305,13 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
             if (m.kind === "goal")    return <_CV_GoalRow         key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
             if (m.kind === "approval") return <_CV_ApprovalRow    key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
             if (m.kind === "tool")    return <_CV_ToolCard_M      key={m._id ?? i} idx={i} highlighted={hl} msg={m} onInspectSubagent={onInspectSubagent}
-              onOpenFile={onOpenFile} onPreviewFile={onPreviewFile} projectRoot={projectRoot} collapsed={collapsed[m._id]} onToggleCollapse={onToggleCollapse} />;
+              onOpenFile={onOpenFile} onPreviewFile={onPreviewFile} projectRoot={projectRoot} collapsed={collapsed[m._id]} onToggleCollapse={handleToggleCollapse} />;
             if (m.kind === "ask")     return <_CV_AskBubble_M     key={m._id ?? i} idx={i} highlighted={hl} msg={m} onAnswer={onAskAnswer} onAnswerDialog={onAskDialogAnswer} onConfirm={onConfirmAsk} onCancelAsk={onCancelAsk} onGrant={onGrantApproval} hasProjectPath={hasProjectPath} submitKey={submitKey} />;
             return <_CV_AssistantBubble_M key={m._id ?? i} idx={i} highlighted={hl} msg={m}
               annotable={i === lastAsstIdx}
               annotations={annotations}
               onAnnotate={onAnnotate}
-              thoughtCollapsed={collapsed[m._id]} onToggleCollapse={onToggleCollapse} />;
+              thoughtCollapsed={collapsed[m._id]} onToggleCollapse={handleToggleCollapse} />;
           })}
           {(() => {
             const p = window.OMP_RUN_PHASE.phase(messages, streaming);

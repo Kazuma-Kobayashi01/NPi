@@ -11,6 +11,7 @@ mod agent;
 mod approval;
 mod app_mode;
 mod chat_space;
+mod chat_image;
 mod session_actions;
 mod approval_mode;
 mod browser;
@@ -163,6 +164,7 @@ fn start_session(
             mode,
             config: overlay.as_deref(),
             prompt: prompt.as_deref(),
+            append_prompt: Some(app_mode::DESKTOP_RICH_OUTPUT_HINT),
         },
         app,
         Arc::clone(rule_book.inner()),
@@ -997,6 +999,37 @@ async fn project_file_read(
     off_ipc(move || project_file::read(&root, &path)).await?
 }
 
+/// Read a chat image (project file, cached remote image, or public HTTPS URL).
+/// Reuses project_file validation for local files, validates public network addresses
+/// and pins DNS to avoid rebinding, caching assets per hashed conversation key.
+#[tauri::command]
+async fn chat_image_read(
+    session_id: String,
+    conversation_key: String,
+    source: String,
+    app: AppHandle,
+    terminal: State<'_, Arc<terminal::TerminalManager>>,
+) -> Result<chat_image::ChatImageResult, String> {
+    if !terminal.tab_ids().iter().any(|id| id == &session_id) {
+        return Err(format!("unknown session: {session_id}"));
+    }
+    let project_root = terminal.folder(&session_id);
+    let cache_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("no app local data dir: {e}"))?
+        .join("chat-images");
+    off_ipc(move || {
+        chat_image::read_chat_image(
+            &cache_dir,
+            project_root.as_deref(),
+            &conversation_key,
+            &source,
+        )
+    })
+    .await?
+}
+
 /// Stage a file's changes — see `workspace::accept`.
 ///
 /// Runs `async` + `spawn_blocking`: `workspace::accept` shells out to
@@ -1680,6 +1713,7 @@ pub fn run() {
             git_browser_commit,
             git_browser_commit_file,
             project_file_read,
+            chat_image_read,
             pr_automation::pr_automation_snapshot,
             workspace_accept,
             workspace_reject,

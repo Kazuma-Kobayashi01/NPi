@@ -75,12 +75,11 @@ function SaAgentRow({ agent: a, depth, now, onSelect }) {
       onClick={() => onSelect(a.id)}>
       <div className="sa-row-top">
         <_SAP_Dot status={a.status} />
-        <span className="sa-name">{_SAP_leaf(a.id)}</span>
+        <span className="sa-name" title={a.id}>{_SAP_leaf(a.id)}</span>
         {a.agent && <span className="chip muted mono sa-kind">{a.agent}</span>}
-        <div style={{ flex: 1 }} />
         <_SAP_Elapsed agent={a} now={now} />
       </div>
-      {(a.description || a.task) && <div className="sa-row-desc">{a.description ?? a.task}</div>}
+      {(a.description || a.task) && <div className="sa-row-desc" title={a.description ?? a.task}>{a.description ?? a.task}</div>}
       {a.status === "running" && p?.currentTool && (
         <div className="sa-row-now">
           <_SAP_ToolChip tool={p.currentTool} running />

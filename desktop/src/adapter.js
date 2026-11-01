@@ -497,10 +497,13 @@
         let thought = null;
         const designBlocks = [];
         for (const block of blocks) {
+          if (!block || typeof block !== "object") continue;
           if (block.type === "thinking" && block.thinking?.trim()) {
             thought = block.thinking;
           } else if (block.type === "text" && block.text?.trim()) {
             designBlocks.push({ type: "text", text: block.text });
+          } else if (_isImageBlock(block)) {
+            designBlocks.push({ ...block, type: "image", data: block.data, mimeType: block.mimeType });
           }
           // tool_use blocks already rendered as separate tool cards; skip here
         }

@@ -46,3 +46,62 @@ A range is `{ from, to }`, 1-based and inclusive; one line and an open-ended sta
 - write: `targets: [args.path]` at start. On finish, `bytes` is parsed from omp's `Successfully wrote N bytes to …`.
 
 Tool cards come only from live `tool_execution_*` frames; the get_messages merge keeps them in place, so these fields need no rebuild path.
+
+## Rich assistant replies
+
+Assistant native image blocks retain their position among text blocks in live deltas,
+completed messages and restored history. `AssistantImage` reuses `ImageThumbs` and its
+keyboard-accessible lightbox.
+
+Markdown images (`![caption](source)`) are resolved through `MarkdownMediaContext`
+and `chat_image_read`, not direct webview network requests. The resolver captures the
+originating tab and conversation identity; in-memory requests belong to that context,
+so tab changes cannot redirect a delayed request into another project's folder.
+Project paths use the existing `project_file` boundary. Public HTTPS images are
+downloaded without login credentials or implicit proxies, limited to 8 MiB, checked
+by signature, and displayed with a source link. Remote SVG is refused. Local SVG
+follows the existing isolated `<img>` policy.
+
+The host stores successful image bytes in private
+`<app local data>/chat-images/<conversation hash>/` directories, with hashed source
+names and atomic writes. These derived attachments survive reloads and removal of
+the original project image; they are retained independently of the source files.
+Cache corruption and download failures are visible errors, not substitute images.
+
+Each HTTPS hop validates its destination, refuses non-public IPs, and pins the
+validated DNS results into the connection. Only a domain whose system DNS returns
+Fake-IP addresses in `198.18.0.0/15` can use the explicitly approved Cloudflare
+HTTPS DNS path. That request sends the hostname, not the full image URL. Bootstrap
+addresses are fixed; returned addresses still undergo public-IP validation. Literal
+reserved addresses, private answers and mixed private/Fake-IP answers remain denied.
+
+### Formulas and charts
+
+`app/marked-setup.js` escapes raw HTML and unsafe schemes, recognizes LaTeX
+`$...$`, `$$...$$`, `\(...\)` and `\[...\]`, and preserves currency and code spans.
+KaTeX runs with `trust: false`; its scripts, styles and fonts are packaged locally.
+
+Fenced `mermaid` blocks render in strict mode as isolated SVG images. Fenced
+`chart` blocks accept declarative JSON, never JavaScript:
+
+````markdown
+```chart
+{"type":"donut","title":"Token usage","data":[{"label":"Input","value":20},{"label":"Output","value":80}]}
+```
+````
+
+Supported types are `percentage-bar`, `donut`, `pie`, `bar` and `line`. Data has
+1–50 labeled finite numeric values. Proportions require non-negative values and
+a positive total; bar and line charts support negative values. Invalid specifications
+produce an error card rather than coerced values or silently truncated datasets.
+
+`MarkdownContent` performs one standard Markdown parse, then mounts React portals
+into trusted renderer-generated slots, including images inside lists and tables.
+Unchanged slots retain their DOM nodes during streaming; open fences remain pending.
+Charts and diagrams follow the current theme and fit narrow views. All resources
+remain offline, and the production CSP is unchanged.
+
+The desktop host appends the rich-output syntax hint in both Chat and Code modes;
+Code retains the kernel's normal engineering workflow. This does not add an image
+search service: the agent still uses its available research tools to find real
+sources, then references their image URLs or project images.

@@ -38,7 +38,7 @@ function _TC_ReadBody({ msg, projectRoot, onPreviewFile }) {
         ) : (
           <span className="fp-path-outside" title={target ? "Outside the project: no preview" : undefined}>{msg.target}</span>
         )}
-        {msg.summary && <span style={{ color: "var(--fg-4)" }}>· {msg.summary}</span>}
+        {msg.summary && <span style={{ color: "var(--fg-3)" }}>· {msg.summary}</span>}
       </div>
       <_TC_Thumbs images={msg.images} className="tool-images" alt="image the agent read" />
     </React.Fragment>
@@ -111,7 +111,7 @@ function ScrubbableDiff({ msg, onOpenFile }) {
           <div className="diff-track-cursor"
             style={{ left: `${(visiblePos / total) * 100}%` }} />
         </div>
-        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
+        <span className="mono" style={{ color: "var(--fg-3)", fontSize: "var(--d-text-xs)" }}>
           {visiblePos}/{total}
         </span>
       </div>
@@ -236,7 +236,7 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
                 <div key={i} className={`search-row ${p.hot ? "hot" : ""}`}>
                   <_TC_Icon name="file" size={11} color={p.hot ? "var(--accent)" : "var(--fg-3)"} />
                   <span className="mono" style={{ color: p.hot ? "var(--fg)" : "var(--fg-2)" }}>{p.file}</span>
-                  <span className="mono" style={{ color: "var(--fg-4)", marginLeft: "auto" }}>{p.hits} hits</span>
+                  <span className="mono" style={{ color: "var(--fg-3)", marginLeft: "auto" }}>{p.hits} hits</span>
                 </div>
               ))}
             </div>
@@ -248,7 +248,7 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
             <div className="tool-foot mono">
               <span style={{ color: "var(--fg-3)" }}>↳</span>
               <DiffPaths msg={msg} onOpenFile={onOpenFile} />
-              {msg.bytes != null && <span style={{ color: "var(--fg-4)" }}>· {_TC_size(msg.bytes)}</span>}
+              {msg.bytes != null && <span style={{ color: "var(--fg-3)" }}>· {_TC_size(msg.bytes)}</span>}
             </div>
           )}
 
