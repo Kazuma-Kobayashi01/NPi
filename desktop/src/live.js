@@ -2269,6 +2269,13 @@
         notify();
         return;
       }
+
+      if (!document.hasFocus() && window.__TAURI__ && (ev.method === "select" || ev.method === "ask" || ev.method === "confirm")) {
+        window.__TAURI__.core.invoke("system_notification_send", {
+          title: "NPi Desktop — Approval Requested",
+          body: ev.title || ev.message || "A tool or decision is waiting for your review.",
+        }).catch(() => {});
+      }
       // Agent asks the user to pick from a list: every tool-approval prompt
       // ("Allow tool: X", options ["Approve","Deny"]) and extension pickers
       // like /review's. The ask tool uses the `ask` dialog below instead.
@@ -2382,6 +2389,15 @@
       }
       _send({ type: "get_session_stats" });
       _send({ type: "get_state" });
+      if (!document.hasFocus() && window.__TAURI__) {
+        const lastMsg = state.messages[state.messages.length - 1];
+        const snippet = lastMsg?.text || lastMsg?.blocks?.find(b => b.type === "text")?.text || "Turn complete.";
+        const body = snippet.length > 80 ? snippet.slice(0, 78) + "…" : snippet;
+        window.__TAURI__.core.invoke("system_notification_send", {
+          title: "NPi Desktop",
+          body,
+        }).catch(() => {});
+      }
       notify();
       return;
     }
@@ -3951,6 +3967,17 @@
     readProjectFile(path) {
       if (!activeSessionId) return Promise.resolve(null);
       return _invokeResult("project_file_read", { sessionId: activeSessionId, path });
+    },
+
+    /** Capture screen to /tmp/npi/{session_id}/ */
+    captureScreen() {
+      if (!activeSessionId || !window.__TAURI__) return Promise.resolve(null);
+      return window.__TAURI__.core.invoke("capture_screen_to_tmp", {
+        sessionId: activeSessionId,
+      }).catch(err => {
+        console.warn("[live] screen capture failed:", err);
+        return null;
+      });
     },
 
     /** Resolve an inline image through the host's conversation-private cache.

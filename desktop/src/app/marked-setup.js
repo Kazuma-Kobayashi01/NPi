@@ -269,6 +269,71 @@
       })
     : s;
 
+  const SAFE_TAGS = new Set([
+    "kbd", "sub", "sup", "mark", "ruby", "rt", "rp", "abbr", "s", "del", "ins",
+    "small", "q", "cite", "span", "b", "i", "strong", "em", "u",
+    "details", "summary", "dl", "dt", "dd", "br", "hr",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "audio", "video", "source"
+  ]);
+
+  const SAFE_ATTRS = new Set([
+    "class", "title", "open", "align", "span", "colspan", "rowspan",
+    "width", "height", "controls", "preload", "loop", "muted", "poster", "src", "type"
+  ]);
+
+  function isSafeMediaUrl(url) {
+    if (!url) return false;
+    const trimmed = url.trim();
+    if (/^\s*(javascript|vbscript|data:text|data:application)/i.test(trimmed)) return false;
+    if (/^https?:\/\//i.test(trimmed)) return true;
+    if (/^data:(image|audio|video)\//i.test(trimmed)) return true;
+    if (/^blob:/i.test(trimmed)) return true;
+    return isSchemeLikeFilePath(trimmed);
+  }
+
+  function sanitizeSafeHtml(html) {
+    if (!html.includes('<')) return escapeHtml(html);
+    return html.replace(/<\/?([a-zA-Z][\w-]*)([^>]*)>/g, (match, tagName, rawAttrs) => {
+      const lowerTag = tagName.toLowerCase();
+      if (!SAFE_TAGS.has(lowerTag)) {
+        return escapeHtml(match);
+      }
+      if (match.startsWith('</')) {
+        return `</${lowerTag}>`;
+      }
+      let cleanAttrs = '';
+      const attrRegex = /([a-zA-Z0-9_-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+      let m;
+      while ((m = attrRegex.exec(rawAttrs)) !== null) {
+        const attrName = m[1].toLowerCase();
+        if (attrName.startsWith('on')) continue;
+        const val = m[2] ?? m[3] ?? m[4] ?? '';
+        if (attrName === 'src' || attrName === 'poster') {
+          if (!isSafeMediaUrl(val)) continue;
+          cleanAttrs += ` ${attrName}="${escapeHtml(val)}"`;
+        } else if (attrName === 'style') {
+          const safeStyle = val.split(';').filter(rule => {
+            const [k, v] = rule.split(':').map(s => s?.trim().toLowerCase());
+            if (!k || !v) return false;
+            if (v.includes('url(') || v.includes('expression') || v.includes('behavior')) return false;
+            return ['color', 'background-color', 'font-size', 'font-weight', 'text-align', 'text-decoration', 'border-radius', 'padding', 'margin'].includes(k);
+          }).join(';');
+          if (safeStyle) {
+            cleanAttrs += ` style="${escapeHtml(safeStyle)}"`;
+          }
+        } else if (SAFE_ATTRS.has(attrName)) {
+          cleanAttrs += val ? ` ${attrName}="${escapeHtml(val)}"` : ` ${attrName}`;
+        }
+      }
+      if ((lowerTag === 'audio' || lowerTag === 'video') && !cleanAttrs.includes('controls')) {
+        cleanAttrs += ' controls';
+      }
+      const selfClosing = match.endsWith('/>') ? ' />' : '>';
+      return `<${lowerTag}${cleanAttrs}${selfClosing}`;
+    });
+  }
+
   function renderMath(token) {
     const text = token.text ?? '';
     const display = Boolean(token.display);
@@ -332,8 +397,19 @@
       // paragraph, list item, heading, table cell or link text. A block
       // keeps paragraph spacing; its line breaks collapse like any text.
       html({ text, block }) {
-        const shown = escapeHtml(text);
-        return block ? '<p>' + shown.trimEnd() + '</p>\n' : shown;
+        const cleaned = sanitizeSafeHtml(text);
+        return block ? (cleaned.startsWith('<p>') || cleaned.startsWith('<div') || cleaned.startsWith('<table') || cleaned.startsWith('<details') || cleaned.startsWith('<audio') || cleaned.startsWith('<video') ? cleaned : '<p>' + cleaned.trimEnd() + '</p>\n') : cleaned;
+      },
+      blockquote(token) {
+        const raw = token.text ?? '';
+        const match = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*\n)?/i.exec(raw);
+        if (match) {
+          const kind = match[1].toLowerCase();
+          const body = raw.slice(match[0].length);
+          const bodyHtml = window.marked.parse(body);
+          return `<div class="md-callout md-callout-${kind}"><div class="md-callout-title"><span class="chip md-callout-badge">${kind.toUpperCase()}</span></div><div class="md-callout-body">${bodyHtml}</div></div>\n`;
+        }
+        return false;
       },
       // The `html` escape above does not stop the lexer from *acting* on a
       // tag: an inline `<pre>`, `<code>`, `<kbd>` or `<script>` switches it

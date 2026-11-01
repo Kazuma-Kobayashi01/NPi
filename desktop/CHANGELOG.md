@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0.78] - 2026-11-01
+
+### Added
+
+- Streamlined workflow pipeline: abstract high-level stage badges (调研 ➔ 编辑 ➔ 编译 ➔ 验证) with subtle downward-expanding concurrent branch chips; configurable via Settings.
+- SideChat right-column alignment: standard stage grid column positioned on the right alongside subagent panes with resize handles and memory isolation.
+- Enhanced Markdown typography and rich content: safe formatting for `<kbd>`, `<mark>`, `<sub>`, `<sup>`, `<ruby>`, `<details>/<summary>`, GFM callout alert badges (NOTE, TIP, WARNING, IMPORTANT, CAUTION), and `<audio>/<video>` multimedia support under verified CSP.
+- Reorganized Settings interface: restructured into 7 clearly delineated, intuitive tabs (Account, General, Chat, Models, Agent, Code, Advanced) with telemetry and MCP/Skill management logically grouped.
+
+## [2.0.0.60] - 2026-11-01
+
+### Added
+
+- Context compaction optimization: manual "Compact Context" button on the sidebar Context card, plus structured Subagent Compactor handoff prompts with protected user invariants, technical decisions, and touched artifacts.
+- Settings MCP & Skill management UI: custom settings rows for viewing, toggling, and adding stdio/http MCP servers, plus listing installed skills with one-click editor opening.
+- System notifications integration: OS-native desktop notifications for turn completion and pending approvals when the window is unfocused, adhering to system-managed Focus/DND policies.
+- Screen capture capability: isolated `/tmp/npi/{session_id}/` screenshot storage with automatic session cleanup on tab close.
+- Subagent workflow improvements: live model thinking stream passthrough (`thinking…`) in subagent inspectors while preserving the 32 concurrent task ceiling for Academic workloads.
+- SideChat ephemeral scratchpad: lightweight parallel drawer for quick questions and algorithm exploration without polluting the main project context.
+- Workflow visualization: collapsible floating horizontal pipeline displaying sequential phase progression and concurrent parallel task branches.
+
 ## [1.3.1] - 2026-11-01
 
 ### Added

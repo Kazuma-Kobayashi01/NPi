@@ -56,7 +56,7 @@ check("every tweak row names a TWEAK_DEFAULTS key whose default is valid", () =>
 
 check("custom rows name the renderers the page expects", () => {
   assert.deepEqual(S.rows().filter(r => r.kind === "custom").map(r => r.type).sort(),
-    ["account", "approvalMode", "approvalRules", "archive", "chatInstructions", "chatMemory", "chromium", "defaultModel", "favoriteModels", "goalContinue", "shell", "shortcuts", "startupProfile", "subagentModel", "terminalHeight", "uiDetail", "usage", "vendors", "wallpaperArt", "widgets", "widths"]);
+    ["account", "approvalMode", "approvalRules", "archive", "chatInstructions", "chatMemory", "chromium", "defaultModel", "favoriteModels", "goalContinue", "mcpServers", "shell", "shortcuts", "skillsManager", "startupProfile", "subagentModel", "terminalHeight", "uiDetail", "usage", "vendors", "wallpaperArt", "widgets", "widths"].sort());
   for (const r of S.rows().filter(r => r.kind === "custom")) for (const k of r.keys ?? []) assert.ok(k in D, k);
 });
 

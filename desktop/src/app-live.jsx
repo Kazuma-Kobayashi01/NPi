@@ -18,7 +18,7 @@
    ═════════════════════════════════════════════════════════════════════ */
 
 const {
-  Icon, ChatView, Composer, CommandBridge, WindowChrome, SubagentPane, ProjectSidebar, EmptyWorkspace,
+  Icon, ChatView, Composer, CommandBridge, WindowChrome, SubagentPane, ProjectSidebar, EmptyWorkspace, SideChat,
   ChromeToolbar, AmbientRail, ConversationTree, PlanKanban, HistoryModal, GitBrowser, FilePreview, ApprovalRulesPanel, UsageStatsPanel, PromptHistoryModal, useTweaks,
   SettingsPage, ConfirmCloseDialog,
   useWidgets, WidgetCard, WidgetErrorCard, WidgetApprovalCard, WidgetBoundary,
@@ -86,6 +86,7 @@ function App() {
   // Cross-component highlight: hovering a minimap cell lights up the
   // matching chat bubble; clicking scrolls to it.
   const [hoveredMsgIdx, setHoveredMsgIdx] = React.useState(null);
+  const [sideChatOpen, setSideChatOpen] = React.useState(false);
   const handleMinimapClick = (idx) => {
     const el = document.querySelector(`[data-msg-idx="${idx}"]`);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -892,17 +893,19 @@ function App() {
   const workspaceRef = React.useRef(null);
   const browserFull = side === "browser" && browser.fullView;
   const splitShown = showSplit && !browserFull;
+  const sideChatShown = sideChatOpen && !browserFull;
   // No side column on the welcome page: there is no session to describe.
   const sideRail = showHome ? null : side !== "browser" && showRail ? "rail" : null;
   const treeShown = !showHome && !browserFull && treeOpen;
   const termShown = !showHome && !browserFull && t.appMode !== "chat" && _TERM_entryOf(terminal.state, planKey).open;
   // Columns after the chat, left to right: the side panel (rail /
-  // browser), the subagent pane, the conversation tree, the terminal; a new one opens at the far right.
+  // browser), the subagent pane, sidechat pane, the conversation tree, the terminal; a new one opens at the far right.
   const stageCols = ["minmax(0, 1fr)"];
   if (!browserFull) {
     if (side === "browser") stageCols.push("auto");
     else if (sideRail) stageCols.push("var(--w-rail, 280px)");
     if (splitShown) stageCols.push("var(--w-split, 320px)");
+    if (sideChatShown) stageCols.push("var(--w-sidechat, 360px)");
     if (treeShown) stageCols.push("var(--w-tree, min(540px, 50%))");
   }
   if (termShown) stageCols.push("var(--w-term, 480px)");
@@ -910,11 +913,12 @@ function App() {
   // The grid line each handle sits at: the column it is the left edge of.
   const hasSide = !browserFull && (side === "browser" || !!sideRail);
   const splitCol = 1 + (hasSide ? 1 : 0) + 1;
-  const treeCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + 1;
-  const termCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (treeShown ? 1 : 0) + 1;
+  const sidechatCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + 1;
+  const treeCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (sideChatShown ? 1 : 0) + 1;
+  const termCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (sideChatShown ? 1 : 0) + (treeShown ? 1 : 0) + 1;
   const panes = usePaneWidths({
     tweaks: t, setTweak, workspaceRef,
-    open: [showSidebar && "sidebar", splitShown && "split", sideRail && "rail", treeShown && "tree", termShown && "term"].filter(Boolean),
+    open: [showSidebar && "sidebar", splitShown && "split", sideChatShown && "sidechat", sideRail && "rail", treeShown && "tree", termShown && "term"].filter(Boolean),
     reserve: side === "browser" && !browserFull ? _AL_BROWSER_MIN : 0,
   });
 
@@ -1016,6 +1020,8 @@ function App() {
                 treeOpen={treeShown}
                 panelOpen={floatingOn}
                 onPanel={() => setTweak("layout", floatingOn ? "focus" : "rail")}
+                onSideChat={() => setSideChatOpen(o => !o)}
+                sideChatOpen={sideChatOpen}
               />
             }
           />
@@ -1091,6 +1097,9 @@ function App() {
                     wallpaper={null}
                     onRewind={streaming ? null : handleRewind}
                     streaming={streaming}
+                    kanban={kanban}
+                    subagents={subagentList}
+                    showWorkflowPipeline={t.showWorkflowPipeline !== false}
                   />
                   <Composer
                     sessionId={planKey}
@@ -1163,6 +1172,8 @@ function App() {
                   show={{ subagents: t.showSubagents ?? true }}
                   todoCounts={todoCounts}
                   kanban={kanban}
+                  onCompact={bridge.compact}
+                  compacting={messages.some(m => m.kind === "compact" && m.status === "pending")}
                 >
                   {/* Hidden without the GitHub CLI; the hook keeps checking on
                       focus, so installing gh brings it back. */}
@@ -1218,6 +1229,15 @@ function App() {
 
               {termShown && <ResizeHandle className="at-term" style={{ gridColumn: termCol }} {...panes.handle("term")} />}
               <TerminalPanels sessions={sessions} activeId={showHome ? null : planKey} terminal={terminal} />
+              {sideChatShown && <ResizeHandle className="at-sidechat" style={{ gridColumn: sidechatCol }} {...panes.handle("sidechat")} />}
+              {sideChatShown && (
+                <SideChat
+                  open={sideChatShown}
+                  onClose={() => setSideChatOpen(false)}
+                  bridge={bridge}
+                  model={model}
+                />
+              )}
             </div>
           </div>
           {showSidebar && <ResizeHandle className="at-sidebar" {...panes.handle("sidebar")} />}

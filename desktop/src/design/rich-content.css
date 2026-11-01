@@ -396,6 +396,87 @@
   max-width: 100%;
 }
 
+/* ── Enhanced Markdown Typography & Media ────────────────────────────── */
+.md-content kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82em;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: inset 0 -1px 0 var(--line);
+  line-height: 1.2;
+}
+
+.md-content mark {
+  background: color-mix(in oklab, var(--amber) 25%, transparent);
+  color: var(--fg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.md-content details {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: color-mix(in oklab, var(--bg-elevated) 60%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.md-content details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg-2);
+  user-select: none;
+}
+
+.md-content details > summary:hover {
+  color: var(--fg);
+}
+
+.md-content audio,
+.md-content video {
+  display: block;
+  max-width: 100%;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #000;
+}
+
+.md-content ruby {
+  ruby-position: over;
+}
+.md-content rt {
+  font-size: 0.65em;
+  color: var(--fg-3);
+}
+
+/* ── GFM Callouts ────────────────────────────────────────────────────── */
+.md-callout {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in oklab, var(--bg-elevated) 70%, transparent);
+  font-size: var(--d-text-sm);
+}
+.md-callout-title {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.md-callout-badge {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.md-callout-note { border-left-color: var(--cyan, #04A5E5); }
+.md-callout-tip { border-left-color: var(--lime, #40A02B); }
+.md-callout-important { border-left-color: var(--lilac, #7287FD); }
+.md-callout-warning { border-left-color: var(--amber, #DF8E1D); }
+.md-callout-caution { border-left-color: var(--rose, #D20F39); }
+
 /* ── Narrow screen responsive (420px) ────────────────────────────────── */
 @media (max-width: 480px) {
   .chart-card,

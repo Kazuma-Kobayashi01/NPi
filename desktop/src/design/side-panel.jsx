@@ -66,7 +66,7 @@ function EnvironmentCard({ project, profileLabel }) {
 
 const _SP2_COLORS = { messages: "var(--accent)", system: "var(--lilac)", tools: "var(--amber)", free: "var(--line-bright)" };
 
-function ContextCard({ breakdown }) {
+function ContextCard({ breakdown, onCompact, compacting, disabled }) {
   const fmt = window.formatTokens;
   if (!breakdown) {
     return <SideCard title="Context"><div className="sp-dim">Nothing sent yet.</div></SideCard>;
@@ -94,6 +94,25 @@ function ContextCard({ breakdown }) {
         ))}
       </div>
       <div className="sp-note">The split of what is in use is estimated.</div>
+      {onCompact && (
+        <div className="sp-foot-action">
+          <button
+            type="button"
+            className="btn ghost is-floating sp-compact-btn"
+            disabled={disabled || compacting || used === 0}
+            onClick={onCompact}
+            title={compacting ? "Compacting context..." : "Compact context now"}
+          >
+            {compacting ? (
+              <span className="sp-compact-status">
+                <span className="pulse-dot" /> Compacting…
+              </span>
+            ) : (
+              <span>Compact Context</span>
+            )}
+          </button>
+        </div>
+      )}
     </SideCard>
   );
 }

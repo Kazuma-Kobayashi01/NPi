@@ -137,7 +137,7 @@ function WindowChrome({
 // The tool buttons that used to sit in the footer status bar.
 
 // ── Toolbar: the two code-mode tools, then everything else under "More" ──
-function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen }) {
+function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen }) {
   return (
     <div className="chrome-toolbar">
       {!chat && <button className={`chrome-btn ${terminalOpen ? "on" : ""}`} aria-pressed={!!terminalOpen}
@@ -161,6 +161,11 @@ function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = 
       {!chat && onTree && (
         <button className={`chrome-btn ${treeOpen ? "on" : ""}`} aria-pressed={!!treeOpen} title="Conversation tree" onClick={onTree}>
           <Icon name="branch" size={15} />
+        </button>
+      )}
+      {onSideChat && (
+        <button className={`chrome-btn ${sideChatOpen ? "on" : ""}`} aria-pressed={!!sideChatOpen} title="SideChat (temporary scratchpad)" onClick={onSideChat}>
+          <Icon name="thinking" size={15} />
         </button>
       )}
       <MoreMenu items={moreItems} />
@@ -220,13 +225,13 @@ function MoreMenu({ items }) {
 // Always for a tab; below them the running subagents, the branch's PR and the
 // user's widgets (passed as children).
 function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, provider, quotas,
-  subagents, subagentPaneOpen, onOpenSubagent, onToggleSubagentPane, show = {}, todoCounts, kanban, children }) {
+  subagents, subagentPaneOpen, onOpenSubagent, onToggleSubagentPane, show = {}, todoCounts, kanban, onCompact, compacting, children }) {
   const hasAgents = Array.isArray(subagents) && subagents.length > 0;
   const { TodoPlanCard } = window;
   return (
     <aside className="rail">
       <EnvironmentCard project={project} profileLabel={profileLabel} />
-      <ContextCard breakdown={ctxBreakdown} />
+      <ContextCard breakdown={ctxBreakdown} onCompact={onCompact} compacting={compacting} />
       <UsageCard provider={provider} quotas={quotas} stats={sessionStats} />
       {(show.subagents ?? true) && hasAgents && (
         <SubagentRailCard agents={subagents} paneOpen={subagentPaneOpen}

@@ -133,29 +133,28 @@ for (const [label, md] of Object.entries(PAYLOADS)) {
 
 // ── What the user sees instead ───────────────────────────────────────────
 
-check("block raw HTML is shown as its source text, in its own paragraph", () => {
-  assert.equal(marked.parse('<div class="x">\nhi\n</div>\n\npara'),
-    '<p>&lt;div class=&quot;x&quot;&gt;\nhi\n&lt;/div&gt;</p>\n<p>para</p>\n');
+check("safe HTML formatting elements render live without script execution risk", () => {
+  const out = marked.parse("press <kbd>Ctrl</kbd>+<kbd>C</kbd> or <b>bold</b> and <mark>highlight</mark>");
+  assert.ok(out.includes("<kbd>Ctrl</kbd>"));
+  assert.ok(out.includes("<b>bold</b>"));
+  assert.ok(out.includes("<mark>highlight</mark>"));
+  assert.deepEqual(liveMarkup(out), []);
 });
 
-check("character references after a raw-block tag still read as characters", () => {
-  assert.equal(marked.parse("wrap in <code>x then &amp; &#60; & <b>"),
-    "<p>wrap in &lt;code&gt;x then &amp; &#60; &amp; &lt;b&gt;</p>\n");
+check("collapsible details and summary render safely", () => {
+  const out = marked.parse("<details><summary>More info</summary>hidden content</details>");
+  assert.ok(out.includes("<details"));
+  assert.ok(out.includes("<summary>More info</summary>"));
+  assert.deepEqual(liveMarkup(out), []);
 });
 
-check("inline raw HTML is shown as its source text", () => {
-  assert.equal(marked.parse("a <kbd>Ctrl</kbd> b"), "<p>a &lt;kbd&gt;Ctrl&lt;/kbd&gt; b</p>\n");
+check("multimedia tags enforce controls and block script event handlers", () => {
+  const audio = marked.parse('<audio src="https://example.com/audio.mp3" onerror="alert(1)">');
+  assert.ok(audio.includes("<audio"));
+  assert.ok(audio.includes("controls"));
+  assert.ok(!audio.includes("onerror"));
+  assert.deepEqual(liveMarkup(audio), []);
 });
-
-check("raw-block text is shown as its source text", () => {
-  assert.equal(marked.parse("x <code> <img/src=x onerror=alert(1)>"),
-    "<p>x &lt;code&gt; &lt;img/src=x onerror=alert(1)&gt;</p>\n");
-});
-
-check("raw HTML in a plan segment is shown as text", () => {
-  assert.equal(renderers.plan("<details>y</details>"), "<p>&lt;details&gt;y&lt;/details&gt;</p>\n");
-});
-
 // ── Ordinary markdown is unaffected ──────────────────────────────────────
 
 check("inline markdown, links and autolinks still render", () => {

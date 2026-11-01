@@ -12,6 +12,9 @@ mod approval;
 mod app_mode;
 mod chat_space;
 mod chat_image;
+mod mcp_skills;
+mod system_notice;
+mod screen_capture;
 mod session_actions;
 mod approval_mode;
 mod browser;
@@ -369,6 +372,9 @@ fn stop_session(
 /// hang-up grace, `TerminalManager::close_tabs`).
 fn end_tabs<S: AsRef<str> + Sync>(app: &AppHandle, ids: &[S]) {
     let rule_book = app.state::<Arc<RuleBook>>();
+    for id in ids {
+        screen_capture::cleanup_session_tmp(id.as_ref());
+    }
     let bridge = app.state::<AgentBridge>();
     let widgets = app.state::<Arc<widgets::WidgetHost>>();
     let watchers = app.state::<GitWatcherState>();
@@ -1714,7 +1720,15 @@ pub fn run() {
             git_browser_commit_file,
             project_file_read,
             chat_image_read,
+            mcp_skills::mcp_servers_get,
+            mcp_skills::mcp_server_toggle,
+            mcp_skills::mcp_server_delete,
+            mcp_skills::mcp_server_upsert,
+            mcp_skills::skills_list,
+            mcp_skills::skill_open,
+            system_notice::system_notification_send,
             pr_automation::pr_automation_snapshot,
+            screen_capture::capture_screen_to_tmp,
             workspace_accept,
             workspace_reject,
             widgets_state,

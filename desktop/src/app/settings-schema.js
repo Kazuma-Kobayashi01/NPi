@@ -89,10 +89,9 @@
           { keys: ["sidebarWidth", "railWidth", "treeWidth", "termWidth", "splitWidth", "browserWidth"] }),
       ] },
     ] },
-    { id: "chat", icon: "thinking", title: "Chat", blurb: "How tool calls and thinking show up in the transcript.", groups: [
-      { name: "Archive", rows: [
-        custom("archive", "Archived conversations", "Conversations you archived from the sidebar. Restore brings one back to the list; Delete removes it from the disk and cannot be undone.", "archive archived restore delete conversations history",
-          { keys: ["archivedSessions"] }),
+    { id: "chat", icon: "thinking", title: "Chat", blurb: "How tool calls, workflow pipelines and thinking show up in the transcript.", groups: [
+      { name: "Workflow pipeline", rows: [
+        tweak("showWorkflowPipeline", "toggle", "Floating workflow pipeline", "Show a minimal horizontal stage capsule at the top of the transcript during planning and task execution.", "workflow pipeline stages flow kanban tasks"),
       ] },
       { name: "Chat assistant", rows: [
         custom("chatInstructions", "Instructions for Chat", "Standing instructions the assistant keeps in mind in every chat in Chat mode: tone, language, format. Applies to chats started or restarted after saving.", "instructions system prompt tone style persona"),
@@ -105,7 +104,6 @@
           { fold: "tool", get options() { return foldOptions(); } }),
         tweak("collapseAfter", "slider", "Collapse after", "With `auto`: how many newer turns before an entry folds.", "auto fold", {
           step: 1, unit: " newer",
-          // Only matters while a fold mode is auto.
           visibleIf: (values) => {
             const m = collapse()?.foldModes(values) ?? { thinking: values?.foldThinking ?? "auto", tool: values?.foldTools ?? "auto" };
             return m.thinking === "auto" || m.tool === "auto";
@@ -114,27 +112,23 @@
           get max() { return collapse()?.MAX_AFTER ?? 30; },
         }),
       ] },
-      { name: "Scrolling", rows: [
-        tweak("followOutput", "toggle", "Follow new output", "Keep the transcript scrolled to the newest message while the agent works. Scrolling up always pauses it.", "auto scroll bottom pin"),
-      ] },
-    ] },
-    { id: "composer", icon: "edit", title: "Composer", blurb: "Sending, pasting and recalling prompts.", groups: [
-      { name: "Sending", rows: [
+      { name: "Composer & sending", rows: [
         tweak("submitKey", "seg", "Send with", "In the composer, an ask's answer box and a subagent's steer box; the other chord inserts a newline. One-line fields always send with Enter.", "submit newline shift enter",
           { options: opts(["enter", "ctrl+enter"]) }),
-      ] },
-      { name: "Pasting", rows: [
         tweak("pasteCollapseLines", "slider", "Collapse pastes longer than", "A longer paste shows as a `[paste #1 +40 lines]` chip; the agent still gets the full text.", "paste chip",
           { step: 1, unit: " lines",
             get min() { return sessionUi()?.PASTE_LINES_MIN ?? 2; },
             get max() { return sessionUi()?.PASTE_LINES_MAX ?? 50; } }),
-      ] },
-      { name: "History", rows: [
         tweak("promptHistoryLimit", "slider", "Prompt history", "How many of your prompts `↑` in the composer can recall, per tab.", "recall up arrow", {
           step: 10, unit: " prompts",
           get min() { return history()?.MIN_LIMIT ?? 10; },
           get max() { return history()?.MAX_LIMIT ?? 1000; },
         }),
+        tweak("followOutput", "toggle", "Follow new output", "Keep the transcript scrolled to the newest message while the agent works. Scrolling up always pauses it.", "auto scroll bottom pin"),
+      ] },
+      { name: "Archive", rows: [
+        custom("archive", "Archived conversations", "Conversations you archived from the sidebar. Restore brings one back to the list; Delete removes it from the disk and cannot be undone.", "archive archived restore delete conversations history",
+          { keys: ["archivedSessions"] }),
       ] },
     ] },
     { id: "rail", icon: "radar", title: "Rail", blurb: "The cards in the rail beside the chat, including widget plugins and extension widgets.", groups: [
@@ -157,6 +151,9 @@
       { name: "Vendors", src: "omp login", rows: [
         custom("vendors", "Vendors", "Who the models come from. Signing in uses omp's own sign-in, so the terminal stays signed in too.", "vendor provider login sign in oauth anthropic openai google api"),
       ] },
+      { name: "Telemetry & Usage", rows: [
+        custom("usage", "Usage statistics", "Requests, cost, tokens and speed over the last 24 hours, by model and folder.", "cost tokens stats usage spend"),
+      ] },
     ] },
     { id: "terminal", icon: "terminal", title: "Terminal", blurb: "The shell panel under the chat. Each tab has its own shell, started in the tab's project folder.", groups: [
       { name: "Shell", src: "terminal.json", rows: [
@@ -177,24 +174,25 @@
         tweak("browserLocalhostInPanel", "toggle", "Open localhost links in the panel", "A click on a `localhost` link in the chat opens it here instead of your system browser.", "dev server url"),
       ] },
     ] },
-    { id: "agent", icon: "agent", title: "Agent", blurb: "Which omp profile new tabs use and how omp behaves in them.", groups: [
+    { id: "agent", icon: "agent", title: "Agent", blurb: "Agent profiles, engine execution behaviors, subagents, and extensions.", groups: [
       { name: "Profiles", src: "profiles.json", rows: [
         custom("startupProfile", "Startup profile", "The profile of the tab opened at launch and of new tabs. Profiles are created and renamed from the profile menu.", "profile account"),
       ] },
-      { name: "Goals", src: "omp config", rows: [
-        custom("goalContinue", "Keep working on a goal", "omp continues an active goal on its own after each turn instead of waiting for you. Costs tokens while unattended.", "goal auto continue"),
-      ] },
-      { name: "Usage", rows: [
-        custom("usage", "Usage statistics", "Requests, cost, tokens and speed over the last 24 hours, by model and folder.", "cost tokens stats usage spend"),
-      ] },
-      { name: "omp behaviour", rows: [
+      { name: "Execution behaviors", rows: [
         tweak("autoCompaction", "toggle", "Auto-compact context", "omp summarises older turns when the context fills up. Off: you run `/compact` yourself.", "compaction context window"),
         tweak("autoRetry", "toggle", "Retry failed requests", "omp retries a request the provider refused or dropped, with a retry row you can stop.", "retry error rate limit"),
+        custom("goalContinue", "Keep working on a goal", "omp continues an active goal on its own after each turn instead of waiting for you. Costs tokens while unattended.", "goal auto continue"),
       ] },
       { name: "Subagents", rows: [
         custom("subagentModel", "Subagent default model", "Default model used when delegating tasks to subagents: automatic (following primary model) or manually designated.", "subagent model worker delegate", { keys: ["subagentModelMode", "subagentCustomModel"] }),
         tweak("subagentDelegation", "seg", "Subagent appetite", "How eagerly the agent delegates tasks to subagents: unlimited, aggressive, moderate, conservative, or off.", "delegation appetite subagent task parallel",
           { options: opts(["unlimited", "aggressive", "moderate", "conservative", "off"]) }),
+      ] },
+      { name: "Model Context Protocol", src: "mcp.json", rows: [
+        custom("mcpServers", "MCP Servers", "External tools and servers (stdio, HTTP/SSE) configured in mcp.json.", "mcp servers tools github model context protocol stdio http"),
+      ] },
+      { name: "Skills", src: "skills/", rows: [
+        custom("skillsManager", "Agent Skills", "Installed skills, workflows and prompt procedures.", "skills custom prompt procedures workflow"),
       ] },
     ] },
     { id: "session", icon: "clock", title: "Session", blurb: "Tabs across restarts, closing, naming and app updates.", groups: [
@@ -220,13 +218,13 @@
     ] },
   ];
 
-  // Five tabs in the window; each gathers sections as authored above.
+  // Seven tabs in the window; each gathers sections as authored above.
   const MERGED = [
     { id: "account", icon: "agent", title: "Account", blurb: "Your profile and what the assistant remembers.", from: ["account"] },
     { id: "general", icon: "sparkle", title: "General", blurb: "Look, text and how tabs behave.", from: ["appearance", "session"] },
-    { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript and the prompt box.", from: ["chat", "composer"] },
-    { id: "models", icon: "bolt", title: "Models", blurb: "The default model, the favourites and the vendors.", from: ["models"] },
-    { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, approvals and omp's behaviour.", from: ["agent", "approvals"] },
+    { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript, workflow pipelines and the prompt box.", from: ["chat"] },
+    { id: "models", icon: "bolt", title: "Models", blurb: "Default model, favourites, vendors and usage statistics.", from: ["models"] },
+    { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
     { id: "code", icon: "terminal", title: "Code", blurb: "Terminal, browser and the floating cards.", from: ["terminal", "browser", "rail"] },
     { id: "advanced", icon: "command", title: "Advanced", sep: true, blurb: "Layout and keyboard shortcuts.", from: ["layout", "shortcuts"] },
   ];

@@ -22,6 +22,7 @@ const {
 const _PW_UI = {
   sidebar: { tweak: "sidebarWidth", label: "resize project sidebar", edge: "right" },
   split: { tweak: "splitWidth", label: "resize subagent pane", edge: "left" },
+  sidechat: { tweak: "sidechatWidth", label: "resize sidechat", edge: "left" },
   rail: { tweak: "railWidth", label: "resize ambient rail", edge: "left" },
   tree: { tweak: "treeWidth", label: "resize conversation tree", edge: "left" },
   term: { tweak: "termWidth", label: "resize terminal", edge: "left" },

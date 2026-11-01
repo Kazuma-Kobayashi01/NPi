@@ -26,6 +26,7 @@
   const PANES = {
     sidebar: { min: 248, max: 420, wide: 256, narrow: 248 },
     split: { min: 240, max: 560, wide: 320, narrow: 280 },
+    sidechat: { min: 260, max: 640, wide: 360, narrow: 300 },
     rail: { min: 240, max: 520, wide: 280, narrow: 240 },
     tree: { min: 320, max: 900, wide: 540, narrow: 540 },
     term: { min: 320, max: 900, wide: 480, narrow: 400 },
