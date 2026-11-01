@@ -8,6 +8,6 @@
 - 用户指定：每次构建仅生成 app 和 dmg（不生成 zip），统一将打包生成的 dmg 放置在根目录下的 dist/{version} 文件夹中（如 dist/1.2.0-client/）。
 - 分支与验证铁律：每次进行修改、删除等操作前必须确认当前分支正确；严禁进行过度测试和反复验收等浪费资源收益小的操作。
 - 用户指定：服务端适配全权写入 `omp`（NPi-Kernel）独立仓库中维护，不在本 Desktop 根仓库中更改；原 1.1.0-server 分支已停止支持。
-- 用户指定：命名遵循“通用先行、平台派生”原则（Desktop 通用 `x.y.z`，OS 适配 `x.y.z-os`；Kernel 命名为 `kernel.x.y.z-platform`，通用为 `universal`；微更新使用 `(CxxEPxx)` 形式标识）；通用版本领先专用版本属正常现象。
+- 用户指定：命名遵循“通用先行、平台派生”原则（Desktop 通用 `x.y.z.w` 四位，OS 适配 `x.y.z.w-os`；Kernel 命名为 `kernel.x.y.z-platform`，通用为 `universal`；微更新使用 `(CxxEPxx)` 形式标识）；通用版本领先专用版本属正常现象。
 
 跨项目注意事项统一维护在 `.agent/`，具体实现规则维护在对应子项目，避免重复或相互漂移。
