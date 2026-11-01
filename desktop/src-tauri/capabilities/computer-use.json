@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "computer-use-indicators",
+  "description": "Only local Computer Use indicator pages can exchange indicator lifecycle events",
+  "windows": ["computer-use-border", "computer-use-control", "computer-use-cursor"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-emit"]
+}

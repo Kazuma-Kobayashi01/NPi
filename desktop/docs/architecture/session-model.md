@@ -14,3 +14,22 @@ The same menu ticks one profile as the **startup default**, stored as `ProfilesF
 
 The ambient rail's bottom `TodoPlanCard` (`design/side-panel.jsx`, wired through `AmbientRail` in `design/chrome.jsx`) receives the active session's `kanban` and counts from `app-live.jsx`. Its header uses the same local disclosure interaction as other `SideCard` cards: initially folded, click/Enter/Space toggles tasks in place rather than opening `PlanKanban`. Expanded content shows phase headings, task statuses and notes, updates with the active session data, and scrolls within a bounded height. Empty plans display an idle state. The separate **Todo and plan** More-menu action still opens the full plan view.
 
+
+## SideChat
+
+SideChat owns a separate ephemeral worker, not a project tab. `sidechat_start`
+starts it with a fixed conversational prompt, a project-independent working
+directory, and no tools, extensions, skills, rules, context files or session
+persistence. It shares the selected profile's model credentials, not the main
+conversation's messages, instructions or memory.
+
+The pane stays mounted while hidden so its event listeners and transcript
+survive closing and reopening during a reply. Actual disposal stops its worker.
+The controller consumes the normal `{seq, text}` event envelopes and rebuilds
+delta messages with `OMP_STREAM_DELTA`. Startup, command failures and process
+exit are visible errors, not successful readiness or indefinite thinking.
+
+Settings → Chat → SideChat selects `sidechatModel` (`provider/model`); empty
+uses the worker's default. Model selection is acknowledged before sending the
+next prompt. Stop and clear target only the independent worker.
+

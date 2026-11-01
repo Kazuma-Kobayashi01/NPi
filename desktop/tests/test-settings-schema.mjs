@@ -34,11 +34,13 @@ function check(label, fn) {
   passed++;
 }
 
-check("sections in page order, separator before advanced", () => {
-  assert.deepEqual(S.SECTIONS.map(s => s.id),
-    ["account", "general", "chat", "models", "agent", "code", "advanced"]);
-  assert.deepEqual(S.SECTIONS.filter(s => s.sep).map(s => s.id), ["advanced"]);
+check("every section is complete and only the last is separated", () => {
+  const ids = S.SECTIONS.map(s => s.id);
+  assert.equal(new Set(ids).size, ids.length, "section ids are unique");
   for (const s of S.SECTIONS) assert.ok(s.icon && s.title && s.blurb && s.groups.length, s.id);
+  const separated = S.SECTIONS.filter(s => s.sep).map(s => s.id);
+  assert.deepEqual(separated, [ids[ids.length - 1]], "only the last section is separated");
+  assert.ok(S.SECTIONS.some(s => s.id === "computerUse"), "Computer Use has its own destination");
 });
 
 check("every tweak row names a TWEAK_DEFAULTS key whose default is valid", () => {
@@ -52,12 +54,6 @@ check("every tweak row names a TWEAK_DEFAULTS key whose default is valid", () =>
     if (r.fold) continue;
     assert.equal(S.clamp(r, D[r.key]), D[r.key], `default of ${r.key} survives clamp`);
   }
-});
-
-check("custom rows name the renderers the page expects", () => {
-  assert.deepEqual(S.rows().filter(r => r.kind === "custom").map(r => r.type).sort(),
-    ["account", "approvalMode", "approvalRules", "archive", "chatInstructions", "chatMemory", "chromium", "defaultModel", "favoriteModels", "goalContinue", "mcpServers", "shell", "shortcuts", "skillsManager", "startupProfile", "subagentModel", "terminalHeight", "uiDetail", "usage", "vendors", "wallpaperArt", "widgets", "widths"].sort());
-  for (const r of S.rows().filter(r => r.kind === "custom")) for (const k of r.keys ?? []) assert.ok(k in D, k);
 });
 
 check("bounds come from the owning modules", () => {

@@ -32,6 +32,7 @@ Code: `src/app/settings-schema.js` (`window.OMP_SETTINGS`), `src/app/settings-ta
 | key bindings | `<app config>/keybindings.json` (omp's `keybindings.yml` as base layer) |
 | widget plugins | `<app config>/widgets.json` (`docs/widgets.md`) |
 | goal auto-continue | omp's config of the active tab's profile (`goal.continuationModes`, `goal_continuation_get` / `_set`, `useGoalContinuation`; `goal-mode.md`) |
+| Computer Use | omp's profile config `computer.enabled` (`computer_use_get` / `_set`, never `localStorage`); macOS grants stay in System Settings (`computer-use.md`) |
 
 Removed tweak keys: `scanlines`, `autosave` (with the status-bar autosave toggle).
 

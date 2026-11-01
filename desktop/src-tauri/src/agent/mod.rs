@@ -127,6 +127,11 @@ const ALLOWED_COMMAND_TYPES: &[&str] = &[
     // open tab on change.
     "set_auto_compaction",
     "set_auto_retry",
+    "get_computer_use",
+    "set_computer_use",
+    "stop_computer_use",
+    "computer_activity_ack",
+    "set_computer_activity_ack",
 ];
 
 /// What one omp process is started with (`start_session` → `spawn_omp`).
@@ -147,6 +152,8 @@ pub struct Launch<'a> {
     pub prompt: Option<&'a str>,
     /// Text for `--append-system-prompt`: capability hint for rich output (Chat and Code).
     pub append_prompt: Option<&'a str>,
+    /// Disable persistence, tools and discovered capabilities for SideChat.
+    pub sidechat: bool,
 }
 
 /// Manages one omp process per tab session.
@@ -207,16 +214,8 @@ impl AgentBridge {
         app: AppHandle,
         rule_book: Arc<crate::approval::RuleBook>,
     ) -> Result<(), String> {
-        let Launch {
-            cwd,
-            resume,
-            profile,
-            mode,
-            config,
-            prompt,
-            append_prompt,
-        } = launch;
-        let (mut child, supervisor) = match spawn_omp(cwd, resume, profile, mode, config, prompt, append_prompt) {
+        let cwd = launch.cwd;
+        let (mut child, supervisor) = match spawn_omp(launch) {
             Ok(c) => c,
             Err(e) => {
                 // Cached *and* returned: the caller gets the reason now, the

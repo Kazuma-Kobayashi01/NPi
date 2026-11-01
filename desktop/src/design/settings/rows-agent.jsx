@@ -135,9 +135,44 @@ function _SRA_SubagentModel({ row, ctx, query }) {
   );
 }
 
+function _SRA_SidechatModel({ row, ctx, query, modified, onReset }) {
+  const { SettingsRow: Row } = window;
+  const M = window.OMP_MODELS;
+  const [catalog, setCatalog] = React.useState([]);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    let current = true;
+    ctx.bridge.modelsCatalog(ctx.profileId).then(result => {
+      if (!current) return;
+      if (result.ok) setCatalog(result.value);
+      else setError(result.error);
+    }, err => { if (current) setError(String(err)); });
+    return () => { current = false; };
+  }, [ctx.bridge, ctx.profileId]);
+  const groups = React.useMemo(() => M.groupByVendor(catalog), [catalog]);
+  const selected = ctx.t.sidechatModel;
+  return (
+    <Row stack label={row.label} desc={row.desc} query={query} modified={modified} onReset={onReset}>
+      <div className="st-modelsel">
+        <select aria-label="SideChat model" value={selected}
+          onChange={e => ctx.setTweak("sidechatModel", e.target.value)}>
+          <option value="">Worker default model</option>
+          {selected && !catalog.some(m => M.keyOf(m) === selected) &&
+            <option value={selected}>{selected}</option>}
+          {groups.map(g => <optgroup key={g.vendor} label={g.vendor}>
+            {g.models.map(m => <option key={M.keyOf(m)} value={M.keyOf(m)}>{m.name || M.keyOf(m)}</option>)}
+          </optgroup>)}
+        </select>
+        {error && <div role="alert">{error}</div>}
+      </div>
+    </Row>
+  );
+}
+
 Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
   usage: _SRA_Usage,
   startupProfile: _SRA_StartupProfile,
   goalContinue: _SRA_GoalContinue,
   subagentModel: _SRA_SubagentModel,
+  sidechatModel: _SRA_SidechatModel,
 });

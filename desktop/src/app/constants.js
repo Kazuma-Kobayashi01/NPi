@@ -56,6 +56,7 @@
     "sidebarWidth": 0,
     "splitWidth": 0,
     "sidechatWidth": 0,
+    "sidechatModel": "",
     "railWidth": 0,
     "treeWidth": 0,
     "termWidth": 0,

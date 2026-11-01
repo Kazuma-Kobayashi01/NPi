@@ -335,6 +335,27 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
                     // applies this frame from the replay.
                     ext_ui::record(&ext_ui, seq, frame_type, parsed.as_ref());
                     if should_emit(&alive) {
+                        if let Some(frame) = parsed.as_ref() {
+                            crate::computer_overlay::observe(&app, &sid, frame);
+                            if frame_type == Some("computer_use_state") {
+                                let state = &frame["state"];
+                                let running = state
+                                    .get("running")
+                                    .and_then(serde_json::Value::as_bool)
+                                    .unwrap_or(false);
+                                let enabled = state
+                                    .get("enabled")
+                                    .and_then(serde_json::Value::as_bool)
+                                    .unwrap_or(false);
+                                if !running || !enabled {
+                                    crate::computer_overlay::clear_session(&app, &sid);
+                                }
+                                let _ = app.emit(
+                                    "computer-use://state",
+                                    serde_json::json!({ "sessionId": sid, "state": state }),
+                                );
+                            }
+                        }
                         let _ = app.emit(&line_event, LineEvent { seq, text: &shared });
                         // Rail widgets with a `turn_end` trigger rerun after
                         // the turn's last frame. Reuses the parse above.
@@ -375,6 +396,7 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
         // Empty payload = clean exit; non-empty = error reason. See the
         // AgentBridge doc-comment for the full event contract.
         if announce {
+            crate::computer_overlay::clear_session(&app, &sid);
             if !exit_reason.is_empty() {
                 // Recorded before the emit so a `session_status` query that
                 // races the event still finds it. Only for the incarnation

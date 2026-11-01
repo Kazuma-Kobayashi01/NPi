@@ -273,6 +273,8 @@
        app-live.jsx read window.OMP_SETTINGS / OMP_SETTINGS_TAB. -->
   <script src="app/settings-schema.js"></script>
   <script src="app/settings-tab.js"></script>
+  <script src="app/computer-use.js"></script>
+  <script src="app/computer-rpc.js"></script>
 
   <!-- Tweak storage (localStorage `omp-desktop:tweaks`): useTweaks and the
        OMP_TWEAKS_STORE reader live.js uses at its top-level init. IIFE. -->
@@ -453,6 +455,7 @@
   <script type="text/babel" src="design/settings/rows-layout.jsx"></script>
   <script type="text/babel" src="design/settings/rows-programs.jsx"></script>
   <script type="text/babel" src="design/settings/rows-agent.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-computer-use.jsx"></script>
   <script type="text/babel" src="design/settings/rows-mcp-skills.jsx"></script>
   <script type="text/babel" src="design/settings/rows-models.jsx"></script>
   <script type="text/babel" src="design/settings/rows-wallpaper.jsx"></script>
@@ -490,6 +493,9 @@
        Dependency-free IIFE; live.js reads window.OMP_STREAM_DELTA at its
        top-level init, so it must load before live.js. -->
   <script src="app/stream-delta.js"></script>
+  <!-- Independent SideChat controller shares the delta projection but never
+       the main session bridge or its persisted transcript. -->
+  <script src="app/sidechat.js"></script>
   <script src="live.js"></script>
 
   <!-- App root — wired to OMP_BRIDGE, no demo effects -->
@@ -501,6 +507,7 @@
        window.OMP_SESSION_UI, window.OMP_GOAL and window.OMP_TURN_STATUS
        at top level. -->
   <script type="text/babel" src="app/use-goal-mode.jsx"></script>
+  <script type="text/babel" src="app/use-computer-use.jsx"></script>
   <script type="text/babel" src="app/use-pr-automation.jsx"></script>
   <!-- Rail widgets hook; destructures window.OMP_WIDGETS at top level. -->
   <script type="text/babel" src="app/use-widgets.jsx"></script>

@@ -279,6 +279,18 @@ fn omp_args(
     args
 }
 
+/// A tool-free in-memory session must not discover project or profile capabilities.
+const SIDECHAT_FLAGS: &[&str] = &[
+    "--no-session",
+    "--no-tools",
+    "--no-extensions",
+    "--no-skills",
+    "--no-rules",
+    "--no-context-files",
+    "--no-lsp",
+    "--no-title",
+];
+
 // ── session spawn ─────────────────────────────────────────────────────────────
 
 /// Resolve `dir` to an absolute path so it can be handed to *both*
@@ -345,14 +357,18 @@ fn sanitize_child_env(cmd: &mut Command) {
 /// whole process tree (subagents, tool-call children) can be torn down as
 /// a unit — plain `Child::kill` only signals the direct `omp` process.
 pub(super) fn spawn_omp(
-    cwd: Option<&str>,
-    resume: Option<&str>,
-    profile: Option<&str>,
-    mode: ApprovalMode,
-    config: Option<&Path>,
-    prompt: Option<&str>,
-    append_prompt: Option<&str>,
+    launch: super::Launch<'_>,
 ) -> Result<(Child, crate::supervisor::ProcessSupervisor), String> {
+    let super::Launch {
+        cwd,
+        resume,
+        profile,
+        mode,
+        config,
+        prompt,
+        append_prompt,
+        sidechat,
+    } = launch;
     let omp = Omp::locate()?;
     // Refused here rather than left to fail later: an omp too old for the
     // RPC surface the frontend uses would start and then break feature by
@@ -363,6 +379,10 @@ pub(super) fn spawn_omp(
     // never disagree or compound a relative value into a nested path.
     let resolved_cwd = cwd.filter(|dir| !dir.is_empty()).map(resolve_cwd);
     let mut args = omp_args(profile, resume, resolved_cwd.as_deref(), mode, config);
+    if sidechat {
+        let at = args.len() - usize::from(config.is_some());
+        args.splice(at..at, SIDECHAT_FLAGS.iter().map(|flag| (*flag).to_string()));
+    }
     if let Some(text) = prompt {
         // Replaces omp's default prompt (omp still adds the skills list). Before the `--config` token, which stays last.
         let at = args.len() - usize::from(config.is_some());

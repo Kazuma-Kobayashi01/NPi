@@ -157,6 +157,7 @@ function App() {
     setPromptHistory, setSubagents, setSubagentTranscripts, setQueue, setQueueSending, setGoal, setExtWidgets,
   });
   useThemeEffect(t);
+  const computerUseAccentError = window.useComputerUseAccent(bridge, t.theme, t.accent);
   // The mode picks the system prompt omp starts with (app_mode.rs).
   React.useEffect(() => { bridge?.setAppMode?.(t.appMode === "chat" ? "chat" : "code"); }, [bridge, t.appMode]);
 
@@ -939,6 +940,7 @@ function App() {
     widgets, widgetTweakKey: _widgetTweakKey, extToggles, keyOpts: settingsKeyOpts,
     panes, terminalHeight: terminal.height,
     goal: { profileId: activeProfileId },
+    computerUseSessionId: activeProject.id, computerUseAccentError,
     openApprovals: () => setRulesOpen(true),
     openStats: () => { closeSettings(); setStatsOpen(true); },
     openLogin: () => { closeSettings(); openBridge("login"); },
@@ -1230,14 +1232,12 @@ function App() {
               {termShown && <ResizeHandle className="at-term" style={{ gridColumn: termCol }} {...panes.handle("term")} />}
               <TerminalPanels sessions={sessions} activeId={showHome ? null : planKey} terminal={terminal} />
               {sideChatShown && <ResizeHandle className="at-sidechat" style={{ gridColumn: sidechatCol }} {...panes.handle("sidechat")} />}
-              {sideChatShown && (
-                <SideChat
-                  open={sideChatShown}
-                  onClose={() => setSideChatOpen(false)}
-                  bridge={bridge}
-                  model={model}
-                />
-              )}
+              <SideChat
+                open={sideChatShown}
+                onClose={() => setSideChatOpen(false)}
+                model={t.sidechatModel}
+                profile={activeProfileId}
+              />
             </div>
           </div>
           {showSidebar && <ResizeHandle className="at-sidebar" {...panes.handle("sidebar")} />}

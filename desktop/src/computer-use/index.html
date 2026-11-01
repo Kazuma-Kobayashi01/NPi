@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- No page-level CSP here: the app-level policy already restricts this local
+       origin, and a stricter meta policy also blocks the runtime's injected
+       scripts, which is how the indicator page lost window.__TAURI__. -->
+  <title>NPi Computer Use</title>
+  <link rel="stylesheet" href="overlay.css">
+  <script defer src="overlay.js"></script>
+</head>
+<body>
+  <div class="target-border" aria-hidden="true"></div>
+  <section class="control" aria-label="Computer Use controls">
+    <span class="status-dot" aria-hidden="true"></span>
+    <div class="copy"><strong>Agent is operating</strong><span id="detail"></span><span id="error" role="alert"></span></div>
+    <button id="stop" type="button">Stop</button>
+  </section>
+  <svg class="agent-cursor" viewBox="0 0 38 46" aria-label="Agent cursor"><path d="M4 4 L4 34 L12 26 L19 40 L25 37 L18 24 L30 24 Z" /></svg>
+</body>
+</html>

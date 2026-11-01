@@ -64,3 +64,7 @@ collapse/expand uses the grouping helper at call time. Load
 `design/chat/tool-group.jsx` after `tool-card.jsx` and before `chat-view.jsx`.
 The grouping layer only projects existing messages; it does not change the RPC
 protocol or rich-content rendering.
+
+`app/sidechat.js` follows `app/stream-delta.js` and precedes
+`design/side-chat.jsx`. It owns the independent worker's RPC lifecycle;
+`app-live.jsx` keeps the component mounted when its column is hidden.

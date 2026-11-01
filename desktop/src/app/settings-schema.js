@@ -93,6 +93,9 @@
       { name: "Workflow pipeline", rows: [
         tweak("showWorkflowPipeline", "toggle", "Floating workflow pipeline", "Show a minimal horizontal stage capsule at the top of the transcript during planning and task execution.", "workflow pipeline stages flow kanban tasks"),
       ] },
+      { name: "SideChat", rows: [
+        custom("sidechatModel", "SideChat model", "Choose the model for independent, temporary conversations. Changes apply to the next message; an empty choice uses the chat worker's default model.", "sidechat model independent chat", { keys: ["sidechatModel"] }),
+      ] },
       { name: "Chat assistant", rows: [
         custom("chatInstructions", "Instructions for Chat", "Standing instructions the assistant keeps in mind in every chat in Chat mode: tone, language, format. Applies to chats started or restarted after saving.", "instructions system prompt tone style persona"),
         custom("chatMemory", "Memory", "What the assistant remembers about you across chats. It reads this at the start of each chat and can add to it when you ask it to remember something.", "memory remember notes"),
@@ -195,6 +198,11 @@
         custom("skillsManager", "Agent Skills", "Installed skills, workflows and prompt procedures.", "skills custom prompt procedures workflow"),
       ] },
     ] },
+    { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Explicit control of screen capture, app interaction and native operation indicators.", groups: [
+      { name: "Computer access", src: "omp config", rows: [
+        custom("computerUse", "Computer Use", "Allow the agent to operate your Mac, only after you enable it and grant macOS permissions.", "computer use screen recording accessibility input monitoring permissions tcc desktop cursor stop control"),
+      ] },
+    ] },
     { id: "session", icon: "clock", title: "Session", blurb: "Tabs across restarts, closing, naming and app updates.", groups: [
       { name: "Tabs", rows: [
         tweak("restoreTabs", "toggle", "Reopen tabs on launch", "Start with the tabs and conversations that were open when you quit.", "restore session startup"),
@@ -218,13 +226,14 @@
     ] },
   ];
 
-  // Seven tabs in the window; each gathers sections as authored above.
+  // Each settings destination gathers the relevant sections authored above.
   const MERGED = [
     { id: "account", icon: "agent", title: "Account", blurb: "Your profile and what the assistant remembers.", from: ["account"] },
     { id: "general", icon: "sparkle", title: "General", blurb: "Look, text and how tabs behave.", from: ["appearance", "session"] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript, workflow pipelines and the prompt box.", from: ["chat"] },
     { id: "models", icon: "bolt", title: "Models", blurb: "Default model, favourites, vendors and usage statistics.", from: ["models"] },
     { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
+    { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Screen access, app control and macOS permissions.", from: ["computerUse"] },
     { id: "code", icon: "terminal", title: "Code", blurb: "Terminal, browser and the floating cards.", from: ["terminal", "browser", "rail"] },
     { id: "advanced", icon: "command", title: "Advanced", sep: true, blurb: "Layout and keyboard shortcuts.", from: ["layout", "shortcuts"] },
   ];

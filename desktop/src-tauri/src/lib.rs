@@ -18,6 +18,8 @@ mod screen_capture;
 mod session_actions;
 mod approval_mode;
 mod browser;
+mod computer_use;
+mod computer_overlay;
 mod child_path;
 mod child_run;
 mod config_file;
@@ -168,12 +170,73 @@ fn start_session(
             config: overlay.as_deref(),
             prompt: prompt.as_deref(),
             append_prompt: Some(app_mode::DESKTOP_RICH_OUTPUT_HINT),
+            sidechat: false,
         },
         app,
         Arc::clone(rule_book.inner()),
     )?;
     widget_host.session_started(&args.session_id, cwd_opt.map(Path::new));
     Ok(mode.as_str().to_string())
+}
+
+/// Start an independent, ephemeral conversation, irrespective of the main app mode.
+/// It shares only the chosen profile's model/auth configuration with normal tabs.
+#[tauri::command]
+fn sidechat_start(
+    session_id: String,
+    profile: Option<String>,
+    bridge: State<'_, AgentBridge>,
+    rule_book: State<'_, Arc<RuleBook>>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+    terminal: State<'_, Arc<terminal::TerminalManager>>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let profile = store.resolve(profile.as_deref())?;
+    // Never inherit the app's project cwd, browser overlay, chat-space memory or
+    // widgets. Keep the small runtime policy outside any selected worktree.
+    let cwd = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("SideChat cache directory: {e}"))?
+        .join("sidechat");
+    private_fs::private_dirs(true)
+        .create(&cwd)
+        .map_err(|e| format!("SideChat workspace: {e}"))?;
+    let config = cwd.join("runtime.yml");
+    std::fs::write(
+        &config,
+        "includeWorkspaceTree: false\nworkspace:\n  additionalDirectories: []\nplan:\n  enabled: false\n  defaultOnStartup: false\ngit:\n  enabled: false\n",
+    )
+    .map_err(|e| format!("SideChat policy: {e}"))?;
+    let cwd_text = cwd
+        .to_str()
+        .ok_or_else(|| "SideChat workspace path is not UTF-8".to_string())?;
+    // The registry also drives close_all_tabs on webview reload. Registration
+    // alone starts no shell; close_tab/end_tabs retains normal tree teardown.
+    terminal.register_tab(&session_id, None);
+    bridge.start_session(
+        session_id,
+        agent::Launch {
+            cwd: Some(cwd_text),
+            resume: None,
+            profile,
+            mode: app.state::<Arc<ApprovalModeStore>>().resolve(None),
+            config: Some(&config),
+            prompt: Some(
+                "You are NPi SideChat, an independent conversational assistant.\n\
+                 Help with questions, writing, analysis, learning and brainstorming. \
+                 Answer directly in the user's language. This is a private, temporary \
+                 conversation separate from the user's project and main agent session. \
+                 You have no tools and cannot access files, browse, execute commands or \
+                 change the user's computer. Never claim to have performed such actions. \
+                 Be honest about uncertainty and do not invent external results.",
+            ),
+            append_prompt: Some("Keep this conversation independent and tool-free."),
+            sidechat: true,
+        },
+        app,
+        Arc::clone(rule_book.inner()),
+    )
 }
 
 /// Run blocking `work` (file or process I/O, a long scan) off Tauri's IPC
@@ -360,8 +423,11 @@ fn stop_session(
     bridge: State<'_, AgentBridge>,
     rule_book: State<'_, Arc<RuleBook>>,
     widget_host: State<'_, Arc<widgets::WidgetHost>>,
+    app: AppHandle,
 ) {
+    // The overlay belongs to this process incarnation, not its replacement.
     bridge.stop_session(&session_id, &rule_book);
+    computer_overlay::clear_session(&app, &session_id);
     widget_host.session_closed(&session_id);
 }
 
@@ -381,6 +447,7 @@ fn end_tabs<S: AsRef<str> + Sync>(app: &AppHandle, ids: &[S]) {
     for id in ids {
         let id = id.as_ref();
         bridge.stop_session(id, &rule_book);
+        computer_overlay::clear_session(app, id);
         widgets.session_closed(id);
         watchers.stop(id);
     }
@@ -1395,6 +1462,7 @@ async fn app_update_install(
 /// group or session and would outlive us. Every step is idempotent.
 pub(crate) fn kill_child_processes(app: &AppHandle) {
     app.state::<AgentBridge>().shutdown_all();
+    computer_overlay::shutdown(app);
     if let Some(browser) = app.try_state::<browser::BrowserManager>() {
         browser.shutdown_all();
     }
@@ -1633,6 +1701,7 @@ fn with_plugins_and_state(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AgentBridge::new())
+        .manage(computer_overlay::OverlayState::default())
         .manage(GitWatcherState::new())
         .manage(OpenProjectState::new())
         .manage(updater::UpdaterState::default())
@@ -1659,6 +1728,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             send_command,
             start_session,
+            sidechat_start,
             stop_session,
             terminal_open,
             terminal_status,
@@ -1739,6 +1809,13 @@ pub fn run() {
             usage_stats,
             goal_continuation_get,
             goal_continuation_set,
+            computer_use::computer_use_get,
+            computer_use::computer_use_set,
+            computer_use::computer_use_request_permission,
+            computer_use::computer_use_reset_permission,
+            computer_use::computer_use_open_settings,
+            computer_overlay::computer_use_set_accent,
+            computer_overlay::computer_use_stop,
             models_catalog,
             usage_limits,
             model_default_get,
@@ -1765,6 +1842,7 @@ pub fn run() {
         ])
         .setup(|app| {
             setup(app);
+            computer_overlay::setup(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())

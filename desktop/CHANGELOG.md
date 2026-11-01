@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0.130] - 2026-11-01
+
+### Added
+
+- Computer Use has its own Settings destination: profile-scoped enablement written to omp's `computer.enabled`, macOS Screen Recording and Accessibility onboarding requested only from an explicit click, optional Input Monitoring for Escape cancellation, live worker readiness, and a Stop that ends only the current computer operation.
+- Native operation indicators during Computer Use: a theme-coloured border on the target window (the display for desktop-level actions), a stop prompt naming the app and action, and an agent-only cursor at the real operation point. Native input waits until the indicator is painted; the indicators never move the user's pointer, take focus, or appear in the agent's screenshots.
+
+### Changed
+
+- Desktop version 2.0.0.130; the bundled kernel reports the same version.
+
+### Fixed
+
+- Computer Use no longer reports "Needs attention" for a conversation whose agent process is not running: the tab applies the profile setting when it starts, and a startup failure is never echoed back as a Computer Use error. A refused change now names one bounded line instead of a stderr dump.
+- Requesting a macOS grant shows "Waiting for macOS" until the answer is recorded, and re-reads twice, instead of reporting the grant as missing while the prompt is still on screen.
+- The "paint the indicator before acting" barrier is now opt-in (`set_computer_activity_ack`), so a kernel with the barrier no longer freezes input for a desktop build that does not confirm paints. The indicator's own 3 s watchdog reports a failed paint with a reason instead of leaving the agent on a bare timeout.
+- Computer Use can recover from a grant that no longer matches the running build (ad-hoc signing binds TCC to the CDHash, so every rebuild is a new app to macOS while System Settings keeps showing the old grant as on): the permission rows offer "Reset & request", which clears this bundle's record with `tccutil reset` and asks again.
+
 ## [2.0.0.78] - 2026-11-01
 
 ### Added
@@ -12,6 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - SideChat right-column alignment: standard stage grid column positioned on the right alongside subagent panes with resize handles and memory isolation.
 - Enhanced Markdown typography and rich content: safe formatting for `<kbd>`, `<mark>`, `<sub>`, `<sup>`, `<ruby>`, `<details>/<summary>`, GFM callout alert badges (NOTE, TIP, WARNING, IMPORTANT, CAUTION), and `<audio>/<video>` multimedia support under verified CSP.
 - Reorganized Settings interface: restructured into 7 clearly delineated, intuitive tabs (Account, General, Chat, Models, Agent, Code, Advanced) with telemetry and MCP/Skill management logically grouped.
+
+### Fixed
+
+- SideChat now reads the actual RPC event envelopes, preserves replies while hidden, and reports startup, model, request and process errors instead of remaining stuck thinking.
+- Dedicated, temporary chat-only worker with no project tools or persisted conversation; Settings → Chat → SideChat selects its model independently. Send remains inside the input box; Stop cancels generation and Clear resets only SideChat.
 
 ## [2.0.0.60] - 2026-11-01
 

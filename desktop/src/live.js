@@ -148,6 +148,8 @@
   // respawns only that tab (see switchSessionProfile).
   const sessionRegistry = new Map();
   const sessionSnapshots = new Map(); // id -> saved state + volatile vars
+  const computerStates = new Map();
+  const computerRequests = window.__TAURI__ ? window.OMP_COMPUTER_RPC.create(window.__TAURI__) : null;
   const gitListeners = new Map();  // session_id → Tauri unlisten fn for git://branch/{id}
   // Prompt history — one list per tab, newest-first, in memory only. Never
   // persisted to disk/localStorage: filled as the user sends (_recordPrompt)
@@ -350,6 +352,7 @@
       queueSending:    state.queueSending,
       goal:            state.goal,
       extWidgets:      state.extWidgets,
+      computerUse:     computerStates.get(activeSessionId) ?? { state: null, error: null },
       // Tab list — derived from session registry, not per-session state.
       // runState: active tab reads live state; background tabs read their
       // cached snapshot (never activated yet = "idle" defaults).
@@ -404,6 +407,28 @@
       return { ok: true, value: await window.__TAURI__.core.invoke(cmd, args) };
     } catch (err) {
       return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
+  async function _computerCommand(sessionId, command) {
+    if (!computerRequests) return { ok: false, error: "not connected" };
+    try {
+      const value = await computerRequests.request(sessionId, command);
+      computerStates.set(sessionId, { state: value, error: null });
+      notify();
+      return { ok: true, value };
+    } catch (error) {
+      const message = String(error.message ?? error);
+      // No live process: the tab is not running Computer Use right now and its
+      // next process applies the profile setting itself. Never a feature error.
+      if (error.absent) {
+        computerStates.set(sessionId, { state: null, error: null });
+        notify();
+        return { ok: false, absent: true, error: message };
+      }
+      computerStates.set(sessionId, { state: computerStates.get(sessionId)?.state ?? null, error: message });
+      notify();
+      return { ok: false, error: message };
     }
   }
 
@@ -972,6 +997,7 @@
         _pushAssistantNote(_exitNote(reason, sessionRegistry.get(id)?.profile));
       }
       _endDeadProcessState();
+      computerStates.delete(id);
       notify();
     });
     if (!current()) {
@@ -1230,6 +1256,7 @@
     }
     _dropGitListener(id);
     sessionSnapshots.delete(id);
+    computerStates.delete(id);
     return stopped;
   }
 
@@ -1241,6 +1268,7 @@
     const closed = _invokeSafe("close_tab", { sessionId: id });
     _dropGitListener(id);
     sessionSnapshots.delete(id);
+    computerStates.delete(id);
     return closed;
   }
 
@@ -2916,6 +2944,8 @@
         if (!sessionPrefs.autoCompaction) _send({ type: "set_auto_compaction", enabled: false });
         if (!sessionPrefs.autoRetry) _send({ type: "set_auto_retry", enabled: false });
         _send({ type: "get_state" });
+        // Fire-and-forget activity: don't block native input waiting for an indicator.
+        void _computerCommand(activeSessionId, { type: "get_computer_use" });
         _send({ type: "get_session_stats" });
         _send({ type: "get_messages", fullHistory: true });
         _send({ type: "get_available_models" });
@@ -3606,6 +3636,46 @@
      *  the setting omp reports afterwards. */
     setGoalContinuation(profile, enabled) {
       return _invokeResult("goal_continuation_set", { profile, enabled });
+    },
+
+    computerUseGet(profile) {
+      return _invokeResult("computer_use_get", { profile });
+    },
+    async computerUseSet(profile, enabled) {
+      const saved = await _invokeResult("computer_use_set", { profile, enabled });
+      if (!saved.ok) return saved;
+      const profileId = profile || DEFAULT_PROFILE_ID;
+      const matching = [...sessionRegistry.values()]
+        .filter(entry => (entry.profile || DEFAULT_PROFILE_ID) === profileId);
+      const results = await Promise.all(matching.map(entry =>
+        _computerCommand(entry.id, { type: "set_computer_use", enabled })));
+      // A tab with no live process applies the setting when its process starts.
+      const failed = results.filter(result => !result.ok && !result.absent);
+      if (failed.length) {
+        return { ok: false, error: `${failed.length} running conversation(s) refused the change: ${failed[0].error}` };
+      }
+      return saved;
+    },
+    computerUseRequestPermission(permission) {
+      return _invokeResult("computer_use_request_permission", { permission });
+    },
+    /** Clears this build's stale TCC record so macOS asks again. */
+    computerUseResetPermission(permission) {
+      return _invokeResult("computer_use_reset_permission", { permission });
+    },
+    computerUseOpenSettings(permission) {
+      return _invokeResult("computer_use_open_settings", { permission });
+    },
+    async computerUseRuntime(sessionId) {
+      const result = await _computerCommand(sessionId, { type: "get_computer_use" });
+      return result.absent ? { ok: true, value: null } : result;
+    },
+    async computerUseStop(sessionId) {
+      const result = await _computerCommand(sessionId, { type: "stop_computer_use" });
+      return result.absent ? { ok: true, value: null } : result;
+    },
+    computerUseSetAccent(accent) {
+      return _invokeResult("computer_use_set_accent", { accent });
     },
     /** Manual rename from the tab bar or sidebar (#32): omp's own
      *  `/rename <title>` builtin, so the name is stored as user-set and
@@ -4724,6 +4794,16 @@
   // ── Connect to Tauri IPC ──────────────────────────────────────────────────
   if (window.__TAURI__) {
     document.documentElement.classList.add("tauri-native");
+    window.__TAURI__.event.listen("computer-use://state", event => {
+      const { sessionId, state: computerState } = event.payload;
+      computerStates.set(sessionId, { state: computerState, error: null });
+      notify();
+    }).catch(error => console.error("[live] Computer Use state listener failed:", error));
+    window.__TAURI__.event.listen("computer-use://error", event => {
+      const { sessionId, error } = event.payload;
+      computerStates.set(sessionId, { state: computerStates.get(sessionId)?.state ?? null, error });
+      notify();
+    }).catch(error => console.error("[live] Computer Use error listener failed:", error));
 
     // No tab at launch: `lib.rs::setup` spawns nothing. Load the persisted
     // profile list + ticked default first — with no tab to inherit from, it
