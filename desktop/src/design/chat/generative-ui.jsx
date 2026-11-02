@@ -17,6 +17,50 @@ function generativeUiRemember(key, record) {
   if (generativeUiDrafts.size > 128) generativeUiDrafts.delete(generativeUiDrafts.keys().next().value);
 }
 
+// A real component so its loader hook has a component boundary; the registry
+// entry below only creates the element (never calls the hook directly).
+function GenerativeUiImage({ component: c }) {
+  const onLink = React.useContext(window.MarkdownLinkContext);
+  const image = window.OMP_CHAT_IMAGE.useChatImage(c.src, { thumbnail: c.thumbnail });
+  const source = c.sourceUrl && /^https:\/\//i.test(c.sourceUrl)
+    ? <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer" className="md-image-attribution"
+      title={c.sourceUrl} onClick={e => { e.stopPropagation(); onLink?.(e); }}>
+      {c.attribution || "Source"}
+    </a>
+    : null;
+
+  if (image.status === "error") {
+    return <div className="gui-image-card is-error" role="group" aria-label={c.alt || c.title || "Image"}>
+      <span className="chip danger">Image unavailable</span>
+      <span className="md-image-error-msg">{image.error}</span>
+      <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>Retry image</button>
+      {source || (c.attribution && <span className="gui-image-credit">{c.attribution}</span>)}
+    </div>;
+  }
+
+  if (!image.displayUrl) {
+    return <div className="gui-image-loading" role="status">
+      <span className="pulse-dot" /> Loading {c.alt || "image"}…
+    </div>;
+  }
+
+  return <div className="gui-image-card">
+    <img className="md-inline-img gui-image-img" src={image.displayUrl} alt={c.alt || ""}
+      title={c.title || c.alt || ""} onLoad={image.onLoad} onError={image.onError} />
+    {image.displayKind === "thumbnail" && (
+      <span className={`md-image-status${image.status === "full-error" ? " is-error" : ""}`} role="status">
+        <span className="pulse-dot" />
+        {image.status === "full-error" ? "Full image unavailable" : image.status === "preview" ? "Preview" : "Loading full image…"}
+      </span>
+    )}
+    {image.status === "full-error" && (
+      <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>Retry full image</button>
+    )}
+    {c.title && <span className="md-image-caption">{c.title}</span>}
+    {source || (c.attribution && <span className="gui-image-credit">{c.attribution}</span>)}
+  </div>;
+}
+
 // ============================================================================
 // Component Registry for Display & Interactive Components
 // ============================================================================
@@ -215,6 +259,10 @@ const GenerativeUiRegistry = {
     return <div className="gui-divider" key={c.id}>
       {c.label && <span className="gui-divider-label">{c.label}</span>}
     </div>;
+  },
+
+  image({ component: c }) {
+    return <GenerativeUiImage key={c.id} component={c} />;
   },
 
   // ── Interactive Controls ──

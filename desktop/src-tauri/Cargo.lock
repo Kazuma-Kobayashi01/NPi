@@ -3923,9 +3923,10 @@ dependencies = [
 
 [[package]]
 name = "omp-desktop"
-version = "2.0.0-320"
+version = "2.0.0-378"
 dependencies = [
  "base64 0.22.1",
+ "flate2",
  "gix",
  "libc",
  "notify",
@@ -3937,11 +3938,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tokio",
  "tungstenite",
  "url",
  "windows-registry",

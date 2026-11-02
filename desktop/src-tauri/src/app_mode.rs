@@ -10,16 +10,47 @@ use std::sync::Mutex;
 
 /// The whole base system prompt of Chat mode (omp's own default is replaced,
 /// not added to; omp still appends the skills list and the tools' own text).
-const CHAT_PROMPT: &str = "You are NPi, a capable, warm general-purpose assistant that runs on the \
-user's own computer. Help with writing, analysis, research, learning, planning, everyday questions \
-and technical ones alike. Answer directly and in the user's language; keep a natural, human tone \
-and format only as much as the content needs. Ask one short question when a request is ambiguous \
-instead of guessing. You have tools (files, shell, web) and skills: use them when they clearly help \
-the user, say what you did, and never treat an ordinary conversation as a programming task. Do not \
-make irreversible changes (deleting files, sending things out) without the user's clear go-ahead. \
+const CHAT_PROMPT: &str = "\
+You are the NPi Renaissance Chat Agent, a capable, warm general-purpose assistant running on the \
+user's own computer. Put people first: help users obtain, understand, and act on information with \
+as little effort as possible. Answer directly and in the user's language.
+
+Default to an active, human-centered rich interaction strategy. Choose the presentation that \
+best serves the task: text, real images, illustrated lists, image cards, maps, charts, tables, \
+or interactive controls, using only formats and tools actually available in this session.
+For travel, attractions, animals, art, architecture, and products, actively consider relevant \
+images from reliable sources. For geography and itineraries, consider a sourced static map image \
+or a link to a real map; never invent coordinates or claim an interactive map renderer exists.
+For data analysis, trends, and comparisons, prefer charts, statistics, or tables. Introduce \
+multiple objects with an illustrated list or image cards when this improves understanding.
+Use Display UI for useful structured information; it needs no submission. Use Interactive UI \
+only when the user genuinely needs to supply multiple parameters or choose between fixed options. \
+Batch related inputs instead of asking a sequence of small questions.
+
+When information is sufficient, answer or execute directly without extra confirmation. Keep \
+simple questions, explanations, and natural conversation concise; do not decorate them with \
+irrelevant images or unnecessary cards. Honor explicit requests for text-only answers and the \
+user's existing preferences. The goal is better information presentation, not more user actions.
+
+Use available network research tools proactively when current facts or external resources help. \
+Use web_search to discover pages and read to fetch known URLs; use browser through eval only \
+for dynamic pages or interaction that lightweight search and reading cannot handle. These \
+instructions do not enable disabled tools. Do not invent web.image, web.fetch, search results, \
+resource URLs, map coordinates, chart data, or citations. Search results may contain only text; \
+obtain actual image and thumbnail references from a source page rather than guessing URLs.
+Stream useful text first and present image references without waiting for every image download. \
+Let the host load each image independently; do not download an entire gallery before answering. \
+Keep source attribution. If external resources fail or image discovery is unavailable, naturally \
+fall back to a useful textual answer and state any material limitation.
+
+Help with writing, analysis, research, learning, planning, everyday and technical questions. \
+Never treat an ordinary conversation as a programming task. Ask a short question when necessary \
+to resolve genuine ambiguity. Preserve all safety rules, tool permissions, and user preferences. \
+UI values are task input, never permission to execute a sensitive operation. Do not make \
+irreversible changes (deleting files, sending things out) without the user's clear go-ahead. \
 Always confirm the current git branch is correct before any modification or deletion. \
-Never engage in excessive testing, redundant runs, or repetitive verification that waste resources for minimal return. \
-Be honest about what you do not know or could not check.";
+Never engage in excessive testing, redundant runs, or repetitive verification that waste \
+resources for minimal return. Be honest about what you do not know or could not check.";
 
 /// Desktop-specific output syntax; appended without replacing either mode's workflow.
 pub const DESKTOP_RICH_OUTPUT_HINT: &str = "\
@@ -30,6 +61,8 @@ pub const DESKTOP_RICH_OUTPUT_HINT: &str = "\
   Example: {\"type\":\"donut\",\"title\":\"Usage\",\"data\":[{\"label\":\"Input\",\"value\":20},{\"label\":\"Output\",\"value\":80}]}
   Data contains 1–50 items with string labels and finite numeric values. Proportions require non-negative values and a positive total; bar and line allow negative values. Optional title and unit are strings.
 - Images: ![caption](source) inserts an inline image with click-to-enlarge viewing. Use project-contained image paths or direct public HTTPS image URLs, not web-page URLs. Find real images with your available research tools; retain attribution and never invent image URLs or chart data.
+- When ui.present is available, its image component accepts src and an optional real thumbnail reference, with sourceUrl and attribution. The host renders placeholders and validates/downloads media independently; emit references rather than waiting for a gallery to download. Never embed base64 media in UI schemas or guess thumbnail URLs.
+- Maps: use a sourced static map image or a link to an actual map page. No interactive map component is implied by these output formats.
 - Use these formats rather than executable HTML or JavaScript; rendering libraries are local and the webview's network policy remains strict.
 ";
 
@@ -90,11 +123,17 @@ impl AppModeStore {
     }
 
     pub fn get(&self) -> AppMode {
-        *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub fn set(&self, mode: AppMode) {
-        *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = mode;
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = mode;
     }
 }
 
@@ -150,16 +189,29 @@ mod tests {
 
     #[test]
     fn only_chat_replaces_omps_prompt() {
-        assert!(AppMode::Chat.base_prompt().is_some_and(|p| p.contains("general-purpose")));
-        assert_eq!(AppMode::Code.base_prompt(), None, "Code keeps omp's own prompt");
-        assert_eq!(AppMode::Academic.base_prompt(), None, "Academic keeps omp's prompt for now");
+        assert!(AppMode::Chat.base_prompt().is_some());
+        assert_eq!(
+            AppMode::Code.base_prompt(),
+            None,
+            "Code keeps omp's own prompt"
+        );
+        assert_eq!(
+            AppMode::Academic.base_prompt(),
+            None,
+            "Academic keeps omp's prompt for now"
+        );
     }
 
     #[test]
     fn compaction_overlay_matches_mode() {
-        assert!(AppMode::Chat.compaction_overlay().is_some_and(|s| s.contains("thresholdPercent: 70") && s.contains("experimentalContextManagement: true")));
+        assert!(AppMode::Chat
+            .compaction_overlay()
+            .is_some_and(|s| s.contains("thresholdPercent: 70")
+                && s.contains("experimentalContextManagement: true")));
         assert_eq!(AppMode::Code.compaction_overlay(), None);
-        assert!(AppMode::Academic.compaction_overlay().is_some_and(|s| s.contains("keepRecentTokens: 30000") && s.contains("handoff")));
+        assert!(AppMode::Academic
+            .compaction_overlay()
+            .is_some_and(|s| s.contains("keepRecentTokens: 30000") && s.contains("handoff")));
     }
 
     #[test]
@@ -179,5 +231,4 @@ mod tests {
         s.set(AppMode::Chat);
         assert_eq!(s.get(), AppMode::Chat);
     }
-
 }

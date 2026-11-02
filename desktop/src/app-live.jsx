@@ -1029,19 +1029,25 @@ function App() {
     { label: "Settings", icon: "cog", hint: keyHint("desktop.settings.open"), onClick: () => (stab.open ? closeSettings() : openSettings()) },
   ];
 
-  const mediaKey = JSON.stringify([activeProfileId, activeProject.sessionFile ?? activeProject.id]);
-  const markdownMedia = React.useMemo(() => {
-    const images = new Map();
-    return {
-      key: mediaKey,
-      resolveImage(source) {
-        if (!images.has(source)) {
-          images.set(source, bridge.chatImageRead(source, mediaKey, activeProject.id));
-        }
-        return images.get(source);
-      },
-    };
-  }, [bridge, mediaKey, activeProject.id]);
+  // Stable across reopen: the backend cache key is profile + session file
+  // (the tab id only when the session has no file yet). The store itself is
+  // rebuilt when the tab's runtime id changes, which cancels its loads.
+  const mediaKey = window.OMP_CHAT_IMAGE.conversationKey(
+    activeProfileId,
+    activeProject.sessionFile,
+    activeProject.id,
+  );
+  const markdownMedia = React.useMemo(
+    () =>
+      window.OMP_CHAT_IMAGE.createStore({
+        key: mediaKey,
+        read: (source, { requestId, priority }) =>
+          bridge.chatImageRead(source, mediaKey, activeProject.id, { requestId, priority }),
+        cancel: requestId => bridge.chatImageCancel(activeProject.id, requestId),
+      }),
+    [bridge, mediaKey, activeProject.id],
+  );
+  React.useEffect(() => () => markdownMedia.dispose(), [markdownMedia]);
 
   // Chat links: project files to the preview, localhost to the browser panel.
   return (

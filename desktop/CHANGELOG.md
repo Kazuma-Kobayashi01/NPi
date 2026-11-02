@@ -6,12 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0.378] - 2026-11-02
+
+Desktop 2.0.0.378 bundles Kernel 2.0.10, the offline managed Python runtime,
+and progressive sourced images in Markdown and Generative UI.
+
 ### Added
 
+- Progressive `image` components in Display/Interactive UI reuse the Markdown image loader: real thumbnail references, independent placeholders, full-image upgrades, attribution and explicit retry without blocking text.
+- Shared per-conversation image subscriptions cancel unused requests, deduplicate sources, bound unpinned memory, and preserve stable saved-session cache identities across tab reopen.
+- Host-side media scheduling: four active / sixteen queued remote transfers, thumbnail priority, cancellation through queued/active requests, a 20-second transfer budget and one transient retry. Source/MIME/SHA-256-verified cache entries persist asynchronously with a 256 MiB disk budget; HTTPS/public-IP/redirect/SVG restrictions and WebView CSP are preserved.
 - Generative UI (`ui.present`): version-1 data-only interactive forms in chat with 11 native controls (`text`, `input`, `textarea`, `number`, `slider`, `checkbox`, `switch`, `select`, `radio`, `multiselect`, `button`).
 - Full interaction lifecycle (`waiting_input` + `rendered` display milestone, `submitted` with `continuation: "pending" | "admitted"`, `cancelled`, `expired`), task/message identity binding, same-batch dependent-tool pause, cancellation without extra model calls, expiry on new user tasks or branch switches, and session-safe history restoration.
 - Settings → Agent → Execution behaviors: `Interaction policy` (`standard` | `aggressive` | `minimal`, default `standard`), decoupled from models/providers while preserving tool approvals and mandatory subagent Auto Ask gates.
 - Invalid or unsupported forms degrade to an isolated text error. Component counts, text, options and numeric ranges are bounded; generated HTML, scripts and commands are never executed.
+- Embedded Python runtime for the `python` tool: pinned CPython 3.12.16 with stdlib and pip, plus uv 0.13.6, packaged as a reproducible 38.6 MB archive with CPython, pip/vendored, uv (Apache-2.0/MIT) and Tcl/Tk license notices.
+- Lazy, content-addressed runtime installation with atomic environment versions, an offline `venv` built from bundled ensurepip wheels, a shared `uv` cache, and a single install lock; old runtimes remain usable by live sessions.
+- `--npi-python-host` one-shot JSON protocol on the desktop executable for `ensure`, `environment`, and `packages` list/install, with resource-directory override and push-style progress.
+- Source checkout build gate: the generated runtime archive is gitignored, `scripts/build-python-runtime.sh` prepares it, and `scripts/check-python-runtime.mjs` fails the build with a concrete command when the archive is missing or its size/SHA-256 does not match the committed manifest.
+
+### Changed
+
+- Chat mode now uses an English NPi Renaissance human-centered rich interaction policy: sourced visual answers and Display UI when useful, necessary Interactive UI only, concise ordinary chat and text-only preferences respected. Tool guidance names actual `web_search`, `read` and eval browser capabilities rather than nonexistent image-search/fetch/map tools.
+- Python execution now uses the desktop-managed absolute interpreter and environment. `omp` no longer unpacks the archive, creates a virtual environment, or falls back to a system/project interpreter when the desktop host is configured.
 
 ## [2.0.0.258] - 2026-11-02
 

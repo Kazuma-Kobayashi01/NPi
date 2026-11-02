@@ -1,6 +1,6 @@
 [package]
 name = "omp-desktop"
-version = "2.0.0-320"
+version = "2.0.0-378"
 edition = "2021"
 
 [lib]
@@ -37,8 +37,16 @@ tungstenite = { version = "0.30", default-features = false, features = ["handsha
 # HTTP client for chat image fetching with strict public DNS/IP pinning.
 # Uses reqwest 0.13 already resolved in Cargo.lock with blocking and rustls.
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+# Real deadline enforcement for chat image admission and blocking DNS joins,
+# on the same Tauri/Tokio runtime (time only; the runtime features are already
+# enabled by Tauri/reqwest). Already resolved in Cargo.lock.
+tokio = { version = "1", features = ["time"] }
 # URL parsing for chat image targets and redirect validation. Already in Cargo.lock.
 url = "2"
+# Archive extraction for the bundled Python runtime (`src/python_runtime/`).
+# Both are already resolved in Cargo.lock.
+flate2 = "1"
+tar = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

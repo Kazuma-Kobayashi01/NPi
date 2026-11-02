@@ -321,6 +321,10 @@
        useMarkdownClick at top level. -->
   <script type="text/babel" src="design/ui/chart-view.jsx"></script>
   <script type="text/babel" src="design/ui/mermaid-view.jsx"></script>
+  <!-- Progressive shared image loader; markdown-image.jsx and
+       generative-ui.jsx call its hook, and app-live.jsx creates one store
+       per conversation for MarkdownMediaContext. -->
+  <script src="app/image-loader.js"></script>
   <script type="text/babel" src="design/ui/markdown-image.jsx"></script>
   <script type="text/babel" src="design/ui/markdown.jsx"></script>
   <script type="text/babel" src="design/ui/plan-annotations.jsx"></script>

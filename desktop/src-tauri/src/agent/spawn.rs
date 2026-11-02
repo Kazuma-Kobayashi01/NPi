@@ -68,6 +68,10 @@ impl Omp {
         cmd.stdin(Stdio::null());
         cmd.env("PATH", &self.path);
         sanitize_child_env(&mut cmd);
+        cmd.env(
+            "NPI_PYTHON_HOST",
+            std::env::current_exe().expect("desktop executable path"),
+        );
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
@@ -361,6 +365,7 @@ pub(super) fn spawn_omp(
         resume,
         profile,
         mode,
+        app_mode,
         config,
         prompt,
         append_prompt,
@@ -394,6 +399,7 @@ pub(super) fn spawn_omp(
     // piped. No `cmd /C` wrapper on Windows: killing cmd.exe would orphan
     // omp without a Job Object.
     let mut cmd = omp.command();
+    cmd.env("NPI_APP_MODE", app_mode);
     cmd.args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

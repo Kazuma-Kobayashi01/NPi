@@ -1,6 +1,24 @@
 // Bounded, data-only Generative UI consumer. Kernel validation is authoritative.
 (function () {
   const blocked = new Set(["__proto__", "constructor", "prototype"]);
+  /** Mirrors the kernel: model image references stay compact and public. */
+  const MAX_IMAGE_REF = 2048;
+
+  function localHostname(hostname) {
+    const host = String(hostname).toLowerCase().replace(/\.$/, "");
+    if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
+    const address = host.startsWith("[") ? host.slice(1, -1) : host;
+    if (address.startsWith("::ffff:")) return true;
+    if (address === "::1" || address === "::") return true;
+    if (/^f[cd][0-9a-f]{2}:/.test(address) || /^fe[89ab][0-9a-f]:/.test(address)) return true;
+    const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address);
+    if (!v4) return false;
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 127 || a === 10 || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 168 || b === 0)) ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+
   const keys = {
     // Display components
     text: ["type", "id", "text", "label", "visibleWhen"],
@@ -18,6 +36,7 @@
     "line-chart": ["type", "id", "title", "unit", "data", "visibleWhen"],
     "pie-chart": ["type", "id", "title", "unit", "data", "visibleWhen"],
     divider: ["type", "id", "label", "visibleWhen"],
+    image: ["type", "id", "src", "thumbnail", "alt", "title", "sourceUrl", "attribution", "visibleWhen"],
     // Interactive components
     button: ["type", "id", "label"],
     input: ["type", "id", "label", "default", "required", "minLength", "maxLength", "placeholder", "visibleWhen"],
@@ -220,6 +239,46 @@
         });
       } else if (c.type === "divider") {
         if (c.label !== undefined) c.label = text(c.label, 120, "divider label");
+      } else if (c.type === "image") {
+        const imageRef = (value, name, normalize) => {
+          const out = normalize(string(value, MAX_IMAGE_REF, name), name);
+          total += out.length;
+          return out;
+        };
+        const normalizeHttps = (s, name) => {
+          if (/\s/.test(s)) throw new Error(`Invalid ${name} (whitespace is not allowed)`);
+          let url;
+          try {
+            url = new URL(s);
+          } catch {
+            throw new Error(`Invalid ${name} (absolute https URL required)`);
+          }
+          if (url.protocol !== "https:") throw new Error(`${name} must use https`);
+          if (url.username !== "" || url.password !== "") throw new Error(`${name} must not embed credentials`);
+          if (localHostname(url.hostname)) throw new Error(`${name} must not target a local host`);
+          // Keep the canonical spelling the host's loader recognises, and
+          // enforce the bound after percent-encoding can expand it.
+          const canonical = url.toString();
+          if (canonical.length > MAX_IMAGE_REF) throw new Error(`Invalid ${name} (canonical URL exceeds ${MAX_IMAGE_REF} characters)`);
+          return canonical;
+        };
+        const normalizeProjectPath = (s, name) => {
+          if (s.startsWith("/") || s.startsWith("\\") || s.startsWith("~")) {
+            throw new Error(`${name} must be project-relative`);
+          }
+          const segments = s.split(/[\\/]/);
+          if (segments.some(segment => segment === "" || segment === "." || segment === "..")) {
+            throw new Error(`${name} must be a normalized project-relative path`);
+          }
+          return segments.join("/");
+        };
+        c.src = imageRef(c.src, "image.src", (s, name) =>
+          /^[A-Za-z][A-Za-z0-9+.-]*:/.test(s) ? normalizeHttps(s, name) : normalizeProjectPath(s, name));
+        if (c.thumbnail !== undefined) c.thumbnail = imageRef(c.thumbnail, "image.thumbnail", normalizeHttps);
+        if (c.alt !== undefined) c.alt = text(c.alt, 300, "image.alt");
+        if (c.title !== undefined) c.title = text(c.title, 160, "image.title");
+        if (c.sourceUrl !== undefined) c.sourceUrl = imageRef(c.sourceUrl, "image.sourceUrl", normalizeHttps);
+        if (c.attribution !== undefined) c.attribution = text(c.attribution, 200, "image.attribution");
       } else if (c.type === "button") {
         buttons++;
         c.label = text(c.label, 120, "button label");

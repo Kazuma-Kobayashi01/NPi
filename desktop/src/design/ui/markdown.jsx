@@ -10,8 +10,9 @@ const { copyCodeBlockClick: _MdCopyClick } = window;
 // (app-live.jsx: the browser panel's localhost links), null for none.
 const MarkdownLinkContext = React.createContext(null);
 
-// Media context: carries conversation identity and image resolver
-// { key: conversation identity, resolveImage: async source => ({data, mimeType}) }
+// Media context: one progressive image store per conversation
+// (app-live.jsx → app/image-loader.js): { key, peekImage, subscribeImage,
+// retryImage, resolveImage }. Images never fetch directly from the webview.
 // Fail loudly if missing; no fake dummy fallbacks.
 const MarkdownMediaContext = React.createContext(null);
 

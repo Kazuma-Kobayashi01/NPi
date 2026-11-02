@@ -10,6 +10,56 @@ The same menu ticks one profile as the **startup default**, stored as `ProfilesF
 
 **Composer and plan mode are per tab too** (#28), but desktop-only state omp never sees, so they live in React rather than in the bridge snapshot: `app-live.jsx` keeps a `plans` map and `design/composer.jsx` a `drafts` map (text, attachments, collapsed pastes, prompt-history recall position, in-flight image count), both keyed by session id via `app/session-ui.js` (regression `test-session-ui.mjs`) and pruned when a tab closes. Both key on `activeProject.id` (the tab being rendered, `""` with none open — a no-op key). The `Composer` deliberately stays mounted across tab switches rather than being re-keyed: a remount would re-fire its `draftInsert`/`promptInsert` effects, and an image still being prepared must land in the tab it was pasted into (`addFiles` captures the id), not in whichever tab is active when it resolves. Purely visual state (caret, slash selection, mention list) is reset on a switch instead. Plan state is not reset by `/new` or a profile respawn inside the same tab. The column beside the chat is per tab the same way (`app-live.jsx` `sides`: the rail, the conversation tree or the browser panel; `docs/architecture/browser.md`).
 
+## Chat rich interaction and image ownership
+
+`app_mode.rs::CHAT_PROMPT` is the English, human-centered Chat base prompt,
+not a second runtime. Chat favors sourced visual explanations and useful
+Display UI, but keeps ordinary conversation concise, honors text-only
+preferences, and uses Interactive UI only for necessary bounded input.
+Permissions and mandatory Ask gates are unchanged. Available research
+surfaces are `web_search` (text-source discovery), `read` (known URLs), and
+the enabled eval `browser` prelude for dynamic pages. There is no dedicated
+image-search tool or interactive map renderer; real source-page images and
+static map images can be displayed without pretending otherwise.
+
+`OMP_CHAT_IMAGE` supplies the shared `MarkdownMediaContext` for Markdown
+and `ui.present` image components. A component's `src`, optional real
+`thumbnail`, source-page URL, attribution and stable UI id are persisted as
+metadata, not base64 image payloads. Each component renders its placeholder
+immediately and independently, preserving source order while text streams.
+A distinct thumbnail loads first; a full-image failure retains that preview.
+An undecodable image becomes a retryable error instead of endless loading.
+
+The disk-cache conversation key is `[profileId, sessionFile ?? tabId]`;
+a saved conversation must not include the ephemeral tab id in that key.
+The in-memory store is still tied to the active tab and disposed on switch.
+Subscribers share requests by source; one unmount does not abort another
+subscriber's transfer, while the last subscriber cancels its pending host
+request. Failed sources retry explicitly, not in an automatic frontend loop.
+Completed unpinned entries have a 24-entry / 32 MiB memory-cache budget.
+
+`chat_image_read` accepts a request id and `thumbnail`/`full` priority;
+`chat_image_cancel` is scoped by tab id plus request id. The Rust manager
+admits four remote transfers and sixteen queued transfers, dispatching
+queued thumbnails first. One 20-second deadline covers admission and
+network resolution/redirect/body work; only transient transfer failures
+retry once inside that budget. Cancellation drops the active HTTP future.
+A system DNS lookup already running on a blocking worker cannot be killed,
+but its result is discarded and no longer holds the caller or transfer slot.
+
+Remote images retain HTTPS-only public DNS/IP pinning, per-redirect
+validation, the 8 MiB body cap and remote-SVG rejection. The WebView still
+receives only host-validated data URLs under the unchanged CSP. Cache reads
+validate source, size, MIME signature and SHA-256; old entries without a
+digest are validated and upgraded. Atomic persistence and oldest-file
+eviction to a 256 MiB disk budget run off the first-display path.
+
+Host timing logs cover validation, transfer, cache lookup/write and total
+request time using hosts and hashes rather than full source URLs. Frontend
+debug records cover thumbnail/full receipt and decode; search logs record
+elapsed time, provider, source count and failure status without query text.
+These measurements are diagnostic samples, not a guaranteed network SLA.
+
 ## Plan usage refresh
 
 `app/use-quotas.jsx` reads subscription limits for the active profile on entry.

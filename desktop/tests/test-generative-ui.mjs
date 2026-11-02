@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { test } from "node:test";
-const ctx = vm.createContext({ console });
+const ctx = vm.createContext({ console, URL });
 ctx.window = ctx;
 for (const file of ["app/generative-ui.js", "app/turn-status.js", "app/transcript-merge.js", "adapter.js"]) {
   vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8"), ctx, { filename: file });
@@ -430,11 +430,12 @@ test("display mode normalizes components, requires no submit button, and renders
       { type: "tabs", id: "tab1", items: [{ id: "tab_a", label: "Overview", content: "All good" }] },
       { type: "bar-chart", id: "chart1", data: [{ label: "A", value: 10 }, { label: "B", value: 20 }] },
       { type: "divider", id: "d1", label: "Section" },
+      { type: "image", id: "img1", src: "images/diagram.png", alt: "Diagram", title: "Diagram title" },
     ],
   };
   const s = H.normalizeSchema(displaySchema);
   assert.equal(s.mode, "display");
-  assert.equal(s.components.length, 11);
+  assert.equal(s.components.length, 12);
 
   // Display mode rejects submit buttons or input controls
   assert.throws(() => H.normalizeSchema({ ...displaySchema, components: [...displaySchema.components, { type: "button", id: "btn", label: "Submit" }] }));
@@ -471,4 +472,72 @@ test("interactive mode supports option-cards and time-picker", () => {
   assert.deepEqual(own(H.validateValues(interactiveSchema, { plan: "opt2", alarm: "14:00" })), {});
   assert.ok(Object.keys(H.validateValues(interactiveSchema, { plan: "invalid", alarm: "14:00" })).length > 0);
   assert.throws(() => H.validateValues(interactiveSchema, { plan: "opt1", alarm: "14:00", extra: "illegal" }));
+});
+
+test("image components mirror kernel references and render through a component boundary", () => {
+  const fixtureImage = {
+    type: "image",
+    id: "prismatic",
+    src: "https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/media/images/Midway.png",
+    thumbnail: "https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/styles/thumbnail/public/media/images/Midway.png?itok=MTMzyGco",
+    alt: "Grand Prismatic Spring",
+    title: "Grand Prismatic Spring",
+    sourceUrl: "https://www.usgs.gov/media/images/grand-prismatic-spring-midway-geyser-basin-yellowstone-national-park",
+    attribution: "Robert Fournier / USGS public domain",
+  };
+  const s = H.normalizeSchema({ version: 1, mode: "display", components: [fixtureImage, { type: "image", id: "local", src: "images/map.png" }] });
+  assert.equal(s.components[0].src, fixtureImage.src);
+  assert.equal(s.components[0].thumbnail, fixtureImage.thumbnail);
+  assert.equal(s.components[0].sourceUrl, fixtureImage.sourceUrl);
+  assert.equal(s.components[0].attribution, fixtureImage.attribution);
+  assert.equal(s.components[1].src, "images/map.png");
+
+  const normalizedRefs = H.normalizeSchema({
+    version: 1, mode: "display",
+    components: [
+      { type: "image", id: "spaces", src: "assets/my image.png" },
+      { type: "image", id: "slashes", src: "assets\\nested\\my image.png" },
+      { type: "image", id: "canonical", src: "HTTPS://EXAMPLE.COM/Photo.PNG", sourceUrl: "HTTPS://WWW.USGS.GOV/photo" },
+    ],
+  });
+  assert.equal(normalizedRefs.components[0].src, "assets/my image.png");
+  assert.equal(normalizedRefs.components[1].src, "assets/nested/my image.png");
+  assert.equal(normalizedRefs.components[2].src, "https://example.com/Photo.PNG");
+  assert.equal(normalizedRefs.components[2].sourceUrl, "https://www.usgs.gov/photo");
+
+  // References share the same 32 KiB budget as the rest of the card.
+  const longRefs = Array.from({ length: 20 }, (_, i) => ({ type: "image", id: `long${i}`, src: "a".repeat(2000) }));
+  assert.throws(() => H.normalizeSchema({ version: 1, mode: "display", components: longRefs }), /text exceeds limit/);
+
+  const componentSchema = H.normalizeSchema({
+    version: 1, mode: "display",
+    components: [{ type: "text", id: "copy", text: "Field notes stay readable while the image loads." }, fixtureImage],
+  });
+  const render = formHarness();
+  const msg = H.messageToUi(present(componentSchema));
+  const tree = render({ msg, disabled: false });
+  const text = nodes(tree).find(node => node.type === "div" && node.props.className === "gui-text");
+  assert.ok(text, "text renders independently of the pending image");
+  const image = nodes(tree).find(node => typeof node.type === "function" && node.type.name === "GenerativeUiImage");
+  assert.ok(image, "registry entry must create a component element, not call the loader hook directly");
+  assert.equal(image.props.component.src, fixtureImage.src);
+
+  const reject = (patch) => assert.throws(() => H.normalizeSchema({ version: 1, mode: "display", components: [{ ...fixtureImage, ...patch }] }));
+  reject({ src: "http://example.com/a.png" });
+  reject({ src: "data:image/png;base64,AAAA" });
+  reject({ src: "/absolute.png" });
+  reject({ src: "../escape.png" });
+  reject({ src: "images//map.png" });
+  reject({ src: "https://localhost/a.png" });
+  reject({ src: "https://127.0.0.1/a.png" });
+  reject({ src: "https://example.com/my image.png" });
+  reject({ src: `https://example.com/${"图".repeat(230)}` });
+  reject({ src: "\\absolute.png" });
+  reject({ src: "~home.png" });
+  reject({ src: "x".repeat(2049) });
+  reject({ thumbnail: "http://example.com/a.png" });
+  reject({ sourceUrl: "https://127.0.0.1/page" });
+  reject({ alt: "x".repeat(301) });
+  reject({ title: "x".repeat(161) });
+  reject({ attribution: "x".repeat(201) });
 });

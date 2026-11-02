@@ -4245,11 +4245,26 @@
     },
 
     /** Resolve an inline image through the host's conversation-private cache.
+     * `options.priority` asks for the preview or the full bytes; `requestId`
+     * lets an unmounted card cancel its own queued/network request.
      * Rejections stay visible in the Markdown image, not as empty thumbnails. */
-    chatImageRead(source, conversationKey, sessionId) {
+    chatImageRead(source, conversationKey, sessionId, options = {}) {
+      const { requestId, priority } = options;
       return window.__TAURI__.core.invoke("chat_image_read", {
         sessionId, conversationKey, source,
+        ...(requestId ? { requestId } : {}),
+        ...(priority ? { priority } : {}),
       });
+    },
+
+    /** Best-effort cancel of one image request; a resolved request is a no-op. */
+    chatImageCancel(sessionId, requestId) {
+      if (!window.__TAURI__) return Promise.resolve(false);
+      return window.__TAURI__.core.invoke("chat_image_cancel", { sessionId, requestId })
+        .catch(error => {
+          console.debug("[live] image cancel failed:", error);
+          return false;
+        });
     },
 
     /** Stage a file's changes (`git add`). */
@@ -5001,6 +5016,17 @@
      *  webview's navigation guard — see `open_url_external`). */
     openExternalUrl(url) {
       return _invokeResult("open_url_external", { url });
+    },
+
+    // ── Embedded Python Runtime (src-tauri/src/python_runtime/) ────────────
+    pythonRuntimeStatus() {
+      return _invokeSafe("python_runtime_status", {}, null);
+    },
+    pythonRuntimeEnsure() {
+      return _invokeResult("python_runtime_ensure", {});
+    },
+    pythonRuntimePackages() {
+      return _invokeResult("python_runtime_packages", {});
     },
 
     /** Update the in-memory prompt-history cap (Settings → Composer,

@@ -151,6 +151,8 @@ pub struct Launch<'a> {
     pub profile: Option<&'a str>,
     /// `--approval-mode`, from `approval_mode::ApprovalModeStore::resolve`.
     pub mode: crate::approval_mode::ApprovalMode,
+    /// Desktop mode, captured when the session starts.
+    pub app_mode: &'a str,
     /// Settings overlay passed as `--config=<path>` (the tab's browser
     /// `cdpUrl`, see `crate::browser`); `None` = no overlay.
     pub config: Option<&'a std::path::Path>,

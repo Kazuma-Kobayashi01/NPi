@@ -375,6 +375,77 @@
   word-break: break-all;
 }
 
+.md-image-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.md-image-status.is-error {
+  color: var(--rose, #ed8796);
+}
+
+.md-image-retry {
+  margin-top: 4px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.md-image-retry:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.md-image-retry:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Generative UI image cards share the Markdown media presentation. */
+.gui-image-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  margin: 4px 0;
+}
+
+.gui-image-card .gui-image-img {
+  cursor: default;
+}
+
+.gui-image-card .gui-image-img:hover {
+  transform: none;
+  opacity: 1;
+}
+
+.gui-image-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.gui-image-credit {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
 .md-image-external-link,
 .md-image-attribution {
   font-size: 11px;

@@ -1,5 +1,6 @@
-//! Bounded child-process runs, shared by widget plugins (`widgets/run.rs`)
-//! and the PR lookup's `gh` calls (`pr_automation/gh.rs`): [`collect`] runs
+//! Bounded child-process runs, shared by widget plugins (`widgets/run.rs`),
+//! the PR lookup's `gh` calls (`pr_automation/gh.rs`) and the Python
+//! runtime's helper programs (`python_runtime/command.rs`): [`collect`] runs
 //! a spawned child to its exit under a deadline with capped output.
 //!
 //! A blocking `read` cannot observe the deadline while the child is idle, so
@@ -33,8 +34,9 @@ pub struct Finished {
     pub status: ExitStatus,
     /// At most the cap's worth, from the start.
     pub stdout: Vec<u8>,
-    /// The last bytes of stderr, read only for a failed run (empty when it
-    /// succeeded or its reader missed the deadline).
+    /// The last bytes of stderr: for a failed run, or for a successful one
+    /// when [`collect_keeping_stderr`] was used (empty when the reader
+    /// missed the deadline).
     pub stderr: Vec<u8>,
 }
 
@@ -44,6 +46,9 @@ pub struct Finished {
 /// say). Once the child exits, whatever it left behind is killed at once
 /// rather than when the supervisor drops, so a background holder of a pipe
 /// cannot stall the readers until the deadline. Every error kills the tree.
+///
+/// Stderr is returned only for a failed run; [`collect_keeping_stderr`]
+/// keeps it for a successful one too.
 pub fn collect(
     child: &mut Child,
     supervisor: &ProcessSupervisor,
@@ -51,6 +56,48 @@ pub fn collect(
     stderr_keep: usize,
     deadline: Instant,
     started: impl FnOnce(&mut Child) -> Result<(), String>,
+) -> Result<Finished, WaitError> {
+    collect_inner(
+        child,
+        supervisor,
+        stdout_cap,
+        stderr_keep,
+        deadline,
+        started,
+        false,
+    )
+}
+
+/// [`collect`], but the returned [`Finished::stderr`] keeps the tail of
+/// stderr even when the child succeeded: `uv` and `pip` report warnings and
+/// what they installed there.
+pub fn collect_keeping_stderr(
+    child: &mut Child,
+    supervisor: &ProcessSupervisor,
+    stdout_cap: usize,
+    stderr_keep: usize,
+    deadline: Instant,
+    started: impl FnOnce(&mut Child) -> Result<(), String>,
+) -> Result<Finished, WaitError> {
+    collect_inner(
+        child,
+        supervisor,
+        stdout_cap,
+        stderr_keep,
+        deadline,
+        started,
+        true,
+    )
+}
+
+fn collect_inner(
+    child: &mut Child,
+    supervisor: &ProcessSupervisor,
+    stdout_cap: usize,
+    stderr_keep: usize,
+    deadline: Instant,
+    started: impl FnOnce(&mut Child) -> Result<(), String>,
+    keep_stderr: bool,
 ) -> Result<Finished, WaitError> {
     let (Some(out_pipe), Some(err_pipe)) = (child.stdout.take(), child.stderr.take()) else {
         terminate(supervisor, child);
@@ -76,7 +123,7 @@ pub fn collect(
     if overflow.load(Ordering::Relaxed) {
         return Err(WaitError::Overflow);
     }
-    let stderr = if status.success() {
+    let stderr = if status.success() && !keep_stderr {
         Vec::new()
     } else {
         recv_until(&stderr_rx, deadline)
@@ -214,5 +261,29 @@ mod tests {
         input.extend_from_slice(b"END");
         let rx = spawn_drain(std::io::Cursor::new(input), 5, None).expect("thread");
         assert_eq!(rx.recv().expect("result").expect("read"), b"aaEND");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_successful_run_keeps_stderr_only_when_asked() {
+        let started = Instant::now() + Duration::from_secs(10);
+        let run = |keep: bool| {
+            let mut cmd = crate::test_support::shell("echo 'note' >&2; echo out");
+            cmd.stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
+            let mut child = crate::spawn_gate::spawn(&mut cmd).expect("spawn");
+            let supervisor = ProcessSupervisor::attach(&child);
+            let done = if keep {
+                collect_keeping_stderr(&mut child, &supervisor, 1024, 1024, started, |_| Ok(()))
+            } else {
+                collect(&mut child, &supervisor, 1024, 1024, started, |_| Ok(()))
+            }
+            .expect("collect");
+            assert!(done.status.success());
+            assert_eq!(done.stdout, b"out\n");
+            done.stderr
+        };
+        assert_eq!(run(false), Vec::<u8>::new());
+        assert_eq!(run(true), b"note\n");
     }
 }

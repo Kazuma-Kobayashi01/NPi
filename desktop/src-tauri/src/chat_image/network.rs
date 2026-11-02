@@ -1,15 +1,30 @@
-//! Public network validation, Cloudflare DoH fallback, and HTTPS image fetching.
+//! Public network validation, Cloudflare `DoH` fallback, and cancellable HTTPS
+//! image fetching.
+//!
+//! Everything below the URL parser is async so cancellation can drop the
+//! reqwest future, which closes the connection (and a partially read body)
+//! instead of letting the transfer run to completion for a discarded caller.
+//! The trust rules are unchanged: HTTPS only, no userinfo, system DNS answers
+//! must be public (Fake-IP ranges re-resolve through pinned Cloudflare `DoH`),
+//! every redirect hop is revalidated, and the client resolves only the pinned
+//! addresses (no second, rebindable lookup).
 
-use std::io::Read as _;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs as _};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use url::{Host, Url};
 
+use super::{with_cancel, CancelToken};
+
 pub(super) const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 
 const MAX_REDIRECTS: usize = 5;
+const MAX_DOH_BYTES: u64 = 64 * 1024;
+/// A retry is only useful with enough budget left for a second transfer.
+const RETRY_MIN_BUDGET: Duration = Duration::from_secs(2);
+const CONNECT_TIMEOUT_CAP: Duration = Duration::from_secs(10);
+const DOH_TIMEOUT_CAP: Duration = Duration::from_secs(10);
 
 const CLOUDFLARE_DOH_HOST: &str = "cloudflare-dns.com";
 const CLOUDFLARE_BOOTSTRAP_IPS: &[IpAddr] = &[
@@ -18,6 +33,65 @@ const CLOUDFLARE_BOOTSTRAP_IPS: &[IpAddr] = &[
     IpAddr::V6(Ipv6Addr::new(0x2606, 0x4700, 0x4700, 0, 0, 0, 0, 0x1111)),
     IpAddr::V6(Ipv6Addr::new(0x2606, 0x4700, 0x4700, 0, 0, 0, 0, 0x1001)),
 ];
+
+const fn user_agent() -> &'static str {
+    concat!("NPi-Desktop/", env!("CARGO_PKG_VERSION"))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FetchErrorKind {
+    Cancelled,
+    Fatal,
+    Transient,
+}
+
+/// A transfer failure. `Transient` may be retried once (connect/timeout, 408,
+/// 429, 5xx, a truncated body); `Fatal` never is: the URL, DNS answer, size or
+/// image signature failed validation, and retrying would repeat the same
+/// refusal. Messages never echo the URL (and therefore no query string).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct FetchError {
+    kind: FetchErrorKind,
+    message: String,
+}
+
+impl FetchError {
+    fn cancelled() -> Self {
+        Self {
+            kind: FetchErrorKind::Cancelled,
+            message: "image request cancelled".to_string(),
+        }
+    }
+
+    fn fatal(message: impl Into<String>) -> Self {
+        Self {
+            kind: FetchErrorKind::Fatal,
+            message: message.into(),
+        }
+    }
+
+    fn transient(message: impl Into<String>) -> Self {
+        Self {
+            kind: FetchErrorKind::Transient,
+            message: message.into(),
+        }
+    }
+
+    pub(super) fn is_cancelled(&self) -> bool {
+        self.kind == FetchErrorKind::Cancelled
+    }
+
+    pub(super) fn into_message(self) -> String {
+        self.message
+    }
+}
+
+pub(super) struct FetchedImage {
+    pub bytes: Vec<u8>,
+    pub mime_type: &'static str,
+    pub validation_ms: u64,
+    pub transfer_ms: u64,
+}
 
 #[derive(Debug, Deserialize)]
 struct CloudflareDnsResponse {
@@ -43,7 +117,7 @@ pub(super) enum DnsResolutionDecision {
 }
 
 /// Whether `ip` falls within the 198.18.0.0/15 benchmarking range used by Fake-IP proxies.
-pub(super) fn is_fake_ip_benchmark(ip: IpAddr) -> bool {
+pub(super) const fn is_fake_ip_benchmark(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let o = v4.octets();
@@ -149,8 +223,8 @@ pub(super) fn evaluate_system_dns_answers(
 }
 
 pub(super) fn parse_doh_answers(json_str: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
-    let resp: CloudflareDnsResponse = serde_json::from_str(json_str)
-        .map_err(|e| format!("invalid Cloudflare DoH JSON: {e}"))?;
+    let resp: CloudflareDnsResponse =
+        serde_json::from_str(json_str).map_err(|e| format!("invalid Cloudflare DoH JSON: {e}"))?;
 
     if let Some(err) = resp.error {
         return Err(format!("Cloudflare DoH error: {err}"));
@@ -182,80 +256,6 @@ pub(super) fn parse_doh_answers(json_str: &str, port: u16) -> Result<Vec<SocketA
     Ok(addrs)
 }
 
-fn query_cloudflare_doh_record(
-    client: &reqwest::blocking::Client,
-    domain: &str,
-    record_type: &str,
-    port: u16,
-) -> Result<Vec<SocketAddr>, String> {
-    let url = format!("https://{CLOUDFLARE_DOH_HOST}/dns-query?name={domain}&type={record_type}");
-    let response = client
-        .get(&url)
-        .header(reqwest::header::ACCEPT, "application/dns-json")
-        .header(
-            "User-Agent",
-            concat!("NPi-Desktop/", env!("CARGO_PKG_VERSION")),
-        )
-        .send()
-        .map_err(|e| format!("Cloudflare DoH request failed for {domain}: {e}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "Cloudflare DoH HTTP error status: {}",
-            response.status()
-        ));
-    }
-
-    let mut body = String::new();
-    response
-        .take(64 * 1024)
-        .read_to_string(&mut body)
-        .map_err(|e| format!("failed to read DoH response: {e}"))?;
-
-    parse_doh_answers(&body, port)
-}
-
-fn resolve_via_cloudflare_doh(domain: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
-    let bootstrap_addrs: Vec<SocketAddr> = CLOUDFLARE_BOOTSTRAP_IPS
-        .iter()
-        .map(|ip| SocketAddr::new(*ip, 443))
-        .collect();
-
-    let client = reqwest::blocking::Client::builder()
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(10))
-        .resolve_to_addrs(CLOUDFLARE_DOH_HOST, &bootstrap_addrs)
-        .build()
-        .map_err(|e| format!("failed to build DoH client: {e}"))?;
-
-    let mut addrs = query_cloudflare_doh_record(&client, domain, "A", port)?;
-    if addrs.is_empty() {
-        addrs = query_cloudflare_doh_record(&client, domain, "AAAA", port)?;
-    }
-
-    if addrs.is_empty() {
-        return Err(format!(
-            "Cloudflare DoH returned no public IP addresses for {domain}"
-        ));
-    }
-
-    Ok(addrs)
-}
-
-fn resolve_domain_addrs(domain: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
-    let resolved = (domain, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("DNS resolution failed for {domain}: {e}"))?
-        .collect::<Vec<_>>();
-
-    match evaluate_system_dns_answers(domain, &resolved) {
-        DnsResolutionDecision::UseDirect(addrs) => Ok(addrs),
-        DnsResolutionDecision::QueryDoH => resolve_via_cloudflare_doh(domain, port),
-        DnsResolutionDecision::Deny(reason) => Err(reason),
-    }
-}
-
 pub(super) fn detect_image_mime(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         Some("image/png")
@@ -283,113 +283,369 @@ pub(super) fn detect_image_mime(bytes: &[u8]) -> Option<&'static str> {
 
 fn is_svg(bytes: &[u8]) -> bool {
     std::str::from_utf8(bytes).is_ok_and(|s| {
-        let trimmed = s.trim_start();
+        let trimmed = s.trim_start_matches('\u{feff}').trim_start();
         trimmed.starts_with("<svg") || (trimmed.starts_with("<?xml") && trimmed.contains("<svg"))
     })
 }
 
-pub(super) fn fetch_public_https_image(
-    url_str: &str,
-) -> Result<(Vec<u8>, &'static str), String> {
-    let mut current_url = Url::parse(url_str).map_err(|e| format!("invalid image URL: {e}"))?;
+fn milliseconds(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
 
-    for hop in 0..=MAX_REDIRECTS {
-        if current_url.scheme() != "https" {
-            return Err("only HTTPS URLs are permitted".to_string());
+fn remaining(deadline: Instant) -> Result<Duration, FetchError> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() {
+        return Err(FetchError::transient("image request timed out"));
+    }
+    Ok(left)
+}
+
+/// URL-level preflight, before any socket is opened: HTTPS, no userinfo, and a
+/// literal host IP must already be public. Domain hosts are resolved (and
+/// pinned) in [`resolve_domain_addrs`]; every redirect target repeats this.
+fn validate_url_target(url: &Url) -> Result<(), FetchError> {
+    if url.scheme() != "https" {
+        return Err(FetchError::fatal("only HTTPS URLs are permitted"));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(FetchError::fatal(
+            "URL userinfo credentials are not permitted",
+        ));
+    }
+    match url.host() {
+        Some(Host::Ipv4(v4)) if !is_public_ipv4(v4) => Err(FetchError::fatal(format!(
+            "non-public IP address {v4} is denied"
+        ))),
+        Some(Host::Ipv6(v6)) if !is_public_ipv6(v6) => Err(FetchError::fatal(format!(
+            "non-public IP address {v6} is denied"
+        ))),
+        Some(_) => Ok(()),
+        None => Err(FetchError::fatal("URL missing host")),
+    }
+}
+
+fn describe_send_error(error: &reqwest::Error) -> FetchError {
+    if error.is_timeout() {
+        FetchError::transient("request timed out")
+    } else if error.is_connect() {
+        FetchError::transient("connection failed")
+    } else {
+        FetchError::transient("network request failed")
+    }
+}
+
+fn describe_body_error(error: &reqwest::Error) -> FetchError {
+    if error.is_timeout() {
+        FetchError::transient("response body timed out")
+    } else {
+        FetchError::transient("response body read failed")
+    }
+}
+
+fn http_status_error(status: reqwest::StatusCode) -> FetchError {
+    let code = status.as_u16();
+    let retryable = code == 408 || code == 425 || code == 429 || (500..=599).contains(&code);
+    let message = format!("HTTP error status: {status}");
+    if retryable {
+        FetchError::transient(message)
+    } else {
+        FetchError::fatal(message)
+    }
+}
+
+/// Read at most `cap` bytes, watching the cancel token between chunks. The
+/// per-client `timeout` bounds a stalled server; cancellation drops the
+/// response future immediately.
+async fn read_body_capped(
+    response: &mut reqwest::Response,
+    cap: u64,
+    token: &CancelToken,
+    limit_message: &str,
+) -> Result<Vec<u8>, FetchError> {
+    let mut bytes = Vec::new();
+    loop {
+        let chunk = with_cancel(token, response.chunk())
+            .await
+            .map_err(|_| FetchError::cancelled())?
+            .map_err(|e| describe_body_error(&e))?;
+        let Some(chunk) = chunk else {
+            break;
+        };
+        if bytes.len() as u64 + chunk.len() as u64 > cap {
+            return Err(FetchError::fatal(limit_message));
         }
-        if !current_url.username().is_empty() || current_url.password().is_some() {
-            return Err("URL userinfo credentials are not permitted".to_string());
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+async fn resolve_domain_addrs(
+    domain: &str,
+    port: u16,
+    token: &CancelToken,
+    deadline: Instant,
+) -> Result<Vec<SocketAddr>, FetchError> {
+    let lookup_domain = domain.to_string();
+    let join = with_cancel(
+        token,
+        tauri::async_runtime::spawn_blocking(move || {
+            (lookup_domain.as_str(), port)
+                .to_socket_addrs()
+                .map(std::iter::Iterator::collect::<Vec<_>>)
+        }),
+    )
+    .await
+    .map_err(|_| FetchError::cancelled())?;
+    let resolved = join
+        .map_err(|e| FetchError::transient(format!("DNS lookup task failed: {e}")))?
+        .map_err(|e| FetchError::transient(format!("DNS resolution failed for {domain}: {e}")))?;
+
+    match evaluate_system_dns_answers(domain, &resolved) {
+        DnsResolutionDecision::UseDirect(addrs) => Ok(addrs),
+        DnsResolutionDecision::QueryDoH => {
+            resolve_via_cloudflare_doh(domain, port, token, deadline).await
         }
+        DnsResolutionDecision::Deny(reason) => Err(FetchError::fatal(reason)),
+    }
+}
+
+async fn resolve_via_cloudflare_doh(
+    domain: &str,
+    port: u16,
+    token: &CancelToken,
+    deadline: Instant,
+) -> Result<Vec<SocketAddr>, FetchError> {
+    let bootstrap: Vec<SocketAddr> = CLOUDFLARE_BOOTSTRAP_IPS
+        .iter()
+        .map(|ip| SocketAddr::new(*ip, 443))
+        .collect();
+
+    let budget = remaining(deadline)?;
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(budget.min(DOH_TIMEOUT_CAP))
+        .connect_timeout(budget.min(CONNECT_TIMEOUT_CAP))
+        .resolve_to_addrs(CLOUDFLARE_DOH_HOST, &bootstrap)
+        .build()
+        .map_err(|_| FetchError::fatal("failed to build DoH client"))?;
+
+    let mut addrs =
+        query_cloudflare_doh_record(&client, domain, "A", port, token, deadline).await?;
+    if addrs.is_empty() {
+        addrs = query_cloudflare_doh_record(&client, domain, "AAAA", port, token, deadline).await?;
+    }
+    if addrs.is_empty() {
+        return Err(FetchError::fatal(format!(
+            "Cloudflare DoH returned no public IP addresses for {domain}"
+        )));
+    }
+    Ok(addrs)
+}
+
+async fn query_cloudflare_doh_record(
+    client: &reqwest::Client,
+    domain: &str,
+    record_type: &str,
+    port: u16,
+    token: &CancelToken,
+    deadline: Instant,
+) -> Result<Vec<SocketAddr>, FetchError> {
+    remaining(deadline)?;
+    let url = format!("https://{CLOUDFLARE_DOH_HOST}/dns-query?name={domain}&type={record_type}");
+    let response = with_cancel(
+        token,
+        client
+            .get(url.as_str())
+            .header(reqwest::header::ACCEPT, "application/dns-json")
+            .header(reqwest::header::USER_AGENT, user_agent())
+            .send(),
+    )
+    .await
+    .map_err(|_| FetchError::cancelled())?
+    .map_err(|_| FetchError::transient("Cloudflare DoH request failed"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(FetchError::transient(format!(
+            "Cloudflare DoH HTTP error status: {status}"
+        )));
+    }
+
+    let mut response = response;
+    let body = read_body_capped(
+        &mut response,
+        MAX_DOH_BYTES,
+        token,
+        "Cloudflare DoH response exceeds 64 KiB",
+    )
+    .await?;
+    let body = String::from_utf8(body)
+        .map_err(|_| FetchError::fatal("invalid UTF-8 in Cloudflare DoH response"))?;
+    parse_doh_answers(&body, port).map_err(FetchError::fatal)
+}
+
+/// Fetch one public HTTPS image. Transient failures get a single retry;
+/// validation failures and cancellation never do.
+pub(super) async fn fetch_public_https_image(
+    url_str: &str,
+    token: &CancelToken,
+    deadline: Instant,
+) -> Result<FetchedImage, FetchError> {
+    let mut attempt = 0u8;
+    loop {
+        if token.is_cancelled() {
+            return Err(FetchError::cancelled());
+        }
+        match fetch_once(url_str, token, deadline).await {
+            Ok(image) => return Ok(image),
+            Err(error) => {
+                let budget_left = deadline.saturating_duration_since(Instant::now());
+                if error.kind != FetchErrorKind::Transient
+                    || attempt >= 1
+                    || budget_left <= RETRY_MIN_BUDGET
+                {
+                    return Err(error);
+                }
+                attempt += 1;
+            }
+        }
+    }
+}
+
+fn build_client(
+    host: &str,
+    addrs: &[SocketAddr],
+    deadline: Instant,
+) -> Result<reqwest::Client, FetchError> {
+    let budget = remaining(deadline)?;
+    reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(budget)
+        .connect_timeout(budget.min(CONNECT_TIMEOUT_CAP))
+        .resolve_to_addrs(host, addrs)
+        .build()
+        .map_err(|_| FetchError::fatal("failed to build HTTP client"))
+}
+
+async fn send_request(
+    client: &reqwest::Client,
+    url: &Url,
+    token: &CancelToken,
+) -> Result<reqwest::Response, FetchError> {
+    with_cancel(
+        token,
+        client
+            .get(url.as_str())
+            .header(reqwest::header::USER_AGENT, user_agent())
+            .send(),
+    )
+    .await
+    .map_err(|_| FetchError::cancelled())?
+    .map_err(|e| describe_send_error(&e))
+}
+
+async fn read_image_response(
+    response: reqwest::Response,
+    token: &CancelToken,
+    validation: Duration,
+) -> Result<FetchedImage, FetchError> {
+    let status = response.status();
+    if !status.is_success() {
+        return Err(http_status_error(status));
+    }
+    if let Some(length) = response.content_length() {
+        if length > MAX_IMAGE_BYTES {
+            return Err(FetchError::fatal(format!(
+                "image size ({length} bytes) exceeds maximum 8 MiB"
+            )));
+        }
+    }
+
+    let transfer_started = Instant::now();
+    let mut response = response;
+    let bytes = read_body_capped(
+        &mut response,
+        MAX_IMAGE_BYTES,
+        token,
+        "image size exceeds maximum 8 MiB",
+    )
+    .await?;
+    let transfer = transfer_started.elapsed();
+
+    let mime_type = detect_image_mime(&bytes)
+        .ok_or_else(|| FetchError::fatal("unsupported image format or invalid signature"))?;
+    if mime_type == "image/svg+xml" {
+        return Err(FetchError::fatal("remote SVG images are not permitted"));
+    }
+
+    Ok(FetchedImage {
+        bytes,
+        mime_type,
+        validation_ms: milliseconds(validation),
+        transfer_ms: milliseconds(transfer),
+    })
+}
+
+async fn fetch_once(
+    url_str: &str,
+    token: &CancelToken,
+    deadline: Instant,
+) -> Result<FetchedImage, FetchError> {
+    let mut validation = Duration::ZERO;
+    let mut current_url =
+        Url::parse(url_str).map_err(|e| FetchError::fatal(format!("invalid image URL: {e}")))?;
+    let mut redirects = 0usize;
+
+    loop {
+        if token.is_cancelled() {
+            return Err(FetchError::cancelled());
+        }
+        remaining(deadline)?;
+        validate_url_target(&current_url)?;
 
         let port = current_url.port_or_known_default().unwrap_or(443);
+        let validation_started = Instant::now();
         let (host_str, addrs) = match current_url.host() {
-            Some(Host::Ipv4(v4)) => {
-                if !is_public_ipv4(v4) {
-                    return Err(format!("non-public IP address {v4} is denied"));
-                }
-                (v4.to_string(), vec![SocketAddr::new(IpAddr::V4(v4), port)])
-            }
-            Some(Host::Ipv6(v6)) => {
-                if !is_public_ipv6(v6) {
-                    return Err(format!("non-public IP address {v6} is denied"));
-                }
-                (v6.to_string(), vec![SocketAddr::new(IpAddr::V6(v6), port)])
-            }
-            Some(Host::Domain(domain)) => {
-                let addrs = resolve_domain_addrs(domain, port)?;
-                (domain.to_string(), addrs)
-            }
-            None => return Err("URL missing host".to_string()),
+            Some(Host::Ipv4(v4)) => (v4.to_string(), vec![SocketAddr::new(IpAddr::V4(v4), port)]),
+            Some(Host::Ipv6(v6)) => (v6.to_string(), vec![SocketAddr::new(IpAddr::V6(v6), port)]),
+            Some(Host::Domain(domain)) => (
+                domain.to_string(),
+                resolve_domain_addrs(domain, port, token, deadline).await?,
+            ),
+            None => return Err(FetchError::fatal("URL missing host")),
         };
+        validation += validation_started.elapsed();
 
-        let client = reqwest::blocking::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(15))
-            .resolve_to_addrs(&host_str, &addrs)
-            .build()
-            .map_err(|e| format!("failed to build HTTP client: {e}"))?;
-
-        let response = client
-            .get(current_url.as_str())
-            .header(
-                "User-Agent",
-                concat!("NPi-Desktop/", env!("CARGO_PKG_VERSION")),
-            )
-            .send()
-            .map_err(|e| format!("HTTP request failed: {e}"))?;
-
+        // One request per hop: redirects are followed by this loop, so each
+        // target is preflighted and pinned exactly like the first URL.
+        let client = build_client(&host_str, &addrs, deadline)?;
+        let response = send_request(&client, &current_url, token).await?;
         let status = response.status();
         if status.is_redirection() {
-            if hop == MAX_REDIRECTS {
-                return Err("too many HTTP redirects".to_string());
+            redirects += 1;
+            if redirects > MAX_REDIRECTS {
+                return Err(FetchError::fatal("too many HTTP redirects"));
             }
-            let loc = response
+            let location = response
                 .headers()
                 .get(reqwest::header::LOCATION)
                 .ok_or_else(|| {
-                    format!("HTTP redirect {} missing Location header", status.as_u16())
+                    FetchError::fatal(format!(
+                        "HTTP redirect {} missing Location header",
+                        status.as_u16()
+                    ))
                 })?
                 .to_str()
-                .map_err(|_| "invalid redirect Location header".to_string())?;
-
+                .map_err(|_| FetchError::fatal("invalid redirect Location header"))?;
             current_url = current_url
-                .join(loc)
-                .map_err(|e| format!("invalid redirect target: {e}"))?;
+                .join(location)
+                .map_err(|e| FetchError::fatal(format!("invalid redirect target: {e}")))?;
             continue;
         }
-
-        if !status.is_success() {
-            return Err(format!("HTTP error status: {status}"));
-        }
-
-        if let Some(cl) = response.content_length() {
-            if cl > MAX_IMAGE_BYTES {
-                return Err(format!("image size ({cl} bytes) exceeds maximum 8 MiB"));
-            }
-        }
-
-        let mut bytes = Vec::new();
-        response
-            .take(MAX_IMAGE_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| format!("failed to read response body: {e}"))?;
-
-        if bytes.len() as u64 > MAX_IMAGE_BYTES {
-            return Err("image size exceeds maximum 8 MiB".to_string());
-        }
-
-        let mime = detect_image_mime(&bytes)
-            .ok_or_else(|| "unsupported image format or invalid signature".to_string())?;
-
-        if mime == "image/svg+xml" {
-            return Err("remote SVG images are not permitted".to_string());
-        }
-
-        return Ok((bytes, mime));
+        return read_image_response(response, token, validation).await;
     }
-
-    Err("too many HTTP redirects".to_string())
 }
 
 #[cfg(test)]
@@ -603,8 +859,43 @@ mod tests {
     }
 
     #[test]
-    fn rejects_userinfo_and_non_https() {
-        assert!(fetch_public_https_image("http://example.com/insecure.png").is_err());
-        assert!(fetch_public_https_image("https://user:pass@example.com/img.png").is_err());
+    fn url_preflight_rejects_non_https_userinfo_and_private_hosts() {
+        for (url, kind) in [
+            ("http://example.com/insecure.png", FetchErrorKind::Fatal),
+            (
+                "https://user:pass@example.com/img.png",
+                FetchErrorKind::Fatal,
+            ),
+            ("https://127.0.0.1/img.png", FetchErrorKind::Fatal),
+            ("https://192.168.1.1/img.png", FetchErrorKind::Fatal),
+            ("https://[::1]/img.png", FetchErrorKind::Fatal),
+            ("https://example.com/img.png", FetchErrorKind::Fatal),
+        ] {
+            let parsed = Url::parse(url).unwrap();
+            let result = validate_url_target(&parsed);
+            if url == "https://example.com/img.png" {
+                assert!(result.is_ok(), "public domain host must pass preflight");
+            } else {
+                assert_eq!(result.unwrap_err().kind, kind);
+            }
+        }
+    }
+
+    #[test]
+    fn retry_classification_separates_transient_from_validation() {
+        assert_eq!(
+            http_status_error(reqwest::StatusCode::SERVICE_UNAVAILABLE).kind,
+            FetchErrorKind::Transient
+        );
+        assert_eq!(
+            http_status_error(reqwest::StatusCode::TOO_MANY_REQUESTS).kind,
+            FetchErrorKind::Transient
+        );
+        assert_eq!(
+            http_status_error(reqwest::StatusCode::NOT_FOUND).kind,
+            FetchErrorKind::Fatal
+        );
+        assert_eq!(FetchError::fatal("bad").kind, FetchErrorKind::Fatal);
+        assert!(FetchError::cancelled().is_cancelled());
     }
 }

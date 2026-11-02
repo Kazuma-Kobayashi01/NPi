@@ -42,6 +42,7 @@ mod private_fs;
 mod profiles;
 mod program_setting;
 mod project_file;
+pub mod python_runtime;
 mod recent_projects;
 mod redaction;
 mod saved_sessions;
@@ -220,6 +221,11 @@ fn start_session(
             resume: args.resume.as_deref(),
             profile,
             mode,
+            app_mode: match app_mode {
+                app_mode::AppMode::Chat => "chat",
+                app_mode::AppMode::Code => "code",
+                app_mode::AppMode::Academic => "academic",
+            },
             config: overlay.as_deref(),
             prompt: prompt.as_deref(),
             append_prompt: Some(app_mode::DESKTOP_RICH_OUTPUT_HINT),
@@ -274,6 +280,7 @@ fn sidechat_start(
             resume: None,
             profile,
             mode: app.state::<Arc<ApprovalModeStore>>().resolve(None),
+            app_mode: "chat",
             config: Some(&config),
             prompt: Some(
                 "You are NPi SideChat, an independent conversational assistant.\n\
@@ -1151,32 +1158,67 @@ async fn project_file_read(
 /// Read a chat image (project file, cached remote image, or public HTTPS URL).
 /// Reuses project_file validation for local files, validates public network addresses
 /// and pins DNS to avoid rebinding, caching assets per hashed conversation key.
+///
+/// `requestId` is optional and globally unique per call: it is what
+/// [`chat_image_cancel`] targets, and it makes an earlier cancel observable even
+/// if this invocation had not started. `priority` is `thumbnail` or `full`
+/// (absent = full) and only orders queued remote transfers.
 #[tauri::command]
 async fn chat_image_read(
     session_id: String,
     conversation_key: String,
     source: String,
-    app: AppHandle,
+    request_id: Option<String>,
+    priority: Option<String>,
     terminal: State<'_, Arc<terminal::TerminalManager>>,
+    images: State<'_, Arc<chat_image::ChatImageManager>>,
 ) -> Result<chat_image::ChatImageResult, String> {
     if !terminal.tab_ids().iter().any(|id| id == &session_id) {
         return Err(format!("unknown session: {session_id}"));
     }
+    let priority = match priority.as_deref() {
+        None => chat_image::ChatImagePriority::Full,
+        Some(value) => chat_image::ChatImagePriority::parse(value)?,
+    };
     let project_root = terminal.folder(&session_id);
-    let cache_dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| format!("no app local data dir: {e}"))?
-        .join("chat-images");
-    off_ipc(move || {
-        chat_image::read_chat_image(
-            &cache_dir,
-            project_root.as_deref(),
-            &conversation_key,
-            &source,
-        )
-    })
-    .await?
+    let cache_root = images.cache_root().map(Path::to_path_buf);
+    let manager = Arc::clone(images.inner());
+    let (result, pending) = manager
+        .read(chat_image::ChatImageQuery {
+            session_id,
+            request_id,
+            conversation_key,
+            source,
+            priority,
+            project_root,
+        })
+        .await?
+        .into_parts();
+    // The image is already displayable: persist off the first-display path.
+    // The task is owned by Tauri's global runtime (not a detached thread), so
+    // it is reclaimed with the app; a cancelled outcome carries no write.
+    if let Some(pending) = pending {
+        if let Some(cache_root) = cache_root {
+            tauri::async_runtime::spawn_blocking(move || {
+                if let Err(e) = pending.persist(&cache_root) {
+                    eprintln!("[chat-image] background cache write failed: {e}");
+                }
+            });
+        }
+    }
+    Ok(result)
+}
+
+/// Withdraw one image request by the id its caller generated. A queued request
+/// never opens a socket; an in-flight one has its HTTP future dropped, which
+/// aborts the connection and body read.
+#[tauri::command]
+fn chat_image_cancel(
+    session_id: String,
+    request_id: String,
+    images: State<'_, Arc<chat_image::ChatImageManager>>,
+) -> bool {
+    images.cancel(&session_id, &request_id)
 }
 
 /// Stage a file's changes — see `workspace::accept`.
@@ -1624,6 +1666,18 @@ fn setup(app: &tauri::App) {
     app.manage(Arc::new(terminal::TerminalManager::new(config_file(
         "terminal.json",
     ))));
+    // Chat image cache + bounded transfer scheduler:
+    // <app_local_data_dir>/chat-images, private to this user. Without a
+    // resolved dir images still load, they are just never cached.
+    let chat_image_cache = app
+        .path()
+        .app_local_data_dir()
+        .ok()
+        .map(|dir| dir.join("chat-images"));
+    if chat_image_cache.is_none() {
+        eprintln!("[omp-desktop] no app local data dir; chat images will not be cached");
+    }
+    app.manage(Arc::new(chat_image::ChatImageManager::new(chat_image_cache)));
     // Approval mode: <app_config_dir>/approval-mode.json. No temp-dir
     // fallback: another account could plant a `yolo` there; without a config
     // dir the choice stays in memory.
@@ -1870,6 +1924,7 @@ pub fn run() {
             git_browser_commit_file,
             project_file_read,
             chat_image_read,
+            chat_image_cancel,
             mcp_skills::mcp_servers_get,
             mcp_skills::mcp_server_toggle,
             mcp_skills::mcp_server_delete,
@@ -1919,6 +1974,9 @@ pub fn run() {
             app_update_check,
             app_update_install,
             set_close_guard,
+            python_runtime::python_runtime_status,
+            python_runtime::python_runtime_ensure,
+            python_runtime::python_runtime_packages,
         ])
         .setup(|app| {
             setup(app);
