@@ -16,7 +16,7 @@ const _QS_NOTICE_MS = 4000;
 // The shared ghost icon button (styles.css), sized down for the row.
 const _QS_BTN = "btn icon ghost queue-btn";
 
-function QueueStrip({ queue, sending, canSendNow, onSendNow, onRemove, onPromote, onEdit }) {
+function QueueStrip({ queue, sending, canSendNow, canPromote = true, onSendNow, onRemove, onPromote, onEdit }) {
   const rows = React.useMemo(() => _QS_rows(queue, sending), [queue, sending]);
   // One request at a time across the strip: omp acts on the first
   // matching message, so a second request for a duplicate text would
@@ -63,7 +63,7 @@ function QueueStrip({ queue, sending, canSendNow, onSendNow, onRemove, onPromote
                 </button>
               )}
               {r.kind === "followUp" && (
-                <button className={_QS_BTN} disabled={busy} onClick={() => run(r, onPromote)}
+                <button className={_QS_BTN} disabled={busy || !canPromote} onClick={() => run(r, onPromote)}
                   title="Steer now: deliver at the agent's next step" aria-label="steer now">
                   <_QS_Icon name="arrowUp" size={11} />
                 </button>

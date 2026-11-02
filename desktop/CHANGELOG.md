@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0.258] - 2026-11-02
+
+### Added
+
+- Subagent default model policy with three tiers: Auto (interactive two-question Ask dialog selecting model and thinking before spawn), Sync (strictly mirrors primary conversation model and thinking level), and Custom (explicit model and thinking level designated from profile catalog).
+- Subagent delegation appetite tiers: Unlimited ≤32 (text highlighted in rose red), Aggressive ≤8, Moderate ≤4 (default), Conservative ≤2, and Off 0 (hard exclusion of task tool and preflight spawn rejection across task, eval, and workpool).
+- Project and open conversation right-click context menu Close option, preserving closed project conversations beneath Recent for direct resumption.
+- Context card Previous compaction category classifying active compaction summaries separately, balancing text estimates to avoid false zero-message displays.
+
+### Changed
+
+- Desktop version 2.0.0.258 with bundled kernel 2.0.5.
+
+### Fixed
+
+- Context compaction lifecycle synchronization via RPC events, preventing sending, steering, follow-ups, and queue promotion while compaction is active while retaining user drafts.
+- Custom subagent model validation rejecting unconfigured models or unsupported thinking levels without silent fallback.
+
 ## [2.0.0.230] - 2026-11-02
 
 ### Added
@@ -17,6 +35,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Project sidebar conversations remain separate, collapsible child rows even for a single conversation. Closing a project keeps saved main conversations accessible beneath its Recent entry, with direct resume and branch-family deduplication.
+- Project and open-conversation context menus offer Close. Closing a project releases its tabs through the existing busy-close guard and leaves saved conversations available under Recent.
+- Context cards refresh after automatic and manual compaction, classify the active summary as Previous compaction, and balance text estimates without letting fixed-prompt estimates erase current messages.
+- Sending, steering, follow-ups and queue promotion pause during compaction; composer drafts remain editable and are preserved until sending resumes.
 - Conversations search icons retain shared icon sizing instead of covering the page; action menus and narrow layouts remain usable.
 - Saved-session actions resolve the selected profile before path validation. History entries retain their source profile when opened, and failed sidebar deletions display an error instead of silently doing nothing.
 - The Chat sidebar groups related branch files into one main conversation row while Conversation Tree and conversation management retain individual historical files.

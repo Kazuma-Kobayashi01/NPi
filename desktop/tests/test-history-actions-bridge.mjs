@@ -36,6 +36,8 @@ function harness(opts = {}) {
   };
 
   for (const path of [
+    "app/constants.js",
+    "app/slash-commands.js",
     "app/project-nav.js",
     "app/message-queue.js",
     "app/goal.js",
@@ -43,6 +45,7 @@ function harness(opts = {}) {
     "app/session-title.js",
     "app/turn-status.js",
     "app/transcript-merge.js",
+    "app/usage-view.js",
     "adapter.js",
     "app/pr-automation.js",
   ]) {
@@ -103,11 +106,15 @@ function harness(opts = {}) {
       },
     },
   };
+  let seq = 0;
 
   return {
     bridge: w.OMP_BRIDGE,
     invokes,
     w,
+    emit(id, frame) {
+      listeners.get(`agent://line/${id}`)({ payload: { seq: ++seq, text: JSON.stringify(frame) } });
+    },
   };
 }
 
@@ -241,6 +248,51 @@ async function run() {
     assert.deepEqual(result, { ok: true, value: [closedPath] });
     const deletion = invokes.find(call => call.command === "batch_delete_saved_sessions");
     assert.deepEqual(deletion.args.paths, [closedPath]);
+  });
+
+  for (const mode of ["auto", "manual"]) {
+    await test(`${mode} compaction blocks prompts and releases on failure or completion`, async () => {
+      const { bridge, invokes, emit } = harness();
+      const id = await bridge.openSession("/context-project", "default");
+      let snapshot;
+      bridge.onUpdate(value => { snapshot = value; });
+      emit(id, { type: `${mode}_compaction_start` });
+      assert.equal(snapshot.isCompacting, true);
+      invokes.length = 0;
+      assert.equal(await bridge.send("keep this draft"), false);
+      assert.equal(await bridge.steer("not yet"), false);
+      assert.equal(await bridge.followUp("not yet either"), false);
+      assert.equal(invokes.some(call => call.command === "send_command"), false);
+      assert.equal(snapshot.messages.some(message => message.text === "keep this draft"), false);
+
+      emit(id, { type: `${mode}_compaction_end`, aborted: true, errorMessage: "cancelled" });
+      assert.equal(snapshot.isCompacting, false);
+      assert.equal(await bridge.send("now allowed"), true);
+      assert.equal(snapshot.messages.some(message => message.text === "now allowed"), true);
+    });
+  }
+
+  await test("manual compact locks immediately, then current context refresh remains separate from full history", async () => {
+    const { bridge, invokes, emit } = harness();
+    const id = await bridge.openSession("/context-project", "default");
+    let snapshot;
+    bridge.onUpdate(value => { snapshot = value; });
+    bridge.compact();
+    assert.equal(snapshot.isCompacting, true);
+    assert.equal(await bridge.send("blocked before start event"), false);
+    emit(id, { type: "manual_compaction_end", aborted: false, result: { summary: "earlier work" } });
+    emit(id, { type: "response", command: "get_state", success: true, data: {
+      isCompacting: false, contextUsage: { tokens: 100, contextWindow: 1000 },
+      systemPrompt: ["system"], dumpTools: [],
+    } });
+    const currentRequest = invokes.filter(call => call.command === "send_command")
+      .map(call => JSON.parse(call.args.json)).findLast(frame => frame.id?.startsWith("context-"));
+    emit(id, { type: "response", command: "get_messages", id: currentRequest.id, success: true, data: {
+      messages: [{ role: "compactionSummary", summary: "earlier work" }],
+    } });
+    assert.equal(snapshot.isCompacting, false);
+    assert.ok(snapshot.ctxBreakdown.parts.find(part => part.key === "compacted").tokens > 0);
+    assert.equal(snapshot.messages.some(message => message.text === "earlier work"), false);
   });
 
   console.log(`PASS test-history-actions-bridge.mjs (${passed} consumer scenarios)`);

@@ -95,6 +95,7 @@ function App() {
   // ── Live data (all per-session — driven by OMP_BRIDGE.onUpdate) ───────────
   const [messages,      setMessages]      = React.useState([]);
   const [streaming,     setStreaming]     = React.useState(false);
+  const [compacting,    setCompacting]    = React.useState(false);
   const [model,         setModelState]    = React.useState(NULL_MODEL);
   const [thinkingLevel, setThinkingLevel] = React.useState(null);
   const [ctx,           setCtx]           = React.useState(data.ctx);
@@ -149,7 +150,7 @@ function App() {
 
   // ── Cross-cutting effects ─────────────────────────────────────────────────
   useBridgeSnapshot(bridge, {
-    setMessages, setStreaming, setCtx, setSessionStats, setCtxBreakdown, setKanban, setPlanMeta,
+    setMessages, setStreaming, setCompacting, setCtx, setSessionStats, setCtxBreakdown, setKanban, setPlanMeta,
     setModels, setActivity, setSparkline,
     setModelState, setThinkingLevel,
     setSessions, setActiveSessionId, setProfiles, setStartupProfileId, setRecentProjects,
@@ -244,6 +245,9 @@ function App() {
   // Behaviours live.js owns (app/session-prefs.js): it takes its keys from
   // the tweaks and acts only on a changed one.
   React.useEffect(() => { bridge?.setSessionPrefs(t); }, [bridge, t]);
+  React.useEffect(() => { bridge?.setSubagentPreferences(t); }, [
+    bridge, t.subagentModelMode, t.subagentCustomModel, t.subagentCustomThinking, t.subagentDelegation,
+  ]);
   // Refuse a file or link drop no handler took (`refusesStrayDrop`), so the
   // webview never navigates to it now that Tauri's native file drop is off
   // (#50). The composer's handlers run first and accept their own drops.
@@ -287,6 +291,16 @@ function App() {
   // usage-stats panel's header label, instead of a second copy.
   const activeProfileId    = activeProject.id ? activeProject.profile : noTabProfileId;
   const activeProfileLabel = profiles.find(p => p.id === activeProfileId)?.name ?? activeProfileId;
+  const [projectHistory, setProjectHistory] = React.useState({ profile: null, sessions: [] });
+  const projectHistoryKey = JSON.stringify(codeTabs.map(tab => [tab.id, tab.profile, tab.sessionFile, tab.name]));
+  React.useEffect(() => {
+    if (isChat || !bridge) return undefined;
+    let live = true;
+    bridge.listSavedSessions(null, activeProfileId).then(list => {
+      if (live) setProjectHistory({ profile: activeProfileId, sessions: list });
+    });
+    return () => { live = false; };
+  }, [bridge, isChat, activeProfileId, projectHistoryKey]);
   // Status-bar approvals cell: the mode the rendered tab's omp runs, or
   // `running ⇢ target` while a change waits for its turn to end. Read
   // late-bound: app/approval-mode.js is a plain module like the others.
@@ -751,6 +765,11 @@ function App() {
   // ── Project navigation (#27) ──────────────────────────────────────────────
   const showSidebar   = t.sidebar ?? true;
   const toggleSidebar = () => setTweak("sidebar", !showSidebar);
+  const handleCloseProject = async tabs => {
+    for (const tab of tabs) {
+      if ((await bridge.closeSessionGuarded(tab.id)) === false) return;
+    }
+  };
 
   // A recent project: focus its open tab in the active profile, else spawn.
   const handleOpenRecent = async path => {
@@ -1087,6 +1106,8 @@ function App() {
             {showSidebar && !isChat && (
               <ProjectSidebar
                 tabs={codeTabs}
+                saved={projectHistory.profile === activeProfileId ? projectHistory.sessions : []}
+                historyProfile={activeProfileId} onResume={handleResumeSession}
                 unread={unread} onReveal={handleReveal} onMarkUnread={handleMarkUnread}
                 onArchiveTab={tab => handleCloseTab(tab.id)}
                 onDeleteTab={tab => trashConversation(tab, tab.sessionFile, tab.profile)}
@@ -1095,6 +1116,7 @@ function App() {
                 profileLabel={profileLabel}
                 onSelectTab={handleSelectTab}
                 onCloseTab={handleCloseTab}
+                onCloseProject={handleCloseProject}
                 onRenameTab={handleRenameTab}
                 onNewInProject={handleNewInProject}
                 onOpenRecent={handleOpenRecent}
@@ -1176,6 +1198,7 @@ function App() {
                     onLoadThinkingLevels={() => bridge.thinkingLevels()}
                     onSetThinking={level => bridge.setThinkingLevel(level)}
                     isStreaming={streaming}
+                    isCompacting={compacting}
                     backgroundWork={activeProject.runState === "background"}
                     onAbort={handleAbort}
                     onApprove={handleApprovePlan}
@@ -1220,7 +1243,7 @@ function App() {
                   todoCounts={todoCounts}
                   kanban={kanban}
                   onCompact={bridge.compact}
-                  compacting={messages.some(m => m.kind === "compact" && m.status === "pending")}
+                  compacting={compacting}
                 >
                   {/* Hidden without the GitHub CLI; the hook keeps checking on
                       focus, so installing gh brings it back. */}

@@ -51,6 +51,7 @@ function harness() {
     timeNow: () => "00:00",
   };
   for (const path of [
+    "app/constants.js",
     "app/message-queue.js",
     "app/goal.js",
     "app/prompt-history.js",

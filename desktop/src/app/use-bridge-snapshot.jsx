@@ -14,6 +14,7 @@ function useBridgeSnapshot(bridge, setters) {
     const unsub = bridge.onUpdate((snap) => {
       setters.setMessages(snap.messages);
       setters.setStreaming(snap.isStreaming);
+      setters.setCompacting(snap.isCompacting);
       setters.setCtx(snap.ctx);
       setters.setSessionStats(snap.sessionStats ?? null);
       setters.setCtxBreakdown(snap.ctxBreakdown ?? null);

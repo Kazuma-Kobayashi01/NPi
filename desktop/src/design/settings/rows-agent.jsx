@@ -73,63 +73,97 @@ function _SRA_Usage({ row, ctx, query }) {
   );
 }
 
-function _SRA_SubagentModel({ row, ctx, query }) {
-  const { SettingsRow: Row, SettingsSeg: Seg } = window;
-  const M = window.OMP_MODELS;
-  const { t, setTweak, bridge } = ctx;
-  const mode = t.subagentModelMode || "auto";
-  const customModel = t.subagentCustomModel || "";
-  const [catalog, setCatalog] = React.useState([]);
-
+function _SRA_SubagentModel({ row, ctx, query, modified, onReset }) {
+  const { SettingsRow: Row, SettingsSeg: Seg, OMP_MODELS: M } = window;
+  const { t, setTweak, bridge, profileId } = ctx;
+  const mode = t.subagentModelMode;
+  const customModel = t.subagentCustomModel;
+  const thinking = t.subagentCustomThinking;
+  const [catalogState, setCatalogState] = React.useState({ profileId: null, models: [], loading: true, error: "" });
   React.useEffect(() => {
-    bridge?.modelsCatalog?.().then(cat => {
-      if (cat?.ok && Array.isArray(cat.value)) setCatalog(cat.value);
+    let current = true;
+    setCatalogState({ profileId, models: [], loading: true, error: "" });
+    bridge.modelsCatalog(profileId).then(result => {
+      if (current) setCatalogState({ profileId, models: result.ok ? result.value : [],
+        loading: false, error: result.ok ? "" : result.error });
+    }, err => {
+      if (current) setCatalogState({ profileId, models: [], loading: false, error: String(err) });
     });
-  }, [bridge]);
-
-  const groups = React.useMemo(() => (M && catalog.length ? M.groupByVendor(catalog) : []), [catalog, M]);
-
+    return () => { current = false; };
+  }, [bridge, profileId]);
+  const catalog = catalogState.profileId === profileId ? catalogState.models : [];
+  const loading = catalogState.profileId !== profileId || catalogState.loading;
+  const groups = React.useMemo(() => M.groupByVendor(catalog), [catalog, M]);
+  const model = catalog.find(m => M.keyOf(m) === customModel);
+  const levels = model?.thinking.length ? model.thinking.filter(l => l !== "auto") : ["off"];
+  const invalidThinking = model && !levels.includes(thinking);
+  const error = catalogState.error || (!loading && (
+    !catalog.length ? "No models available for this profile." :
+    !customModel ? "Select a Custom model before delegating." :
+    !model ? `Custom model unavailable: ${customModel}. Select a model from this profile.` :
+    invalidThinking ? `Thinking “${thinking}” is unavailable for this model. Select a supported level.` : ""));
+  const selectModel = key => {
+    const selected = catalog.find(m => M.keyOf(m) === key);
+    const supported = selected.thinking.length ? selected.thinking.filter(l => l !== "auto") : ["off"];
+    setTweak("subagentCustomModel", key);
+    if (!supported.includes(thinking)) {
+      setTweak("subagentCustomThinking", supported.includes("medium") ? "medium" : supported[0]);
+    }
+  };
+  const descriptions = {
+    auto: "Ask before spawning to choose the subagent model and thinking level.",
+    sync: "Follow the conversation’s current model and thinking level.",
+    custom: "Use the model and explicit thinking level selected below.",
+  };
   return (
-    <Row stack label={row.label} desc={row.desc} query={query}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        <Seg
-          options={[
-            { value: "auto", label: "auto (follow primary)" },
-            { value: "custom", label: "custom" },
-          ]}
-          value={mode}
-          onChange={v => {
-            setTweak("subagentModelMode", v);
-            if (v === "auto") {
-              bridge?.setSubagentModel?.("");
-            } else if (customModel) {
-              bridge?.setSubagentModel?.(customModel);
-            }
-          }}
-        />
-        {mode === "custom" && (
-          <div className="st-modelsel">
-            <select
-              value={customModel}
-              aria-label="Subagent designated model"
-              onChange={e => {
-                const val = e.target.value;
-                setTweak("subagentCustomModel", val);
-                bridge?.setSubagentModel?.(val);
-              }}
-            >
-              <option value="">{catalog.length ? "Select a model…" : "Loading models…"}</option>
-              {groups.map(g => (
-                <optgroup key={g.vendor} label={g.vendor}>
-                  {g.models.map(m => {
-                    const k = M.keyOf(m);
-                    return <option key={k} value={k}>{m.name || k}</option>;
-                  })}
-                </optgroup>
-              ))}
-            </select>
+    <Row stack label={row.label} desc={row.desc} query={query} modified={modified} onReset={onReset}>
+      <div className="st-subagent-settings">
+        <Seg label="Subagent model mode" options={[
+          { value: "auto", label: "Auto" }, { value: "sync", label: "Sync" }, { value: "custom", label: "Custom" },
+        ]} value={mode} onChange={v => setTweak("subagentModelMode", v)} />
+        <div className="st-rd">{descriptions[mode]}</div>
+        {mode === "custom" && <>
+          <div className="st-subagent-pickers">
+            <label className="st-modelsel">Model
+              <select value={customModel} aria-label="Subagent Custom model"
+                disabled={loading || !catalog.length} onChange={e => selectModel(e.target.value)}>
+                <option value="" disabled>{loading ? "Loading models…" : catalog.length ? "Select a model…" : "No models available"}</option>
+                {customModel && !model && <option value={customModel} disabled>{customModel} (unavailable)</option>}
+                {groups.map(g => <optgroup key={g.vendor} label={g.vendor}>
+                  {g.models.map(m => <option key={M.keyOf(m)} value={M.keyOf(m)}>{m.name || M.keyOf(m)}</option>)}
+                </optgroup>)}
+              </select>
+            </label>
+            <label className="st-modelsel">Thinking
+              <select value={model ? thinking : ""} aria-label="Subagent Custom thinking"
+                disabled={loading || !model} onChange={e => setTweak("subagentCustomThinking", e.target.value)}>
+                {!model && <option value="">Select a model first</option>}
+                {invalidThinking && <option value={thinking} disabled>{thinking} (unavailable)</option>}
+                {model && levels.map(level => <option key={level} value={level}>{level}</option>)}
+              </select>
+            </label>
           </div>
-        )}
+          {error && <div className="st-subagent-error" role="alert">{error}</div>}
+        </>}
+      </div>
+    </Row>
+  );
+}
+
+function _SRA_SubagentDelegation({ row, ctx, query, modified, onReset }) {
+  const { SettingsRow: Row, SettingsSeg: Seg } = window;
+  return (
+    <Row stack label={row.label} desc={row.desc} query={query} modified={modified} onReset={onReset}>
+      <div className="st-subagent-settings st-subagent-appetite">
+        <Seg label={row.label} value={ctx.t.subagentDelegation}
+          onChange={value => ctx.setTweak("subagentDelegation", value)}
+          options={[
+            { value: "unlimited", label: <span className="st-subagent-unlimited">Unlimited ≤32</span> },
+            { value: "aggressive", label: "Aggressive ≤8" },
+            { value: "moderate", label: "Moderate ≤4" },
+            { value: "conservative", label: "Conservative ≤2" },
+            { value: "off", label: "Off 0" },
+          ]} />
       </div>
     </Row>
   );
@@ -174,5 +208,6 @@ Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
   startupProfile: _SRA_StartupProfile,
   goalContinue: _SRA_GoalContinue,
   subagentModel: _SRA_SubagentModel,
+  subagentDelegation: _SRA_SubagentDelegation,
   sidechatModel: _SRA_SidechatModel,
 });

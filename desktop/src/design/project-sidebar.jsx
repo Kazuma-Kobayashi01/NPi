@@ -1,15 +1,13 @@
 /* ═════════════════════════════════════════════════════════════════════
    project-sidebar.jsx — left project navigator (issue #27)
 
-   `open`: every tab, grouped by project (folder + profile) exactly like the
-   tab bar (`OMP_PROJECT_NAV.groupTabs`), multi-tab projects expandable.
-   `recent`: recently opened folders of the active profile that have no
-   open tab — computed by the caller (`recentRows`), since only it knows
-   the active profile. Rows are containers; the click targets inside them
-   are real buttons, so every action is keyboard-reachable.
+   Open tabs and saved main conversations live beneath their project, even
+   when there is only one conversation. Closed projects retain resumable
+   conversation rows under Recent. Rows are containers; the click targets
+   inside them are real buttons, so every action is keyboard-reachable.
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon, TabRunDot, TabLabel, RenameField } = window;
+const { Icon, TabRunDot, RenameField } = window;
 const { groupTabs, groupRunState, groupTarget, membersNewestFirst, basename, parentName } = window.OMP_PROJECT_NAV;
 
 // Same guard as chrome.jsx's copy: the registry may not be loaded.
@@ -18,8 +16,8 @@ function sidebarHint(actionId, fallback) {
 }
 
 function ProjectSidebar({
-  tabs, activeId, recents, profileLabel,
-  onSelectTab, onCloseTab, onRenameTab, onNewInProject, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab,
+  tabs, activeId, recents, profileLabel, saved = [], historyProfile, onResume,
+  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab,
 }) {
   const ctx = window.useContextMenu();
   const tabMenu = t => [
@@ -27,6 +25,7 @@ function ProjectSidebar({
     { label: "Mark as unread", key: "U", onClick: () => onMarkUnread(t.id) },
     { label: "Rename", key: "R", onClick: () => startRename(t.id) },
     "-",
+    { label: "Close", onClick: () => onCloseTab(t.id) },
     { label: "Archive", key: "A", onClick: () => onArchiveTab(t) },
     { label: "Delete", key: "D", danger: true, confirm: "Delete permanently?", onClick: () => onDeleteTab(t) },
   ];
@@ -49,6 +48,19 @@ function ProjectSidebar({
     </button>
   );
   const groups = groupTabs(tabs);
+  const savedForProject = (path, profile) => {
+    const projectSaved = saved.filter(s => s.profile === profile
+      && window.OMP_PROJECT_NAV.normPath(s.cwd) === window.OMP_PROJECT_NAV.normPath(path));
+    const openFiles = tabs.filter(t => t.profile === profile).map(t => t.sessionFile);
+    return window.OMP_PROJECT_NAV.collapseChatFamilies(projectSaved, openFiles);
+  };
+  const savedRow = s => (
+    <div key={s.path} className="psb-row psb-tab">
+      <button className="psb-main" title={s.title} onClick={() => onResume(s)}>
+        <span className="psb-name">{s.title}</span>
+      </button>
+    </div>
+  );
   // Drag to reorder (#40), the same lists as the tab bar's: projects (a
   // project's rows move as one block), and members within their project.
   const reorder = window.useDragReorder(onReorder);
@@ -68,66 +80,42 @@ function ProjectSidebar({
         <div className="psb-section">Open</div>
         {groups.length === 0 && <div className="psb-empty">no open tabs</div>}
         {groups.map(group => {
-          const multi = group.tabs.length > 1;
-          const expanded = multi && !collapsed[group.key];
+          const history = savedForProject(group.path, group.profile);
+          const expanded = !collapsed[group.key];
           const containsActive = group.tabs.some(t => t.id === activeId);
           const profile = profileLabel(group.profile);
-          const editing = !multi && renaming === group.tabs[0].id;
           const folderIcon = <Icon name="folder" size={11} color={containsActive ? "var(--accent)" : "var(--fg-4)"} />;
-          // Single-tab cards show `folder · title` (#46), which ellipsizes.
-          // The tooltip keeps the full title plus the folder path; multi-tab
-          // project rows still tip the path (member rows tip each tab name).
-          const cardTip = multi
-            ? (group.path || group.name)
-            : [group.tabs[0].name, group.path].filter(Boolean).join("\n");
+          const cardTip = group.path || group.name;
           const members = `members:${group.key}`;
           return (
             <div key={group.key} {...reorder.itemProps("projects", group.key, "y")}
               className={`psb-group${reorder.dropClass("projects", group.key)}`}>
-              {/* A multi-tab project row is only highlighted through its
-                  active member row, as in the mockup; a single-tab one is
-                  that tab. */}
               <div className={`psb-row psb-project ${containsActive && !expanded ? "active" : ""}`}
-                onContextMenu={e => ctx.open(e, multi ? (group.path ? [{ label: "Open in Finder", onClick: () => onReveal(group.path) }] : []) : tabMenu(group.tabs[0]))}>
-                {multi ? (
+                onContextMenu={e => ctx.open(e, [
+                  ...(group.path ? [{ label: "Open in Finder", onClick: () => onReveal(group.path) }, "-"] : []),
+                  { label: "Close", onClick: () => onCloseProject(group.tabs) },
+                ])}>
                   <button className={`psb-chev ${expanded ? "open" : ""}`}
                     title={expanded ? "collapse" : "expand"} aria-expanded={expanded}
                     onClick={e => { e.stopPropagation(); toggle(group.key); }}>
                     <Icon name="chevR" size={10} />
                   </button>
-                ) : <span className="psb-chev-spacer" />}
-                {editing ? (
-                  <div className="psb-main psb-editing">
-                    {folderIcon}
-                    {renameField(group.tabs[0])}
-                  </div>
-                ) : (
                   <button className="psb-main" title={cardTip}
-                    onClick={() => onSelectTab(groupTarget(group, activeId))}
-                    onDoubleClick={() => { if (!multi) startRename(group.tabs[0].id); }}>
+                    onClick={() => onSelectTab(groupTarget(group, activeId))}>
                     {folderIcon}
-                    {multi
-                      ? <span className="psb-name">{group.name}</span>
-                      : <TabLabel tab={group.tabs[0]} className="psb-name" />}
+                    <span className="psb-name">{group.name}</span>
                     {profile && (
                       <span className="chip muted tab-profile" title={`profile: ${profile}`}>{profile}</span>
                     )}
                     {group.tabs.some(x => unread?.has(x.id)) && <span className="psb-unread" title="Unread" />}
                     <TabRunDot state={groupRunState(group.tabs)} />
-                    {multi && <span className="tab-count psb-count">{group.tabs.length}</span>}
+                    <span className="tab-count psb-count">{group.tabs.length + history.length}</span>
                   </button>
-                )}
                 <span className="psb-actions">
                   {group.path && (
                     <button className="psb-act" title="New conversation here"
                       onClick={() => onNewInProject(group.path, group.profile)}>
                       <Icon name="plus" size={10} />
-                    </button>
-                  )}
-                  {!multi && !editing && renameButton(group.tabs[0])}
-                  {!multi && (
-                    <button className="psb-act" title="Close tab" onClick={() => onCloseTab(group.tabs[0].id)}>
-                      <Icon name="close" size={9} />
                     </button>
                   )}
                 </span>
@@ -153,29 +141,47 @@ function ProjectSidebar({
                   </span>
                 </div>
               ))}
+              {expanded && history.map(savedRow)}
             </div>
           );
         })}
 
         <div className="psb-section">Recent</div>
         {recents.length === 0 && <div className="psb-empty">no recent projects</div>}
-        {recents.map(r => (
-          <div key={r.path} className="psb-row psb-recent">
-            <span className="psb-chev-spacer" />
-            <button className="psb-main" title={r.path} onClick={() => onOpenRecent(r.path)}>
-              <Icon name="folder" size={11} color="var(--fg-5)" />
-              <span className="psb-name">
-                {basename(r.path)}
-                <span className="psb-parent">{parentName(r.path)}</span>
-              </span>
-            </button>
-            <span className="psb-actions">
-              <button className="psb-act" title="Remove from recent" onClick={() => onForgetRecent(r.path)}>
-                <Icon name="close" size={9} />
-              </button>
-            </span>
-          </div>
-        ))}
+        {recents.map(r => {
+          const key = window.OMP_PROJECT_NAV.groupKey({ path: r.path, profile: historyProfile });
+          const expanded = !collapsed[key];
+          const history = savedForProject(r.path, historyProfile);
+          return (
+            <div key={key} className="psb-group">
+              <div className="psb-row psb-recent">
+                <button className={`psb-chev ${expanded ? "open" : ""}`}
+                  title={expanded ? "collapse" : "expand"} aria-expanded={expanded}
+                  onClick={() => toggle(key)}>
+                  <Icon name="chevR" size={10} />
+                </button>
+                <button className="psb-main" title={r.path} onClick={() => toggle(key)}>
+                  <Icon name="folder" size={11} color="var(--fg-5)" />
+                  <span className="psb-name">
+                    {basename(r.path)}
+                    <span className="psb-parent">{parentName(r.path)}</span>
+                  </span>
+                  <span className="tab-count psb-count">{history.length}</span>
+                </button>
+                <span className="psb-actions">
+                  <button className="psb-act" title="New conversation here" onClick={() => onOpenRecent(r.path)}>
+                    <Icon name="plus" size={10} />
+                  </button>
+                  <button className="psb-act" title="Remove from recent" onClick={() => onForgetRecent(r.path)}>
+                    <Icon name="close" size={9} />
+                  </button>
+                </span>
+              </div>
+              {expanded && history.map(savedRow)}
+              {expanded && history.length === 0 && <div className="psb-empty">No saved conversations</div>}
+            </div>
+          );
+        })}
       </div>
 
       {footer}

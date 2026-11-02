@@ -64,7 +64,7 @@ function EnvironmentCard({ project, profileLabel }) {
   );
 }
 
-const _SP2_COLORS = { messages: "var(--accent)", system: "var(--lilac)", tools: "var(--amber)", free: "var(--line-bright)" };
+const _SP2_COLORS = { messages: "var(--accent)", compacted: "var(--cyan)", system: "var(--lilac)", tools: "var(--amber)", free: "var(--line-bright)" };
 
 function ContextCard({ breakdown, onCompact, compacting, disabled }) {
   const fmt = window.formatTokens;
@@ -93,7 +93,7 @@ function ContextCard({ breakdown, onCompact, compacting, disabled }) {
           </div>
         ))}
       </div>
-      <div className="sp-note">The split of what is in use is estimated.</div>
+      <div className="sp-note">Parts are text estimates reconciled to the reported total. Native payloads and images are not separately sized.</div>
       {onCompact && (
         <div className="sp-foot-action">
           <button

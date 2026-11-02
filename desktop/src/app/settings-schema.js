@@ -193,9 +193,8 @@
         custom("goalContinue", "Keep working on a goal", "omp continues an active goal on its own after each turn instead of waiting for you. Costs tokens while unattended.", "goal auto continue"),
       ] },
       { name: "Subagents", rows: [
-        custom("subagentModel", "Subagent default model", "Default model used when delegating tasks to subagents: automatic (following primary model) or manually designated.", "subagent model worker delegate", { keys: ["subagentModelMode", "subagentCustomModel"] }),
-        tweak("subagentDelegation", "seg", "Subagent appetite", "How eagerly the agent delegates tasks to subagents: unlimited, aggressive, moderate, conservative, or off.", "delegation appetite subagent task parallel",
-          { options: opts(["unlimited", "aggressive", "moderate", "conservative", "off"]) }),
+        custom("subagentModel", "Subagent default model", "Choose a model policy for delegated tasks: Ask before spawning, sync with the conversation, or use a Custom model and thinking level.", "subagent model thinking auto sync custom worker delegate", { keys: ["subagentModelMode", "subagentCustomModel", "subagentCustomThinking"] }),
+        custom("subagentDelegation", "Subagent appetite", "Higher levels make the agent more inclined to delegate. These are concurrent upper limits, not target agent counts. Off disables delegation.", "delegation appetite subagent task parallel unlimited aggressive moderate conservative off", { keys: ["subagentDelegation"] }),
       ] },
       { name: "Model Context Protocol", src: "mcp.json", rows: [
         custom("mcpServers", "MCP Servers", "External tools and servers (stdio, HTTP/SSE) configured in mcp.json.", "mcp servers tools github model context protocol stdio http"),

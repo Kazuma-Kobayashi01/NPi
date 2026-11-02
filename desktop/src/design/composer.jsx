@@ -38,7 +38,7 @@ function hintKeyFor(actionId, fallback) {
 // tweaks (Settings › Composer); the defaults match TWEAK_DEFAULTS.
 const _cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
-function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePlan, planBlocked = "", goalMode = false, goalTint = false, onToggleGoal, goalBlocked = "", goalStrip = null, onOpenCmd, onOpenModel, currentModel, approvalMode = null, onApprovals, favoriteModels = [], onPickModel, onManageModels, profileId, contextInfo = null, onToggleDetails, usage = null, thinking, onLoadThinkingLevels, onSetThinking, isStreaming, backgroundWork = false, onAbort, onApprove, annotationCount = 0, microcopy, onFollowUp, draftInsert, promptHistory = [], promptInsert, queue, queueSending, onRemoveQueued, onPromoteQueued, onSendQueuedNow, browserChips = [], onRemoveBrowserChip, onBrowserChipClick, submitKey = "enter", pasteCollapseLines = 5 }) {
+function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePlan, planBlocked = "", goalMode = false, goalTint = false, onToggleGoal, goalBlocked = "", goalStrip = null, onOpenCmd, onOpenModel, currentModel, approvalMode = null, onApprovals, favoriteModels = [], onPickModel, onManageModels, profileId, contextInfo = null, onToggleDetails, usage = null, thinking, onLoadThinkingLevels, onSetThinking, isStreaming, isCompacting = false, backgroundWork = false, onAbort, onApprove, annotationCount = 0, microcopy, onFollowUp, draftInsert, promptHistory = [], promptInsert, queue, queueSending, onRemoveQueued, onPromoteQueued, onSendQueuedNow, browserChips = [], onRemoveBrowserChip, onBrowserChipClick, submitKey = "enter", pasteCollapseLines = 5 }) {
   // Drafts are per tab (issue #28). The composer stays mounted across tab
   // switches and keeps one draft per session id (app/session-ui.js
   // DRAFT_IDLE): text, pending image attachments (sent alongside the next
@@ -377,6 +377,7 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
   // '/' command is being typed), never silently reroute into executing the
   // highlighted palette command instead.
   const sendWith = (dispatcher, { followUp = false } = {}) => {
+    if (isCompacting) return;
     if (showSlash && !followUp) { execCmd(filtered[clampedIdx]); return; }
     if (pendingImages > 0) return; // a paste/pick is still preparing — its image would ship on the *next* message instead
     // A follow-up (`onFollowUp` dispatcher) requires non-empty text.
@@ -615,7 +616,8 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
       {/* Keyed by tab, like the paste strip: a pending action or notice
           belongs to the tab it was taken in. */}
       <QueueStrip key={`queue-${sessionId}`} queue={queue} sending={queueSending}
-        canSendNow={isStreaming}
+        canSendNow={isStreaming && !isCompacting}
+        canPromote={!isCompacting}
         onSendNow={row => onSendQueuedNow(row.text, row.kind)}
         onRemove={row => onRemoveQueued(row.text, row.kind)}
         onPromote={row => onPromoteQueued(row.text)}
@@ -683,7 +685,7 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
         {isStreaming ? (
           <>
             {steerable && (
-              <button className={`btn outlined${goalMode ? " goal-resume" : ""}`} onClick={send} disabled={pendingImages > 0}
+              <button className={`btn outlined${goalMode ? " goal-resume" : ""}`} onClick={send} disabled={isCompacting || pendingImages > 0}
                 style={goalMode ? undefined : { color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))" }}>
                 <Icon name={goalMode ? "goal" : "arrow"} size={10} color={goalMode ? "var(--lilac)" : "var(--amber)"} /> {goalMode ? "start goal" : "steer"}
               </button>
@@ -695,13 +697,13 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
         ) : (
           <>
             {planMode && (
-              <button className="btn outlined" onClick={onApprove}
+              <button className="btn outlined" onClick={onApprove} disabled={isCompacting}
                 style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))" }}>
                 <Icon name="play" size={10} color="var(--amber)" /> approve
               </button>
             )}
             <button className={`btn primary${goalMode ? " goal-start" : ""}`} onClick={send}
-              disabled={!sendable || pendingImages > 0}>
+              disabled={isCompacting || !sendable || pendingImages > 0}>
               {goalMode
                 ? "start goal"
                 : planMode
@@ -714,6 +716,7 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
       </div>
 
       <div className="composer-foot">
+        {isCompacting && <span className="composer-bg-note">Compacting context… · sending paused; your draft is preserved</span>}
         {backgroundWork && (
           <span className="composer-bg-note" title="omp reports background work (an async bash, task or eval job) whose result will wake the agent">
             <TabRunDot state="background" />

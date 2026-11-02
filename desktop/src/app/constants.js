@@ -75,6 +75,7 @@
     "autoRetry": true,
     "subagentModelMode": "auto",
     "subagentCustomModel": "",
+    "subagentCustomThinking": "off",
     "subagentDelegation": "moderate"
   }/*EDITMODE-END*/;
 

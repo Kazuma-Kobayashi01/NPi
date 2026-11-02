@@ -40,10 +40,55 @@ check("the context splits into messages, system prompt, tools and free space, su
 check("estimates never exceed what omp says is in use", () => {
   const b = plain(U.contextBreakdown({ contextUsage: { tokens: 50, contextWindow: 1000 }, systemPrompt: ["a".repeat(4000)], dumpTools: [{ d: "b".repeat(4000) }] }));
   const by = Object.fromEntries(b.parts.map(p => [p.key, p.tokens]));
-  assert.equal(by.system, 50);
-  assert.equal(by.tools, 0);
-  assert.equal(by.messages, 0);
+  assert.ok(by.system > 0 && by.system < 50);
+  assert.ok(by.tools > 0 && by.tools < 50);
+  assert.equal(by.messages, 50 - by.system - by.tools);
   assert.equal(by.free, 950);
+});
+
+check("active summaries are separate from current messages, never sized by tokensAfter", () => {
+  const state = {
+    contextUsage: { tokens: 1000, contextWindow: 10000 },
+    systemPrompt: ["a".repeat(400)],
+    dumpTools: [],
+  };
+  const active = [
+    { role: "compactionSummary", summary: "b".repeat(800), tokensBefore: 200000, tokensAfter: 9000 },
+    { role: "user", content: "c".repeat(400) },
+  ];
+  const b = plain(U.contextBreakdown(state, active));
+  const by = Object.fromEntries(b.parts.map(p => [p.key, p.tokens]));
+  assert.equal(by.compacted, 200);
+  assert.equal(by.messages, 1000 - by.system - by.tools - by.compacted);
+  assert.equal(b.parts.reduce((n, p) => n + p.tokens, 0), 10000);
+});
+
+check("fixed estimates do not starve known active messages after compaction", () => {
+  const b = plain(U.contextBreakdown({
+    contextUsage: { tokens: 1000, contextWindow: 10000 },
+    systemPrompt: ["a".repeat(8000)],
+    dumpTools: [{ description: "t".repeat(8000) }],
+  }, [
+    { role: "compactionSummary", summary: "s".repeat(800) },
+    { role: "user", content: "m".repeat(800) },
+  ]));
+  const by = Object.fromEntries(b.parts.map(p => [p.key, p.tokens]));
+  assert.ok(by.messages > 0);
+  assert.ok(by.compacted > 0);
+  assert.equal(b.parts.reduce((n, p) => n + p.tokens, 0), 10000);
+});
+
+check("native payload bytes are not invented summary tokens", () => {
+  const b = plain(U.contextBreakdown({
+    contextUsage: { tokens: 1000, contextWindow: 10000 },
+  }, [{
+    role: "compactionSummary", summary: "abcd",
+    providerPayload: { encrypted: "x".repeat(80000) },
+    images: [{ data: "x".repeat(80000) }],
+  }]));
+  assert.equal(b.parts.find(p => p.key === "compacted").tokens, 1);
+  assert.ok(!U.contextBreakdown({ contextUsage: { tokens: 1, contextWindow: 10 } }, null)
+    .parts.some(p => p.key === "compacted"));
 });
 
 check("without context usage there is no breakdown", () => {
@@ -91,7 +136,7 @@ check("cost formatting", () => {
 });
 
 if (failed) process.exit(1);
-console.log("test-usage-view: 8 checks passed");
+console.log("test-usage-view: 11 checks passed");
 
 // Exercise the real hook with deferred reads and live completion notifications.
 {

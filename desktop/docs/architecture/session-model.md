@@ -27,6 +27,33 @@ profile: 24 hours, 7 days, 30 days, or all locally available history. Its
 token totals sum uncached input, output, cache read and cache write; model
 rows preserve those components and provider identity. Costs are estimates.
 
+## Context usage
+
+`get_state.contextUsage` reports `{ tokens, contextWindow, percent }`.
+`tokens` already includes the fixed system/tool context and active messages,
+including `compactionSummary`; it is not just the conversation token count.
+The kernel uses its tokenizer and provider usage anchors. Its richer internal
+`getContextBreakdown` is not exposed by RPC.
+
+The bridge reads active context separately with `get_messages` **without**
+`fullHistory`, keeps it per tab as `contextMessages`, and passes it to
+`OMP_USAGE.contextBreakdown(rpcState, contextMessages)`. The full-history
+transcript is for display only: discarded historical summaries must not be
+summed into current usage. Manual and automatic compaction completion refresh
+both state and active messages; compaction start/end and `isCompacting` from
+state govern the in-progress UI.
+
+The Context card separates active `compactionSummary.summary` text as
+**Previous compaction**, deducting its estimate from Messages rather than
+counting it twice. System, tool, summary and ordinary-message text estimates
+are reconciled together when they exceed the reported used total, so a large
+fixed-prompt estimate cannot incorrectly consume all of Messages. Remaining
+unclassified overhead stays in Messages. All parts are estimates, not exact
+provider billing. Images and opaque/native payloads have no separate token
+count in this RPC and are not priced by base64/ciphertext length.
+`tokensBefore` and optional `tokensAfter` are whole-context before/after
+compaction metadata, never the token size of the summary itself.
+
 ## Todo and plan rail card
 
 The ambient rail's bottom `TodoPlanCard` (`design/side-panel.jsx`, wired through `AmbientRail` in `design/chrome.jsx`) receives the active session's `kanban` and counts from `app-live.jsx`. Its header uses the same local disclosure interaction as other `SideCard` cards: initially folded, click/Enter/Space toggles tasks in place rather than opening `PlanKanban`. Expanded content shows phase headings, task statuses and notes, updates with the active session data, and scrolls within a bounded height. Empty plans display an idle state. The separate **Todo and plan** More-menu action still opens the full plan view.

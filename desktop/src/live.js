@@ -68,6 +68,8 @@
     sessionCost:    null,
     sessionStats:   null,   // get_session_stats: tokens in/out/cache, cost (the side panel)
     ctxBreakdown:   null,   // OMP_USAGE.contextBreakdown of rpcState
+    isCompacting:   false,
+    contextMessages: null,
     currentTps:     0,
     exitReason:     null,   // non-empty agent://exit reason for the last run — drives the "failed" run state
     // omp reports background work (an async bash/task/eval job) that will
@@ -219,6 +221,16 @@
   // read from the stored tweaks at load so the boot restore sees
   // `restoreTabs` before React mounts; `setSessionPrefs` keeps them current.
   let sessionPrefs = PREFS.fromTweaks(window.OMP_TWEAKS_STORE.read(), window.TWEAK_DEFAULTS);
+  function _readSubagentPreferences(values) {
+    const defaults = window.TWEAK_DEFAULTS;
+    return {
+      mode: values.subagentModelMode ?? defaults.subagentModelMode,
+      model: values.subagentCustomModel ?? defaults.subagentCustomModel,
+      thinking: values.subagentCustomThinking ?? defaults.subagentCustomThinking,
+      appetite: values.subagentDelegation ?? defaults.subagentDelegation,
+    };
+  }
+  let subagentPreferences = _readSubagentPreferences(window.OMP_TWEAKS_STORE.read());
   // The busy-close confirmation on screen (`PREFS.tabCloseConfirm` /
   // `quitConfirm` shape), or null; `_closeConfirmAnswer` settles it.
   let closeConfirm = null;
@@ -336,6 +348,7 @@
     return {
       messages:        state.messages,
       isStreaming:     state.isStreaming,
+      isCompacting:    state.isCompacting,
       model:           state.model,
       thinkingLevel:   state.thinkingLevel,
       ctx:             state.ctx,
@@ -759,6 +772,7 @@
   // unknown) or they tick forever. Its queue died with it, no send to it
   // will be acknowledged, and its background jobs died with it too.
   function _endDeadProcessState() {
+    state.isCompacting = false;
     state.subagents = SUB.mergeSnapshots(state.subagents, []);
     state.queue = QUEUE.EMPTY_QUEUE;
     state.queueSending = [];
@@ -787,6 +801,8 @@
       sessionCost:   null,
       sessionStats:  null,
       ctxBreakdown:  null,
+      isCompacting:  false,
+      contextMessages: null,
       currentTps:    0,
       exitReason:    null,
       asyncPending:  false,
@@ -837,6 +853,8 @@
       sessionCost:   state.sessionCost,
       sessionStats:  state.sessionStats,
       ctxBreakdown:  state.ctxBreakdown,
+      isCompacting:  state.isCompacting,
+      contextMessages: state.contextMessages,
       currentTps:    state.currentTps,
       exitReason:    state.exitReason,
       asyncPending:  state.asyncPending,
@@ -883,6 +901,8 @@
       sessionCost:   snap.sessionCost,
       sessionStats:  snap.sessionStats ?? null,
       ctxBreakdown:  snap.ctxBreakdown ?? null,
+      isCompacting:  snap.isCompacting ?? false,
+      contextMessages: snap.contextMessages ?? null,
       currentTps:    snap.currentTps,
       exitReason:    snap.exitReason ?? null,
       asyncPending:  snap.asyncPending ?? false,
@@ -1206,6 +1226,11 @@
     await settled.ready;
     const approvalMode = await window.__TAURI__.core.invoke("start_session", {
       args: { sessionId: id, cwd: cwd ?? "", resume, profile },
+    });
+    // Queue preferences before any prompt can be sent to this new process.
+    await window.__TAURI__.core.invoke("send_command", {
+      sessionId: id,
+      json: JSON.stringify({ type: "set_subagent_preferences", ...subagentPreferences }),
     });
     // A fresh incarnation owns this id now, and `start_session` cleared the
     // backend's cached error for it — so a *new* startup failure must be
@@ -1979,6 +2004,16 @@
 
   // ── RPC response handler ──────────────────────────────────────────────────
   function _handleResponse(resp) {
+    // This is model context, not the full display transcript. In particular,
+    // only its currently active summary belongs in the context breakdown.
+    if (resp.command === "get_messages" && resp.id?.startsWith("context-")) {
+      if (resp.success) {
+        state.contextMessages = resp.data.messages;
+        state.ctxBreakdown = window.OMP_USAGE.contextBreakdown(state.rpcState, state.contextMessages);
+        notify();
+      }
+      return;
+    }
     // `branch` / `fork` moved the process onto a new file whether or not a
     // caller still waits (it may have timed out, or the response is replayed
     // after a tab switch), so the transcript follows here, before the
@@ -1997,8 +2032,14 @@
       }
       return;
     }
+    if (resp.command === "set_subagent_preferences" && !resp.success) {
+      _pushAssistantNote(`Could not apply subagent settings: ${resp.error}`);
+      notify();
+      return;
+    }
     // Compact — handle success and failure both (must come before early-return below)
     if (resp.command === "compact") {
+      state.isCompacting = false;
       let idx = -1;
       for (let i = state.messages.length - 1; i >= 0; i--) {
         if (state.messages[i].kind === "compact" && state.messages[i].status === "pending") { idx = i; break; }
@@ -2010,7 +2051,7 @@
           : { status: "error" };
         state.messages = state.messages.map((m, i) => i === idx ? { ...m, ...update } : m);
       }
-      if (resp.success) {
+      if (resp.success && idx !== -1) {
         _send({ type: "get_state" });
         _send({ type: "get_messages", fullHistory: true });
       }
@@ -2168,6 +2209,27 @@
     const { type } = ev;
     const now  = Date.now();
     const time = timeNow();
+
+    if (type === "auto_compaction_start" || type === "manual_compaction_start") {
+      state.isCompacting = true;
+      if (!state.messages.some(m => m.kind === "compact" && m.status === "pending")) {
+        state.messages = [...state.messages, { kind: "compact", status: "pending", id: "cmpct-" + (_nextCmdId++), time }];
+      }
+      notify();
+      return;
+    }
+    if (type === "auto_compaction_end" || type === "manual_compaction_end") {
+      state.isCompacting = false;
+      state.contextMessages = null;
+      const result = ev.result;
+      state.messages = state.messages.map(m => m.kind === "compact" && m.status === "pending"
+        ? { ...m, status: result ? "done" : "error", summary: result?.summary, shortSummary: result?.shortSummary, tokensBefore: result?.tokensBefore }
+        : m);
+      _send({ type: "get_state" });
+      _send({ type: "get_messages", fullHistory: true });
+      notify();
+      return;
+    }
 
     // Subagent frames (only emitted once _initFetch subscribed this process).
     if (type === "subagent_lifecycle" || type === "subagent_progress" || type === "subagent_event") {
@@ -2808,7 +2870,9 @@
   function _applyRpcState(rpcState) {
     if (!rpcState) return;
     state.rpcState      = rpcState;
-    state.ctxBreakdown  = window.OMP_USAGE.contextBreakdown(rpcState);
+    state.ctxBreakdown  = window.OMP_USAGE.contextBreakdown(rpcState, state.contextMessages);
+    _send({ type: "get_messages", id: "context-" + (_nextCmdId++) });
+    state.isCompacting  = rpcState.isCompacting === true;
     state.isStreaming   = rpcState.isStreaming ?? false;
     // Background work that will wake the agent (see `state.asyncPending`);
     // this is also how a tab activated mid-wait learns about it.
@@ -2970,6 +3034,7 @@
         // way (`setSessionPrefs`).
         if (!sessionPrefs.autoCompaction) _send({ type: "set_auto_compaction", enabled: false });
         if (!sessionPrefs.autoRetry) _send({ type: "set_auto_retry", enabled: false });
+        _send({ type: "set_subagent_preferences", ...subagentPreferences });
         _send({ type: "get_state" });
         // Fire-and-forget activity: don't block native input waiting for an indicator.
         void _computerCommand(activeSessionId, { type: "get_computer_use" });
@@ -3286,6 +3351,7 @@
    *  Side-effectful end to end (IPC, both tab stores); the row and note
    *  shapes are pure and tested in test-message-queue.mjs. */
   function _sendQueued(kind, text, images, send) {
+    if (state.isCompacting) return Promise.resolve(false);
     const origin = activeSessionId;
     if (!origin) return Promise.resolve(false);
     const id = ++_queueSendSeq;
@@ -3380,6 +3446,7 @@
    *  `streamingBehavior` tells omp what to do if a turn is running by the
    *  time the prompt arrives; idle, omp ignores it and runs the prompt. */
   function _sendPrompt(text, images, streamingBehavior) {
+    if (state.isCompacting) return Promise.resolve(false);
     state.messages = [...state.messages, { kind: "user", time: timeNow(), text, images: images ?? [] }];
     _disarmAutoRename(text);
     _recordPrompt(text);
@@ -3538,6 +3605,7 @@
      *  While idle (e.g. after an abort) omp starts a turn with it right
      *  away. Same result contract as `removeQueuedMessage`. */
     async promoteQueuedMessage(text) {
+      if (state.isCompacting) return false;
       const data = await _sendWithResponse({ type: "promote_queued_message", message: text });
       return data?.promoted === true;
     },
@@ -3550,6 +3618,7 @@
      *  docs/architecture/message-queue.md. Same result contract as
      *  `removeQueuedMessage`. */
     async sendQueuedNow(text, queue) {
+      if (state.isCompacting) return false;
       const gen = _switchGen;
       if (queue === "followUp" && !(await this.promoteQueuedMessage(text))) return false;
       if (_switchGen === gen && state.isStreaming && !userAbortInFlight) this.abort();
@@ -3574,6 +3643,7 @@
      *  IPC end to end; the decisions are app/goal.js's (`ompStartedTurn`,
      *  test-goal.mjs), the sequence was live-tested against omp 18.6.0. */
     async goalStart(objective, tokenBudget, images, prompt) {
+      if (state.isCompacting) return { ok: false, error: "Context compaction is in progress." };
       const text = String(objective ?? "").trim();
       const imgs = images ?? [];
       if (!text) return { ok: false, error: "Describe the goal first." };
@@ -3778,10 +3848,20 @@
       return _sendWithResponse({ type: "set_thinking_level", level }, QUICK_CMD_TIMEOUT_MS);
     },
     compact() {
+      if (state.isCompacting) return;
+      state.isCompacting = true;
       const id  = "cmpct-" + (_nextCmdId++);
       state.messages = [...state.messages, { kind: "compact", status: "pending", id, time: timeNow() }];
       notify();
-      _send({ type: "compact", id });
+      const origin = activeSessionId;
+      _send({ type: "compact", id }).then(sent => {
+        if (sent) return;
+        const target = origin === activeSessionId ? state : sessionSnapshots.get(origin);
+        if (!target) return; // The originating tab may have closed during IPC.
+        target.isCompacting = false;
+        target.messages = target.messages.map(m => m.id === id ? { ...m, status: "error" } : m);
+        if (origin === activeSessionId) notify();
+      });
     },
     newSession()       { _send({ type: "new_session" }); },
     exportHtml()       { _send({ type: "export_html" }); },
@@ -4753,6 +4833,14 @@
       if (changed.includes("autoCompaction")) _sendToAll({ type: "set_auto_compaction", enabled: next.autoCompaction });
       if (changed.includes("autoRetry")) _sendToAll({ type: "set_auto_retry", enabled: next.autoRetry });
       if (changed.includes("confirmBusyClose")) _syncCloseGuard(_sessionsView());
+    },
+
+    /** Desktop-owned preferences apply to all open processes and new spawns. */
+    setSubagentPreferences(values) {
+      const next = _readSubagentPreferences(values);
+      if (Object.keys(next).every(key => next[key] === subagentPreferences[key])) return;
+      subagentPreferences = next;
+      _sendToAll({ type: "set_subagent_preferences", ...next });
     },
 
     /** Put the tabs in `ids` order (#40): a drag in the tab bar, the group

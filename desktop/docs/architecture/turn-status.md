@@ -24,6 +24,23 @@ live bubbles or dropping their stable IDs, tool cards, or pending prompts.
 `ChatView` allows scrolling to the first message and retains the reader's
 position when new output arrives while they are reading history.
 
+## Compaction lifecycle
+
+`live.js` tracks `isCompacting` per tab from `get_state` and OMP's
+`auto_compaction_start/end` and `manual_compaction_start/end` events.
+The explicit Compact action locks immediately, before its start event.
+Completion, failure or cancellation unlocks sending and requests fresh state
+and full display history; each state response also requests the active model
+context separately, without `fullHistory`, for the Context card. These active
+messages never merge into the displayed transcript.
+
+The composer disables send, steer, follow-up and queue-promotion actions while
+compaction is active. Its draft remains editable and is not cleared by blocked
+submission. The bridge also refuses prompt/queue/goal sends during this phase.
+An IPC failure or process exit releases the lock. No kernel compaction or
+history-persistence behavior changes.
+
+
 
 ## Remote status for all tabs
 

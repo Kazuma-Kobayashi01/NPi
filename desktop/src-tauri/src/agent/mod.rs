@@ -98,6 +98,7 @@ const ALLOWED_COMMAND_TYPES: &[&str] = &[
     // Thinking-level menu on the composer pill: the current model's levels,
     // and the one picked.
     "get_available_thinking_levels",
+    "set_subagent_preferences",
     "set_thinking_level",
     "compact",
     "new_session",

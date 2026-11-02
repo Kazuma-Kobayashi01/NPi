@@ -1,11 +1,11 @@
 // What the side panel shows about a conversation's size and cost, pure.
 // Exposes `window.OMP_USAGE`; an IIFE (AGENTS.md "IIFE rule"), dependency-free.
 //
-//  - contextBreakdown(rpcState): the context window split into messages /
-//    system prompt / tools / free. omp reports the total in use
-//    (`contextUsage`); the system prompt and the tool definitions it also
-//    sends (`systemPrompt`, `dumpTools`) are sized by an estimate, and the
-//    rest is the conversation. The parts are estimates and say so.
+//  - contextBreakdown(rpcState, contextMessages): the context window split
+//    into current messages / previous compaction / system prompt / tools /
+//    free. The reported total includes all of them. Text estimates are
+//    reconciled to that total; active messages must come from get_messages
+//    without fullHistory, not the transcript displayed in chat.
 //  - quotaFor(rows, provider): the subscription limits of the provider in
 //    use, and the other signed-in subscriptions (rows: `usage_limits`).
 //  - tokenRows(stats): input / output / cache read / cache write from
@@ -20,18 +20,60 @@
     return Math.ceil(n);
   }
 
-  function contextBreakdown(rpcState) {
+  function messageTextTokens(message) {
+    if (message.excludeFromContext) return 0;
+    let tokens = estimateTokens(message.summary);
+    if (message.role === "bashExecution") {
+      tokens += estimateTokens(message.command) + estimateTokens(message.output);
+    } else if (message.role === "pythonExecution") {
+      tokens += estimateTokens(message.code) + estimateTokens(message.output);
+    } else if (message.role === "fileMention") {
+      for (const file of message.files) tokens += estimateTokens(file.content);
+    }
+    const content = message.blocks ?? message.content;
+    if (typeof content === "string") return tokens + estimateTokens(content);
+    for (const block of content ?? []) {
+      if (block.type === "text") tokens += estimateTokens(block.text);
+      else if (block.type === "thinking") tokens += estimateTokens(block.thinking);
+      else if (block.type === "toolCall") {
+        tokens += estimateTokens(block.name) + estimateTokens(JSON.stringify(block.arguments));
+      }
+    }
+    // Images and native provider payloads have no token size in this RPC.
+    // Never price their base64/ciphertext as if it were summary text.
+    return tokens;
+  }
+
+  function contextBreakdown(rpcState, contextMessages) {
     const cu = rpcState?.contextUsage;
     if (!cu || !(cu.contextWindow > 0)) return null;
     const total = cu.contextWindow;
     const used = Math.max(0, Math.min(cu.tokens ?? 0, total));
-    const system = Math.min(used, estimateTokens((rpcState.systemPrompt ?? []).join("\n")));
-    const tools = Math.min(used - system, estimateTokens(JSON.stringify(rpcState.dumpTools ?? [])));
-    const messages = used - system - tools;
+    let system = estimateTokens((rpcState.systemPrompt ?? []).join("\n"));
+    let tools = estimateTokens(JSON.stringify(rpcState.dumpTools ?? []));
+    let summary = 0, current = 0, hasSummary = false;
+    for (const message of contextMessages ?? []) {
+      if (message.role === "compactionSummary") {
+        hasSummary = true;
+        summary += messageTextTokens(message);
+      } else {
+        current += messageTextTokens(message);
+      }
+    }
+    // Fixed prompt estimates must not consume the whole budget before known
+    // messages are considered. Scale all text estimates down together, then
+    // leave unclassified provider overhead in the residual Messages category.
+    const estimated = system + tools + summary + current;
+    const scale = estimated > used ? used / estimated : 1;
+    system = Math.floor(system * scale);
+    tools = Math.floor(tools * scale);
+    summary = Math.floor(summary * scale);
+    const messages = used - system - tools - summary;
     return {
       total, used, pct: (used / total) * 100,
       parts: [
         { key: "messages", label: "Messages", tokens: messages },
+        ...(hasSummary ? [{ key: "compacted", label: "Previous compaction", tokens: summary }] : []),
         { key: "system", label: "System prompt", tokens: system },
         { key: "tools", label: "Tools", tokens: tools },
         { key: "free", label: "Free space", tokens: total - used },

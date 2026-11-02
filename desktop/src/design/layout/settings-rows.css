@@ -52,6 +52,18 @@
 .st-row-error { padding: 0 16px 10px; color: var(--rose); font-size: var(--d-text-xs); overflow-wrap: anywhere; }
 .st-linkrow .st-btn svg { color: currentColor; }
 
+/* ── Agent → subagent preferences ────────────────────────────────── */
+.st-subagent-settings { display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%; }
+.st-subagent-settings .st-seg { align-self: flex-start; max-width: 100%; flex-wrap: wrap; }
+.st-subagent-pickers { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+.st-subagent-pickers .st-modelsel { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--fg-3); font-size: var(--d-text-xs); }
+.st-subagent-pickers select { width: 100%; min-width: 0; }
+.st-subagent-error { color: var(--rose); font-size: var(--d-text-xs); overflow-wrap: anywhere; }
+.st-subagent-unlimited { color: var(--rose); }
+@media (max-width: 600px) {
+  .st-subagent-pickers { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ── Approvals → the mode editor (approval-mode-section.jsx) ───────── */
 .st-row .mode-sect { padding: 0; border-bottom: 0; }
 
