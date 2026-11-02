@@ -33,10 +33,24 @@ pub const DESKTOP_RICH_OUTPUT_HINT: &str = "\
 - Use these formats rather than executable HTML or JavaScript; rendering libraries are local and the webview's network policy remains strict.
 ";
 
+pub const CHAT_COMPACTION_OVERLAY: &str = "\
+compaction:
+  thresholdPercent: 70
+  methodOrder: [\"soft\"]
+  experimentalContextManagement: true
+";
+
+pub const ACADEMIC_COMPACTION_OVERLAY: &str = "\
+compaction:
+  keepRecentTokens: 30000
+  methodOrder: [\"handoff\", \"soft\"]
+";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppMode {
     Chat,
     Code,
+    Academic,
 }
 
 impl AppMode {
@@ -44,6 +58,7 @@ impl AppMode {
         match s {
             "chat" => Some(Self::Chat),
             "code" => Some(Self::Code),
+            "academic" => Some(Self::Academic),
             _ => None,
         }
     }
@@ -52,6 +67,15 @@ impl AppMode {
     pub const fn base_prompt(self) -> Option<&'static str> {
         match self {
             Self::Chat => Some(CHAT_PROMPT),
+            Self::Code | Self::Academic => None,
+        }
+    }
+
+    /// Compaction configuration overlay snippet for this mode; `None` keeps omp defaults.
+    pub const fn compaction_overlay(self) -> Option<&'static str> {
+        match self {
+            Self::Chat => Some(CHAT_COMPACTION_OVERLAY),
+            Self::Academic => Some(ACADEMIC_COMPACTION_OVERLAY),
             Self::Code => None,
         }
     }
@@ -116,9 +140,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_only_the_two_modes() {
+    fn parses_modes() {
         assert_eq!(AppMode::parse("chat"), Some(AppMode::Chat));
         assert_eq!(AppMode::parse("code"), Some(AppMode::Code));
+        assert_eq!(AppMode::parse("academic"), Some(AppMode::Academic));
         assert_eq!(AppMode::parse("Chat"), None);
         assert_eq!(AppMode::parse(""), None);
     }
@@ -127,6 +152,14 @@ mod tests {
     fn only_chat_replaces_omps_prompt() {
         assert!(AppMode::Chat.base_prompt().is_some_and(|p| p.contains("general-purpose")));
         assert_eq!(AppMode::Code.base_prompt(), None, "Code keeps omp's own prompt");
+        assert_eq!(AppMode::Academic.base_prompt(), None, "Academic keeps omp's prompt for now");
+    }
+
+    #[test]
+    fn compaction_overlay_matches_mode() {
+        assert!(AppMode::Chat.compaction_overlay().is_some_and(|s| s.contains("thresholdPercent: 70") && s.contains("experimentalContextManagement: true")));
+        assert_eq!(AppMode::Code.compaction_overlay(), None);
+        assert!(AppMode::Academic.compaction_overlay().is_some_and(|s| s.contains("keepRecentTokens: 30000") && s.contains("handoff")));
     }
 
     #[test]

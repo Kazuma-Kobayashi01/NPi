@@ -10,6 +10,23 @@ The same menu ticks one profile as the **startup default**, stored as `ProfilesF
 
 **Composer and plan mode are per tab too** (#28), but desktop-only state omp never sees, so they live in React rather than in the bridge snapshot: `app-live.jsx` keeps a `plans` map and `design/composer.jsx` a `drafts` map (text, attachments, collapsed pastes, prompt-history recall position, in-flight image count), both keyed by session id via `app/session-ui.js` (regression `test-session-ui.mjs`) and pruned when a tab closes. Both key on `activeProject.id` (the tab being rendered, `""` with none open — a no-op key). The `Composer` deliberately stays mounted across tab switches rather than being re-keyed: a remount would re-fire its `draftInsert`/`promptInsert` effects, and an image still being prepared must land in the tab it was pasted into (`addFiles` captures the id), not in whichever tab is active when it resolves. Purely visual state (caret, slash selection, mention list) is reset on a switch instead. Plan state is not reset by `/new` or a profile respawn inside the same tab. The column beside the chat is per tab the same way (`app-live.jsx` `sides`: the rail, the conversation tree or the browser panel; `docs/architecture/browser.md`).
 
+## Plan usage refresh
+
+`app/use-quotas.jsx` reads subscription limits for the active profile on entry.
+Live `session_settled` events from each tab, including background tabs, force
+an invalidation and read for that tab's profile; replay does not repeat it.
+There is no periodic poll. Manual refresh uses the same invalidation path.
+The kernel's provider failure cooldown still applies. A provider failure can
+leave no report, and the CLI does not expose enough information here to
+distinguish every such case from an account without subscription limits.
+Concurrent requests are serialized per profile, and explicit errors appear
+alongside retained same-profile data.
+
+The Usage statistics panel uses `npi stats --json --range` for the active
+profile: 24 hours, 7 days, 30 days, or all locally available history. Its
+token totals sum uncached input, output, cache read and cache write; model
+rows preserve those components and provider identity. Costs are estimates.
+
 ## Todo and plan rail card
 
 The ambient rail's bottom `TodoPlanCard` (`design/side-panel.jsx`, wired through `AmbientRail` in `design/chrome.jsx`) receives the active session's `kanban` and counts from `app-live.jsx`. Its header uses the same local disclosure interaction as other `SideCard` cards: initially folded, click/Enter/Space toggles tasks in place rather than opening `PlanKanban`. Expanded content shows phase headings, task statuses and notes, updates with the active session data, and scrolls within a bounded height. Empty plans display an idle state. The separate **Todo and plan** More-menu action still opens the full plan view.

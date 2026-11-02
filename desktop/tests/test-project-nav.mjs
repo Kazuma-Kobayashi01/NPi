@@ -327,4 +327,55 @@ check("restoreSpec opens a fresh, unnamed tab on the folder when there is no con
   assert.deepEqual(spec, { cwd: "/a", resume: null, name: null, profile: "default" });
 });
 
+// ── collapseChatFamilies ────────────────────────────────────────────────────
+
+check("collapseChatFamilies deduplicates branches to one row with resume_path", () => {
+  const saved = [
+    { path: "/sessions/a.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/c.jsonl", title: "My Research", timestamp: "2026-10-01T10:00:00Z" },
+    { path: "/sessions/b.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/c.jsonl", title: "Untitled conversation", timestamp: "2026-10-01T10:05:00Z" },
+    { path: "/sessions/c.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/c.jsonl", title: "Untitled conversation", timestamp: "2026-10-01T10:10:00Z", updated_at: "2026-10-01T10:30:00Z" },
+  ];
+  const collapsed = N.collapseChatFamilies(saved, []);
+  assert.equal(collapsed.length, 1);
+  assert.equal(collapsed[0].path, "/sessions/c.jsonl");
+  assert.equal(collapsed[0].title, "My Research");
+  assert.deepEqual(collapsed[0]._familyMembers, ["/sessions/a.jsonl", "/sessions/b.jsonl", "/sessions/c.jsonl"]);
+});
+
+check("collapseChatFamilies omits saved family if any member is currently open in a tab", () => {
+  const saved = [
+    { path: "/sessions/a.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/b.jsonl", title: "Chat" },
+    { path: "/sessions/b.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/b.jsonl", title: "Chat" },
+  ];
+  // Tab is running branch b
+  const collapsed = N.collapseChatFamilies(saved, ["/sessions/b.jsonl"]);
+  assert.equal(collapsed.length, 0);
+
+  // Tab is running root a
+  const collapsed2 = N.collapseChatFamilies(saved, ["/sessions/a.jsonl"]);
+  assert.equal(collapsed2.length, 0);
+});
+
+check("collapseChatFamilies keeps unrelated families distinct", () => {
+  const saved = [
+    { path: "/sessions/a.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/a.jsonl", title: "Fam 1" },
+    { path: "/sessions/b.jsonl", family_path: "/sessions/a.jsonl", resume_path: "/sessions/a.jsonl", title: "Fam 1" },
+    { path: "/sessions/x.jsonl", family_path: "/sessions/x.jsonl", resume_path: "/sessions/x.jsonl", title: "Fam 2" },
+  ];
+  const collapsed = N.collapseChatFamilies(saved, []);
+  assert.equal(collapsed.length, 2);
+  const paths = collapsed.map(c => c.path).sort();
+  assert.deepEqual(paths, ["/sessions/a.jsonl", "/sessions/x.jsonl"]);
+});
+
+check("collapseChatFamilies falls back cleanly when family_path is missing", () => {
+  const saved = [
+    { path: "/sessions/p.jsonl", title: "Solo 1" },
+    { path: "/sessions/q.jsonl", title: "Solo 2" },
+  ];
+  const collapsed = N.collapseChatFamilies(saved, ["/sessions/p.jsonl"]);
+  assert.equal(collapsed.length, 1);
+  assert.equal(collapsed[0].path, "/sessions/q.jsonl");
+});
+
 console.log(`project-nav: ${passed} checks passed`);

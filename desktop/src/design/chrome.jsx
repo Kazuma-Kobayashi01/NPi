@@ -226,14 +226,15 @@ function MoreMenu({ items }) {
 // user's widgets (passed as children).
 function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, provider, quotas,
   subagents, subagentPaneOpen, onOpenSubagent, onToggleSubagentPane, show = {}, todoCounts, kanban, onCompact, compacting, children }) {
-  const hasAgents = Array.isArray(subagents) && subagents.length > 0;
+  const isLive = window.OMP_SUBAGENTS?.isLive ?? (s => s === "pending" || s === "running");
+  const hasActiveAgents = Array.isArray(subagents) && subagents.some(a => isLive(a.status));
   const { TodoPlanCard } = window;
   return (
     <aside className="rail">
       <EnvironmentCard project={project} profileLabel={profileLabel} />
       <ContextCard breakdown={ctxBreakdown} onCompact={onCompact} compacting={compacting} />
       <UsageCard provider={provider} quotas={quotas} stats={sessionStats} />
-      {(show.subagents ?? true) && hasAgents && (
+      {(show.subagents ?? true) && hasActiveAgents && (
         <SubagentRailCard agents={subagents} paneOpen={subagentPaneOpen}
           onOpen={onOpenSubagent} onTogglePane={onToggleSubagentPane} />
       )}

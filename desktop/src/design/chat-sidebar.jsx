@@ -23,16 +23,39 @@ const _csFile = (r) => (r.tab ? r.tab.sessionFile : r.saved?.path) || null;
  *  `[{ label, items: [{ key, title, tab?, saved?, file }] }]`. Archived saved chats are left out. */
 function groupChats(tabs, saved, pinned = [], archived = []) {
   const openFiles = new Set(tabs.map(t => t.sessionFile).filter(Boolean));
+  const collapsedSaved = window.OMP_PROJECT_NAV.collapseChatFamilies(saved, openFiles);
+
+  const isArchived = s => archived.includes(s.path)
+    || (s._familyMembers && s._familyMembers.some(f => archived.includes(f)));
+
+  const isPinned = r => r.file && (
+    pinned.includes(r.file)
+    || (r.saved?._familyMembers && r.saved._familyMembers.some(f => pinned.includes(f)))
+  );
+
   const rows = [
     ...[...tabs].reverse().map(t => ({ key: `tab:${t.id}`, title: t.name, tab: t, at: Date.now() })),
-    ...saved.filter(s => !openFiles.has(s.path) && !archived.includes(s.path))
-      .map(s => ({ key: `saved:${s.path}`, title: s.title || "Untitled", saved: s, at: Date.parse(s.updated_at || s.timestamp) || 0 }))
+    ...collapsedSaved.filter(s => !isArchived(s))
+      .map(s => ({
+        key: `saved:${s.path}`,
+        title: s.title || "Untitled",
+        saved: s,
+        at: s._familyMaxAt || Date.parse(s.updated_at || s.timestamp) || 0,
+      }))
       .sort((a, b) => b.at - a.at),
-  ].map(r => ({ ...r, file: _csFile(r) }));
+  ].map(r => {
+    const file = _csFile(r);
+    const session = saved.find(s => s.path === file);
+    const familyFiles = r.saved?._familyMembers ?? (session
+      ? saved.filter(s => s.family_path === session.family_path).map(s => s.path)
+      : file ? [file] : []);
+    return { ...r, file, familyFiles };
+  });
+
   const groups = [];
-  const pins = rows.filter(r => r.file && pinned.includes(r.file));
+  const pins = rows.filter(isPinned);
   if (pins.length) groups.push({ label: "Pinned", items: pins });
-  for (const r of rows.filter(r => !pins.includes(r))) {
+  for (const r of rows.filter(r => !isPinned(r))) {
     const label = _csDay(r.at);
     let g = groups[groups.length - 1];
     if (!g || g.label !== label || g.label === "Pinned") groups.push(g = { label, items: [] });
@@ -47,13 +70,18 @@ function ChatSidebar({ tabs, saved, activeId, pinned = [], archived = [], unread
   const ctx = window.useContextMenu();
   const groups = React.useMemo(() => groupChats(tabs, saved, pinned, archived), [tabs, saved, pinned, archived]);
   const menuFor = (r) => {
-    const isPinned = !!r.file && pinned.includes(r.file);
+    const isPinned = !!r.file && (
+      pinned.includes(r.file)
+      || (r.saved?._familyMembers && r.saved._familyMembers.some(f => pinned.includes(f)))
+    );
     return [
       ...(r.file ? [{ label: isPinned ? "Unpin" : "Pin", key: "P", onClick: () => onPin(r.file) }] : []),
       ...(r.tab ? [{ label: "Mark as unread", key: "U", onClick: () => onMarkUnread(r.tab.id) }, { label: "Rename", key: "R", onClick: () => { onSelectTab(r.tab.id); setRenaming(r.tab.id); } }] : []),
       "-",
       { label: "Archive", key: "A", onClick: () => onArchive(r) },
-      { label: "Delete", key: "D", danger: true, confirm: "Delete permanently?", onClick: () => onDelete(r) },
+      { label: "Delete conversation", key: "D", danger: true,
+        confirm: `Delete conversation and all branches (${r.familyFiles.length} files)?`,
+        onClick: () => onDelete(r) },
     ];
   };
   return (

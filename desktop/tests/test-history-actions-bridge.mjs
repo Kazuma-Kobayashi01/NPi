@@ -1,0 +1,249 @@
+#!/usr/bin/env node
+// Consumer-visible scenario regressions for historical session resume and deletion in live.js.
+// Run: node tests/test-history-actions-bridge.mjs
+
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const source = (path) =>
+  readFileSync(
+    fileURLToPath(new URL(`../src/${path}`, import.meta.url)),
+    "utf8",
+  );
+
+function harness(opts = {}) {
+  const listeners = new Map();
+  const invokes = [];
+
+  const w = {
+    OMP_SLASH: { LOCAL_COMMANDS: [] },
+    OMP_SUBAGENTS: {
+      emptySubagents: () => ({}),
+      subscriptionLevelFor: () => "progress",
+    },
+    OMP_EXT_WIDGETS: { EMPTY: {} },
+    OMP_SESSION_PREFS: {
+      fromTweaks: () => ({ autoCompaction: true, autoRetry: true, confirmBusyClose: true }),
+      closeGuardArmed: () => true,
+      tabCloseConfirm: () => ({ title: "Close busy tab?" }),
+    },
+    OMP_TWEAKS_STORE: { read: () => ({}) },
+    OMP_APPROVAL_MODE: { isMode: () => true },
+    DEFAULT_PROFILE_ID: "default",
+    INTENT_FRAMING: () => "",
+    timeNow: () => "00:00",
+  };
+
+  for (const path of [
+    "app/project-nav.js",
+    "app/message-queue.js",
+    "app/goal.js",
+    "app/prompt-history.js",
+    "app/session-title.js",
+    "app/turn-status.js",
+    "app/transcript-merge.js",
+    "adapter.js",
+    "app/pr-automation.js",
+  ]) {
+    new Function("window", source(path))(w);
+  }
+
+  const timeout = (fn, ms) => {
+    const timer = setTimeout(fn, ms);
+    timer.unref();
+    return timer;
+  };
+
+  new Function("window", "setTimeout", "clearTimeout", source("live.js"))(
+    w,
+    timeout,
+    clearTimeout,
+  );
+
+  w.__TAURI__ = {
+    core: {
+      async invoke(command, args) {
+        invokes.push({ command, args });
+        if (command === "start_session") {
+          if (opts.failSpawn) throw new Error("backend spawn rejected: invalid profile");
+          return "prompt";
+        }
+        if (command === "start_git_watch") return "main";
+        if (command === "stop_session") return null;
+        if (command === "close_tab") return null;
+        if (command === "open_tabs_save") return null;
+        if (command === "replay_events") return { dropped: false, events: [] };
+        if (command === "delete_saved_session") {
+          if (opts.failDelete) throw new Error("could not delete: permission denied");
+          return null;
+        }
+        if (command === "batch_delete_saved_sessions") return args.paths || [];
+        if (command === "list_profiles") {
+          return {
+            profiles: [
+              { id: "default", name: "Default" },
+              { id: "work", name: "Work" },
+            ],
+            startupId: "default",
+          };
+        }
+        if (command === "list_saved_sessions") {
+          return [
+            { id: "sess-1", path: "/path/to/default-sess.jsonl", title: "Default Chat" },
+          ];
+        }
+        return null;
+      },
+    },
+    event: {
+      async listen(event, cb) {
+        listeners.set(event, cb);
+        return async () => { listeners.delete(event); };
+      },
+    },
+  };
+
+  return {
+    bridge: w.OMP_BRIDGE,
+    invokes,
+    w,
+  };
+}
+
+let passed = 0;
+async function test(name, fn) {
+  try {
+    await fn();
+    passed++;
+  } catch (err) {
+    console.error(`FAILED: ${name}`);
+    throw err;
+  }
+}
+
+async function run() {
+  await test("list default then active profile switches work then resume listed default retains correct profile", async () => {
+    const { bridge, invokes } = harness();
+    // 1. List sessions for default profile
+    const list = await bridge.listSavedSessions(null, "default");
+    assert.equal(list.length, 1);
+    assert.equal(list[0].profile, "default", "listed row must be stamped with default profile");
+
+    // 2. Active profile switches to work by opening a session in work profile
+    await bridge.openSession("/work-project", "work");
+    const activeTabProfile = invokes.find(i => i.command === "start_session" && i.args?.args?.profile === "work");
+    assert.ok(activeTabProfile, "opened session in work profile");
+
+    // 3. User resumes the listed default session while active tab is in work profile
+    invokes.length = 0;
+    const resumedId = await bridge.resumeSession(list[0]);
+    assert.ok(resumedId);
+
+    // 4. Must spawn under "default" profile (the stamped profile), NOT "work"
+    const resumeCall = invokes.find(i => i.command === "start_session");
+    assert.ok(resumeCall);
+    assert.equal(resumeCall.args?.args?.profile, "default", "must retain listed default profile");
+    assert.equal(resumeCall.args?.args?.resume, "/path/to/default-sess.jsonl");
+  });
+
+  await test("resume older branch opens exact requested file despite resume_path metadata", async () => {
+    const { bridge, invokes } = harness();
+    // Historical branch item with resume_path pointing to newer family head
+    const olderBranch = {
+      path: "/sessions/older-branch.jsonl",
+      resume_path: "/sessions/family-newest.jsonl",
+      family_path: "/sessions/family-root.jsonl",
+      profile: "default",
+      title: "Older Branch",
+    };
+
+    const id = await bridge.resumeSession(olderBranch);
+    assert.ok(id);
+    const spawnCall = invokes.find(i => i.command === "start_session");
+    assert.ok(spawnCall);
+    // Must open exact requested file, NOT redirected to resume_path
+    assert.equal(spawnCall.args?.args?.resume, "/sessions/older-branch.jsonl", "must honor exact session.path");
+  });
+
+  await test("resume same session twice focuses existing tab (only one spawn)", async () => {
+    const { bridge, invokes } = harness();
+    const session = {
+      path: "/sessions/conversation-a.jsonl",
+      profile: "default",
+      title: "Conv A",
+    };
+
+    const id1 = await bridge.resumeSession(session);
+    assert.ok(id1);
+    const spawnCalls1 = invokes.filter(i => i.command === "start_session").length;
+    assert.equal(spawnCalls1, 1);
+
+    // Resume same session a second time
+    const id2 = await bridge.resumeSession(session);
+    assert.equal(id2, id1, "must return existing tab id");
+    const spawnCalls2 = invokes.filter(i => i.command === "start_session").length;
+    assert.equal(spawnCalls2, 1, "must not spawn a second tab");
+  });
+
+  await test("failed spawn clean rollback", async () => {
+    const { bridge } = harness({ failSpawn: true });
+    const session = {
+      path: "/sessions/failing.jsonl",
+      profile: "work",
+      title: "Will Fail",
+    };
+
+    await assert.rejects(
+      async () => { await bridge.resumeSession(session); },
+      /backend spawn rejected/,
+    );
+  });
+
+  await test("close cancellation prevents delete", async () => {
+    const { bridge, invokes } = harness();
+    // Open a session running a file
+    const session = {
+      path: "/sessions/active-busy.jsonl",
+      profile: "default",
+      title: "Active Busy",
+    };
+    const tabId = await bridge.resumeSession(session);
+    assert.ok(tabId);
+
+    // Cancel close confirm when asked
+    setTimeout(() => {
+      bridge.resolveCloseConfirm(false);
+    }, 10);
+
+    invokes.length = 0;
+    const res = await bridge.deleteSavedSession("/sessions/active-busy.jsonl", "default");
+    assert.equal(res.ok, false);
+    assert.match(res.error, /cancelled/i);
+
+    // delete_saved_session must NOT have been called on backend
+    const delCall = invokes.find(i => i.command === "delete_saved_session");
+    assert.equal(delCall, undefined, "backend delete must not be called when close was cancelled");
+  });
+
+  await test("backend delete error returns error object", async () => {
+    const { bridge } = harness({ failDelete: true });
+    const res = await bridge.deleteSavedSession("/sessions/locked.jsonl", "default");
+    assert.deepEqual(res, { ok: false, error: "Error: could not delete: permission denied" });
+  });
+
+  await test("batch deletion preserves open files while deleting closed siblings", async () => {
+    const { bridge, invokes } = harness();
+    const openPath = "/sessions/open-branch.jsonl";
+    const closedPath = "/sessions/closed-parent.jsonl";
+    await bridge.resumeSession({ path: openPath, profile: "default", title: "Open branch" });
+    const result = await bridge.batchDeleteSavedSessions([openPath, closedPath], "default");
+    assert.deepEqual(result, { ok: true, value: [closedPath] });
+    const deletion = invokes.find(call => call.command === "batch_delete_saved_sessions");
+    assert.deepEqual(deletion.args.paths, [closedPath]);
+  });
+
+  console.log(`PASS test-history-actions-bridge.mjs (${passed} consumer scenarios)`);
+}
+
+run();

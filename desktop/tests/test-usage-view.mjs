@@ -92,3 +92,83 @@ check("cost formatting", () => {
 
 if (failed) process.exit(1);
 console.log("test-usage-view: 8 checks passed");
+
+// Exercise the real hook with deferred reads and live completion notifications.
+{
+  const slots = [];
+  let index = 0, pending = [], settled;
+  const changed = (a, b) => !a || a.length !== b.length || a.some((v, i) => !Object.is(v, b[i]));
+  const React = {
+    useState(initial) {
+      const slot = slots[index] ??= { value: initial };
+      index++;
+      return [slot.value, value => { slot.value = typeof value === "function" ? value(slot.value) : value; }];
+    },
+    useRef(initial) { return slots[index++] ??= { current: initial }; },
+    useCallback(fn, deps) {
+      const i = index++;
+      if (!slots[i] || changed(slots[i].deps, deps)) slots[i] = { deps, value: fn };
+      return slots[i].value;
+    },
+    useEffect(fn, deps) {
+      const i = index++, prev = slots[i];
+      if (!prev || changed(prev.deps, deps)) pending.push(() => {
+        prev?.cleanup?.();
+        slots[i] = { deps, cleanup: fn() };
+      });
+    },
+  };
+  const window = {};
+  vm.runInNewContext(fs.readFileSync(new URL("../src/app/use-quotas.jsx", import.meta.url), "utf8"), { window, React });
+  const calls = [];
+  const bridge = {
+    usageLimits(profile, force) {
+      return new Promise((resolve, reject) => calls.push({ profile, force, resolve, reject }));
+    },
+    onSessionSettled(fn) { settled = fn; return () => { settled = null; }; },
+  };
+  let profileId = "a";
+  const render = () => {
+    index = 0; pending = [];
+    const result = window.useQuotas({ bridge, profileId, enabled: true });
+    for (const effect of pending) effect();
+    return result;
+  };
+  const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+  render();
+  await flush();
+  assert.equal(calls[0].force, false);
+  render().refresh();
+  await flush();
+  assert.equal(calls.length, 1, "manual refresh waits for the automatic read");
+  calls[0].resolve({ ok: true, value: [{ provider: "old" }] });
+  await flush();
+  assert.equal(calls[1].force, true);
+  assert.equal(render().rows, null, "superseded automatic response is not shown");
+  calls[1].resolve({ ok: true, value: [{ provider: "fresh" }] });
+  await flush();
+  assert.equal(render().rows[0].provider, "fresh");
+  settled("a");
+  await flush();
+  assert.equal(calls[2].force, true, "completion invalidates the originating profile");
+  settled("a");
+  profileId = "b";
+  assert.equal(render().rows, null, "profile switch clears previous rows immediately");
+  await flush();
+  assert.equal(calls[3].profile, "b");
+  calls[2].resolve({ ok: true, value: [{ provider: "late" }] });
+  calls[3].resolve({ ok: true, value: [{ provider: "b" }] });
+  await flush();
+  assert.equal(calls[4].profile, "a");
+  assert.equal(calls[4].force, true, "later completion is not dropped while a refresh runs");
+  calls[4].resolve({ ok: true, value: [{ provider: "a2" }] });
+  await flush();
+  assert.equal(render().rows[0].provider, "b", "background completion cannot replace active profile");
+  settled("b");
+  await flush();
+  calls[5].reject(new Error("offline"));
+  await flush();
+  assert.equal(render().rows[0].provider, "b");
+  assert.equal(render().error, "offline");
+  for (const slot of slots) slot?.cleanup?.();
+}

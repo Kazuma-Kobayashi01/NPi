@@ -486,3 +486,163 @@ fn an_empty_profile_id_reads_the_builtin_tree_like_omp_args_writes_it() {
         Path::new("/custom/agent/sessions")
     );
 }
+
+#[test]
+fn parses_session_file_includes_size_bytes() {
+    let dir = make_test_dir("size_bytes");
+    let file_path = dir.join("test_size.jsonl");
+    write_jsonl(
+        &file_path,
+        &[
+            r#"{"type":"title","v":1,"title":"Size Test"}"#,
+            r#"{"type":"session","version":3,"id":"sess-size","timestamp":"2026-09-04T00:00:00.000Z","cwd":"/test/project"}"#,
+        ],
+    );
+
+    let session = parse_session_file(&file_path).expect("parsed session");
+    let expected_len = fs::metadata(&file_path).unwrap().len();
+    assert!(session.size_bytes > 0);
+    assert_eq!(session.size_bytes, expected_len);
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rename_session_file_appends_title_record() {
+    let dir = make_test_dir("rename");
+    let file_path = dir.join("test_rename.jsonl");
+    write_jsonl(
+        &file_path,
+        &[
+            r#"{"type":"title","v":1,"title":"Original Title","updatedAt":"2026-09-04T00:00:00.000Z"}"#,
+            r#"{"type":"session","version":3,"id":"sess-rename","timestamp":"2026-09-04T00:00:00.000Z","cwd":"/test/project"}"#,
+        ],
+    );
+
+    let s1 = parse_session_file(&file_path).expect("parsed session 1");
+    assert_eq!(s1.title, "Original Title");
+
+    rename_session_file(&file_path, "Updated Title After Renaming").expect("rename succeeds");
+
+    let s2 = parse_session_file(&file_path).expect("parsed session 2");
+    assert_eq!(s2.title, "Updated Title After Renaming");
+    assert!(s2.updated_at.is_some());
+    assert!(s2.size_bytes > s1.size_bytes);
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn now_iso8601_format_is_valid() {
+    let ts = now_iso8601();
+    assert!(ts.ends_with('Z'));
+    assert!(ts.contains('T'));
+    assert_eq!(ts.len(), 24); // e.g. "2026-11-02T12:34:56.789Z"
+}
+
+#[test]
+fn parses_session_file_reads_parent_session() {
+    let dir = make_test_dir("parent_session");
+    let file_path = dir.join("child.jsonl");
+    write_jsonl(
+        &file_path,
+        &[
+            r#"{"type":"session","version":3,"id":"child-1","parentSession":"parent-0","timestamp":"2026-10-04T10:00:00.000Z","cwd":"/proj"}"#,
+        ],
+    );
+
+    let session = parse_session_file(&file_path).expect("parsed session");
+    assert_eq!(session.parent_session.as_deref(), Some("parent-0"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn scan_dir_assigns_family_and_resume_paths_across_branches() {
+    let root = make_test_dir("family_branches");
+    let proj_dir = root.join("proj_folder");
+    fs::create_dir_all(&proj_dir).unwrap();
+
+    let file_a = proj_dir.join("2026-10-04T10-00-00-000Z_01a11111-1111-1111-1111-111111111111.jsonl");
+    let file_b = proj_dir.join("2026-10-04T10-05-00-000Z_01a22222-2222-2222-2222-222222222222.jsonl");
+    let file_c = proj_dir.join("2026-10-04T10-10-00-000Z_01a33333-3333-3333-3333-333333333333.jsonl");
+
+    write_jsonl(
+        &file_a,
+        &[
+            r#"{"type":"session","version":3,"id":"01a11111-1111-1111-1111-111111111111","timestamp":"2026-10-04T10:00:00.000Z","cwd":"/work"}"#,
+            r#"{"type":"message","timestamp":"2026-10-04T10:01:00.000Z","message":{"role":"user","content":"Initial prompt"}}"#,
+        ],
+    );
+
+    // B branches from A using session id
+    write_jsonl(
+        &file_b,
+        &[
+            r#"{"type":"session","version":3,"id":"01a22222-2222-2222-2222-222222222222","parentSession":"01a11111-1111-1111-1111-111111111111","timestamp":"2026-10-04T10:05:00.000Z","cwd":"/work"}"#,
+            r#"{"type":"message","timestamp":"2026-10-04T10:06:00.000Z","message":{"role":"user","content":"Branch B prompt"}}"#,
+        ],
+    );
+
+    // C branches from B using file name path
+    write_jsonl(
+        &file_c,
+        &[
+            r#"{"type":"session","version":3,"id":"01a33333-3333-3333-3333-333333333333","parentSession":"2026-10-04T10-05-00-000Z_01a22222-2222-2222-2222-222222222222.jsonl","timestamp":"2026-10-04T10:10:00.000Z","cwd":"/work"}"#,
+            r#"{"type":"message","timestamp":"2026-10-04T10:20:00.000Z","message":{"role":"user","content":"Branch C prompt latest"}}"#,
+        ],
+    );
+
+    let all = scan_dir(&root, None).expect("scan ok");
+    assert_eq!(all.len(), 3, "All branch files must be retained");
+
+    let path_a_str = file_a.to_string_lossy().to_string();
+    let path_c_str = file_c.to_string_lossy().to_string();
+
+    for sess in &all {
+        assert_eq!(sess.family_path, path_a_str, "All members must share root family_path");
+        assert_eq!(sess.resume_path, path_c_str, "All members must point to latest resume_path");
+    }
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn scan_dir_handles_missing_parent_and_links_siblings() {
+    let root = make_test_dir("missing_parent");
+    let proj_dir = root.join("proj_folder");
+    fs::create_dir_all(&proj_dir).unwrap();
+
+    let file_b = proj_dir.join("2026-10-04T10-05-00-000Z_01b22222-2222-2222-2222-222222222222.jsonl");
+    let file_c = proj_dir.join("2026-10-04T10-10-00-000Z_01b33333-3333-3333-3333-333333333333.jsonl");
+
+    // Both B and C point to deleted root "missing-root-uuid"
+    write_jsonl(
+        &file_b,
+        &[
+            r#"{"type":"session","version":3,"id":"01b22222-2222-2222-2222-222222222222","parentSession":"missing-root-uuid","timestamp":"2026-10-04T10:05:00.000Z","cwd":"/work"}"#,
+            r#"{"type":"message","timestamp":"2026-10-04T10:06:00.000Z","message":{"role":"user","content":"B"}}"#,
+        ],
+    );
+    write_jsonl(
+        &file_c,
+        &[
+            r#"{"type":"session","version":3,"id":"01b33333-3333-3333-3333-333333333333","parentSession":"missing-root-uuid","timestamp":"2026-10-04T10:10:00.000Z","cwd":"/work"}"#,
+            r#"{"type":"message","timestamp":"2026-10-04T10:15:00.000Z","message":{"role":"user","content":"C"}}"#,
+        ],
+    );
+
+    let all = scan_dir(&root, None).expect("scan ok");
+    assert_eq!(all.len(), 2);
+
+    let path_b_str = file_b.to_string_lossy().to_string();
+    let path_c_str = file_c.to_string_lossy().to_string();
+
+    // B is older than C, so B becomes the candidate root
+    for sess in &all {
+        assert_eq!(sess.family_path, path_b_str);
+        assert_eq!(sess.resume_path, path_c_str);
+    }
+
+    let _ = fs::remove_dir_all(&root);
+}

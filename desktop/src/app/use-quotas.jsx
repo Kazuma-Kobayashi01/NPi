@@ -1,36 +1,69 @@
-/* app/use-quotas.jsx — what the signed-in subscriptions still allow, for the
-   side panel's Usage card. useQuotas({ bridge, profileId, enabled }) →
-   { rows, loading, error, refresh }. `rows` is OMP_BRIDGE.usageLimits' value
-   (null until the first answer; the last good rows stay through a failed
-   refresh). Asked while `enabled` (the panel is shown) and every five
-   minutes after: omp asks the providers over the network, a few seconds. */
+/* app/use-quotas.jsx — subscription limits scoped to each profile.
+   Read the cache on entry and invalidate after a session settles or manual refresh. */
 
 function useQuotas({ bridge, profileId, enabled }) {
-  const [state, setState] = React.useState({ rows: null, loading: false, error: "" });
-  const alive = React.useRef(true);
-  React.useEffect(() => () => { alive.current = false; }, []);
+  const [, render] = React.useState(0);
+  const entries = React.useRef(new Map());
+  const mounted = React.useRef(false);
+  const selected = React.useRef(profileId);
+  selected.current = profileId;
 
-  const refresh = React.useCallback(() => {
+  const request = React.useCallback((profile, force) => {
     if (!bridge?.usageLimits) return;
-    setState(s => ({ ...s, loading: true }));
-    Promise.resolve(bridge.usageLimits(profileId)).then(r => {
-      if (!alive.current) return;
-      setState(s => ({
-        rows: r?.ok && Array.isArray(r.value) ? r.value : s.rows,
-        loading: false,
-        error: r?.ok ? "" : String(r?.error ?? "unavailable"),
-      }));
+    let entry = entries.current.get(profile);
+    if (!entry) {
+      entry = { rows: null, loading: false, error: "", running: false, queuedForce: false, generation: 0 };
+      entries.current.set(profile, entry);
+    }
+    const update = () => {
+      if (mounted.current && selected.current === profile) render(n => n + 1);
+    };
+    if (entry.running) {
+      if (force) {
+        entry.queuedForce = true;
+        entry.generation++;
+      }
+      return;
+    }
+    entry.running = true;
+    entry.loading = true;
+    const generation = ++entry.generation;
+    update();
+    Promise.resolve().then(() => bridge.usageLimits(profile, force)).then(r => {
+      if (generation !== entry.generation) return;
+      if (r?.ok && Array.isArray(r.value)) {
+        entry.rows = r.value;
+        entry.error = "";
+      } else {
+        entry.error = String(r?.error ?? "unavailable");
+      }
+    }, error => {
+      if (generation === entry.generation) entry.error = String(error?.message ?? error);
+    }).finally(() => {
+      entry.running = false;
+      if (entry.queuedForce) {
+        entry.queuedForce = false;
+        request(profile, true);
+      } else {
+        entry.loading = false;
+        update();
+      }
     });
-  }, [bridge, profileId]);
+  }, [bridge]);
 
   React.useEffect(() => {
-    if (!enabled) return undefined;
-    refresh();
-    const id = setInterval(refresh, 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [enabled, refresh]);
+    mounted.current = true;
+    const unsubscribe = bridge?.onSessionSettled?.(profile => request(profile, true));
+    return () => { mounted.current = false; unsubscribe?.(); };
+  }, [bridge, request]);
 
-  return { ...state, refresh };
+  React.useEffect(() => {
+    if (enabled) request(profileId, false);
+  }, [enabled, profileId, request]);
+
+  const refresh = React.useCallback(() => request(profileId, true), [profileId, request]);
+  const entry = entries.current.get(profileId);
+  return { rows: entry?.rows ?? null, loading: entry?.loading ?? false, error: entry?.error ?? "", refresh };
 }
 
 Object.assign(window, { useQuotas });

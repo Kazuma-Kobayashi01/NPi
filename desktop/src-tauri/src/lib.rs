@@ -103,6 +103,16 @@ struct StartSessionArgs {
     profile: Option<String>,
 }
 
+fn strip_compaction_section(yaml: &str) -> &str {
+    if yaml.starts_with("compaction:") {
+        ""
+    } else if let Some(idx) = yaml.find("\ncompaction:") {
+        yaml[..idx].trim_end()
+    } else {
+        yaml.trim_end()
+    }
+}
+
 /// Register the tab with the terminal, start an omp process for it, then
 /// tell the widget host (which computes the project's git context on its own
 /// thread). The terminal comes first so a failed omp spawn still leaves the
@@ -141,13 +151,56 @@ fn start_session(
     // without `--config`; a tab whose browser can't be set up (a respawn
     // racing the tab's close: "still closing") fails to start, and the
     // frontend's rollback closes it.
-    let overlay = app
+    let mut overlay = app
         .state::<browser::BrowserManager>()
         .allocate_if_available(&args.session_id)
         .map_err(|e| format!("browser: {e}"))?;
+
+    let app_mode = app.state::<app_mode::AppModeStore>().get();
+    match app_mode.compaction_overlay() {
+        Some(compaction) => {
+            if let Some(path) = &overlay {
+                let existing = std::fs::read_to_string(path).unwrap_or_default();
+                let base = strip_compaction_section(&existing).trim_end();
+                let merged = if base.is_empty() {
+                    compaction.trim().to_string()
+                } else {
+                    format!("{base}\n\n{}", compaction.trim())
+                };
+                private_fs::write_private_file(path, format!("{merged}\n").as_bytes())
+                    .map_err(|e| format!("overlay merge: {e}"))?;
+            } else {
+                let dir = app
+                    .path()
+                    .app_cache_dir()
+                    .map_err(|e| format!("cache dir: {e}"))?
+                    .join("overlays");
+                let _ = private_fs::private_dirs(true).create(&dir);
+                let path = dir.join(format!("{}.yml", args.session_id));
+                private_fs::write_private_file(&path, format!("{}\n", compaction.trim()).as_bytes())
+                    .map_err(|e| format!("compaction overlay: {e}"))?;
+                overlay = Some(path);
+            }
+        }
+        None => {
+            if let Some(path) = &overlay {
+                let existing = std::fs::read_to_string(path).unwrap_or_default();
+                if existing.contains("compaction:") {
+                    let base = strip_compaction_section(&existing).trim_end();
+                    let trimmed = if base.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{base}\n")
+                    };
+                    let _ = private_fs::write_private_file(path, trimmed.as_bytes());
+                }
+            }
+        }
+    }
+
     // Chat replaces omp's coding prompt with its own (plus the user's profile,
     // instructions and memory); Code leaves omp's default untouched.
-    let prompt = match app.state::<app_mode::AppModeStore>().get().base_prompt() {
+    let prompt = match app_mode.base_prompt() {
         Some(base) => Some(
             app.state::<chat_space::ChatSpace>().system_prompt(base)
                 + &app_mode::environment(
@@ -446,6 +499,9 @@ fn end_tabs<S: AsRef<str> + Sync>(app: &AppHandle, ids: &[S]) {
     let watchers = app.state::<GitWatcherState>();
     for id in ids {
         let id = id.as_ref();
+        if let Ok(dir) = app.path().app_cache_dir() {
+            let _ = std::fs::remove_file(dir.join("overlays").join(format!("{id}.yml")));
+        }
         bridge.stop_session(id, &rule_book);
         computer_overlay::clear_session(app, id);
         widgets.session_closed(id);
@@ -855,8 +911,28 @@ fn chat_prefs_set(
     instructions: String,
     memory: String,
     space: State<'_, chat_space::ChatSpace>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    space.save(&instructions, &memory)
+    space.save(&instructions, &memory)?;
+    let _ = app.emit(
+        "chat-memory://updated",
+        serde_json::json!({
+            "memory": space.memory(),
+            "instructions": space.instructions(),
+            "path": space.memory_path().to_string_lossy(),
+        }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+fn chat_memory_get(space: State<'_, chat_space::ChatSpace>) -> String {
+    space.memory()
+}
+
+#[tauri::command]
+fn chat_context_get(space: State<'_, chat_space::ChatSpace>) -> String {
+    space.memory_context()
 }
 
 #[tauri::command]
@@ -1164,14 +1240,8 @@ fn widgets_refresh(plugin_id: String, host: State<'_, Arc<widgets::WidgetHost>>)
     host.refresh(&plugin_id);
 }
 
-/// Usage statistics for the "Usage" panel — see `stats::fetch`. Scoped to
-/// `profile` (the active tab's profile — resolved the same way as
-/// `list_saved_sessions`), *not* every profile at once: `omp stats`
-/// itself resolves its session directory and SQLite warehouse against
-/// one profile per invocation, the same as every other per-tab omp
-/// spawn in this app. Also not all-time — the installed omp CLI's
-/// `--json` path has no way to request more than a rolling last-24-hours
-/// window (see `stats.rs`'s module doc for how this was confirmed).
+/// Usage statistics for one profile and the requested time range. Total
+/// includes only locally available session history for that profile.
 ///
 /// Runs `async` + `spawn_blocking`: `stats::fetch` shells out to
 /// `omp stats --json`, which first syncs every on-disk session log for
@@ -1181,10 +1251,14 @@ fn widgets_refresh(plugin_id: String, host: State<'_, Arc<widgets::WidgetHost>>)
 #[tauri::command]
 async fn usage_stats(
     profile: Option<String>,
+    range: String,
     store: State<'_, Arc<profiles::ProfileStore>>,
 ) -> Result<stats::DashboardStats, String> {
     let profile = store.resolve_owned(profile)?;
-    off_ipc(move || stats::fetch(profile.as_deref())).await?
+    if !matches!(range.as_str(), "24h" | "7d" | "30d" | "all") {
+        return Err(format!("invalid usage statistics range: {range}"));
+    }
+    off_ipc(move || stats::fetch(profile.as_deref(), &range)).await?
 }
 
 /// Whether omp's goal mode auto-continues over RPC for `profile` — see
@@ -1232,10 +1306,11 @@ async fn models_catalog(
 #[tauri::command]
 async fn usage_limits(
     profile: Option<String>,
+    force: bool,
     store: State<'_, Arc<profiles::ProfileStore>>,
 ) -> Result<serde_json::Value, String> {
     let profile = store.resolve_owned(profile)?;
-    off_ipc(move || model_config::usage_limits(profile.as_deref())).await?
+    off_ipc(move || model_config::usage_limits(profile.as_deref(), force)).await?
 }
 
 /// The `default` model role of `profile`, `None` when unset.
@@ -1773,12 +1848,17 @@ pub fn run() {
             approval_rules_revoke,
             app_mode_set,
             session_actions::delete_saved_session,
+            session_actions::batch_delete_saved_sessions,
+            session_actions::rename_saved_session,
+            session_actions::export_session_markdown,
             session_actions::reveal_path,
             chat_dir,
             chat_dirs,
             chat_prefs_get,
             chat_prefs_set,
             chat_profile_get,
+            chat_memory_get,
+            chat_context_get,
             chat_profile_set,
             approval_mode_get,
             approval_mode_set_default,
@@ -1896,7 +1976,7 @@ fn announce_held_close(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{config_dir, holds_close, StartSessionArgs};
+    use super::{config_dir, holds_close, strip_compaction_section, StartSessionArgs};
     use std::path::PathBuf;
 
     #[test]
@@ -1964,6 +2044,23 @@ mod tests {
         assert!(
             serde_json::from_value::<StartSessionArgs>(payload).is_err(),
             "a renamed profile field must be a loud deserialize error, not a silent None"
+        );
+    }
+
+    #[test]
+    fn strip_compaction_section_removes_compaction_or_returns_base() {
+        assert_eq!(strip_compaction_section(""), "");
+        assert_eq!(
+            strip_compaction_section("browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false\n"),
+            "browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false"
+        );
+        assert_eq!(
+            strip_compaction_section("browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false\n\ncompaction:\n  thresholdPercent: 70\n"),
+            "browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false"
+        );
+        assert_eq!(
+            strip_compaction_section("compaction:\n  thresholdPercent: 70\n"),
+            ""
         );
     }
 }

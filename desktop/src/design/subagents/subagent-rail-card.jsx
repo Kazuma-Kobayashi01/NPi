@@ -9,24 +9,19 @@ const { Icon: _SAR_Icon, OMP_SUBAGENTS: _SAR, SaDot: _SAR_Dot, SaToolChip: _SAR_
 const SA_RAIL_MAX_ROWS = 5;
 
 function SubagentRailCard({ agents, paneOpen, onOpen, onTogglePane }) {
-  const t = _SAR.totals(agents);
-  const now = _SAR_useNow(t.live > 0, 500);
-  // Live first (spawn order), then finished most-recent-first.
   const live = agents.filter(a => _SAR.isLive(a.status));
-  const done = agents.filter(a => !_SAR.isLive(a.status)).sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0));
-  const rows = [...live, ...done].slice(0, SA_RAIL_MAX_ROWS);
-  const hidden = agents.length - rows.length;
+  if (live.length === 0) return null;
+  const t = _SAR.totals(agents);
+  const now = _SAR_useNow(live.length > 0, 500);
+  const rows = live.slice(0, SA_RAIL_MAX_ROWS);
+  const hidden = live.length - rows.length;
 
   return (
     <div className="rail-card glass">
       <div className="rail-card-head">
         <_SAR_Icon name="agent" size={11} color="var(--cyan)" />
         <span className="mono" style={{ color: "var(--fg-2)" }}>subagents</span>
-        {t.live > 0 ? (
-          <span className="chip accent mono" style={{ marginLeft: "auto" }}><span className="dot live" /> {t.live} live</span>
-        ) : (
-          <span className="chip muted mono" style={{ marginLeft: "auto" }}>{t.total ? `${t.total} ran` : "idle"}</span>
-        )}
+        <span className="chip accent mono" style={{ marginLeft: "auto" }}><span className="dot live" /> {live.length} active</span>
       </div>
 
       {t.total === 0 ? (

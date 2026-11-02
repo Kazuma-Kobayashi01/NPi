@@ -173,23 +173,49 @@ function App() {
   const handlePin = file => setTweak("pinnedSessions", pinned.includes(file) ? pinned.filter(f => f !== file) : [...pinned, file]);
   const handleReveal = path => { bridge?.revealPath?.(path); };
   // `row` of the chat sidebar ({ tab?, saved?, file }) or a code tab: the file is its saved conversation.
-  const trashConversation = async (tab, file) => {
+  const trashConversation = async (tab, file, profile) => {
     // A busy tab asks first; "keep" means keep the file too.
     if (tab && (await bridge?.closeSessionGuarded(tab.id)) === false) return false;
-    if (file) {
-      const r = await bridge?.deleteSavedSession?.(file, tab?.profile);
-      if (r && !r.ok) { console.error("[app] could not delete the conversation:", r.error); return false; }
-      setSavedChats(list => list.filter(x => x.path !== file));
-      if (pinned.includes(file)) setTweak("pinnedSessions", pinned.filter(f => f !== file));
-      if (archived.includes(file)) setTweak("archivedSessions", archived.filter(f => f !== file));
+    const targetFile = file || tab?.sessionFile;
+    if (targetFile) {
+      const targetProfile = profile || tab?.profile;
+      const r = await bridge?.deleteSavedSession?.(targetFile, targetProfile);
+      if (r && !r.ok) {
+        console.error("[app] could not delete the conversation:", r.error);
+        if (typeof window.alert === "function") window.alert(`Could not delete conversation: ${r.error}`);
+        return false;
+      }
+      setSavedChats(list => list.filter(x => x.path !== targetFile));
+      if (pinned.includes(targetFile)) setTweak("pinnedSessions", pinned.filter(f => f !== targetFile));
+      if (archived.includes(targetFile)) setTweak("archivedSessions", archived.filter(f => f !== targetFile));
     }
     return true;
   };
   const handleArchiveRow = row => {
-    if (row.file) setTweak("archivedSessions", [...archived, row.file]);
-    if (row.tab) bridge?.closeSessionGuarded(row.tab.id);
+    if (row?.file) setTweak("archivedSessions", [...archived, row.file]);
+    if (row?.tab) bridge?.closeSessionGuarded(row.tab.id);
   };
-  const handleDeleteRow = row => { trashConversation(row.tab, row.file); };
+  const handleDeleteRow = async row => {
+    const files = new Set(row.familyFiles);
+    const profile = row.saved?.profile || row.tab?.profile;
+    const owners = sessions.filter(tab => files.has(tab.sessionFile) || tab.id === row.tab?.id);
+    for (const tab of owners) {
+      if ((await bridge.closeSessionGuarded(tab.id)) === false) return;
+    }
+    if (!files.size) return;
+    const result = await bridge.batchDeleteSavedSessions([...files], profile);
+    if (!result.ok) {
+      window.alert(`Could not delete conversation: ${result.error}`);
+      return;
+    }
+    const deleted = new Set(result.value);
+    setSavedChats(list => list.filter(s => !deleted.has(s.path)));
+    setTweak("pinnedSessions", pinned.filter(path => !deleted.has(path)));
+    setTweak("archivedSessions", archived.filter(path => !deleted.has(path)));
+    if (deleted.size !== files.size) {
+      window.alert(`Deleted ${deleted.size} of ${files.size} conversation files. The remaining files were kept.`);
+    }
+  };
   // The interface-detail step as a class on <html> (layout/shell.css).
   React.useEffect(() => {
     const root = document.documentElement;
@@ -644,7 +670,12 @@ function App() {
   const handleResumeSession = async (session) => {
     if (!bridge || !session) return;
     try {
-      await bridge.resumeSession(session);
+      const id = await bridge.resumeSession(session);
+      if (id) {
+        setStab(window.OMP_SETTINGS_TAB.selectProject);
+        setHome(false);
+      }
+      return id;
     } catch (err) {
       // Same dangling-profile rejection as openSession (see handleNewProject
       // below) — the bridge already rolled back its ghost tab registration.
@@ -877,7 +908,7 @@ function App() {
     setTweak("appMode", m);
     setHome(true);
   };
-  const quotas = useQuotas({ bridge, profileId: activeProfileId, enabled: showRail && !showHome && side !== "browser" });
+  const quotas = useQuotas({ bridge, profileId: activeProfileId, enabled: !showHome || showSidebar });
   const welcomeProjects = (() => {
     const seen = new Set();
     const rows = [];
@@ -934,7 +965,21 @@ function App() {
   // with the last one (`active: false`), so streaming frames re-render
   // nothing there.
   const settingsCtx = stab.open ? {
-    active: true, t, setTweak, bridge, keymap,
+    active: true, t, setTweak,
+    bridge: bridge ? {
+      ...bridge,
+      resumeSession: async (session) => {
+        const id = await bridge.resumeSession(session);
+        if (id) {
+          closeSettings();
+          setHome(false);
+        }
+        return id;
+      },
+    } : bridge,
+    onResumeSession: handleResumeSession,
+    closeSettings,
+    keymap,
     profiles, startupProfileId, onSetStartupProfile: handleSetStartupProfile,
     approvalModes, sessions, activeProject,
     widgets, widgetTweakKey: _widgetTweakKey, extToggles, keyOpts: settingsKeyOpts,
@@ -1044,7 +1089,7 @@ function App() {
                 tabs={codeTabs}
                 unread={unread} onReveal={handleReveal} onMarkUnread={handleMarkUnread}
                 onArchiveTab={tab => handleCloseTab(tab.id)}
-                onDeleteTab={tab => trashConversation(tab, tab.sessionFile)}
+                onDeleteTab={tab => trashConversation(tab, tab.sessionFile, tab.profile)}
                 activeId={activeSessionId}
                 recents={recentRows(recentProjects, sessions, activeProfileId).filter(r => r.path !== chatDir && !chatDirs.includes(r.path))}
                 profileLabel={profileLabel}

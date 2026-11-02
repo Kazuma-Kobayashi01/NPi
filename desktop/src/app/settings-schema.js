@@ -134,6 +134,12 @@
           { keys: ["archivedSessions"] }),
       ] },
     ] },
+    { id: "conversations", icon: "clock", title: "Conversations", blurb: "Manage, search, preview, export and organize your conversation history across projects.", groups: [
+      { name: "Conversation history", rows: [
+        custom("conversations", "Conversations", "Manage, search, preview, export and organize your conversation history across projects.", "conversations history search export archive preview sessions",
+          { keys: ["pinnedSessions", "archivedSessions"] }),
+      ] },
+    ] },
     { id: "rail", icon: "radar", title: "Rail", blurb: "The cards in the rail beside the chat, including widget plugins and extension widgets.", groups: [
       { name: "Floating cards", rows: [
         tweak("showSubagents", "toggle", "Subagents", "Running and finished subagents of this tab.", "tasks"),
@@ -231,6 +237,7 @@
     { id: "account", icon: "agent", title: "Account", blurb: "Your profile and what the assistant remembers.", from: ["account"] },
     { id: "general", icon: "sparkle", title: "General", blurb: "Look, text and how tabs behave.", from: ["appearance", "session"] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript, workflow pipelines and the prompt box.", from: ["chat"] },
+    { id: "conversations", icon: "clock", title: "Conversations", blurb: "Manage, search, preview, export and organize your conversation history across projects.", from: ["conversations"] },
     { id: "models", icon: "bolt", title: "Models", blurb: "Default model, favourites, vendors and usage statistics.", from: ["models"] },
     { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
     { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Screen access, app control and macOS permissions.", from: ["computerUse"] },

@@ -96,9 +96,15 @@ function SettingsSlider({ value, min, max, step = 1, unit = "", onChange, label 
     if (draft !== value) onChange(draft);
     setDraft(null);
   };
+  const range = (max ?? 100) - (min ?? 0);
+  const pct = range > 0 ? Math.max(0, Math.min(100, Math.round(((shown - (min ?? 0)) / range) * 100))) : 0;
+  const trackStyle = {
+    background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--line-soft) ${pct}%, var(--line-soft) 100%)`,
+  };
   return (
     <div className="st-slider">
       <input type="range" min={min} max={max} step={step} value={shown} aria-label={label}
+        style={trackStyle}
         onChange={e => setDraft(Number(e.target.value))}
         onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
       <span className="st-val">{shown}{unit}</span>

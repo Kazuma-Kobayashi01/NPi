@@ -54,3 +54,9 @@ Removed tweak keys: `scanlines`, `autosave` (with the status-bar autosave toggle
 - **Approvals.** The `approvalMode` row renders the same `ApprovalModeSection` as the approvals panel; `approvalRules` shows the rule count and opens the panel.
 - **Shortcuts.** `shortcuts-editor.jsx` is the rebinding editor (formerly the shortcuts modal): rebind, add a chord, clear, reset to default; rows from omp's `keybindings.yml` can be overridden too; the source chip shows where a binding comes from.
 - **Changes.** The `showChanges` rail toggle (default on) shows the Changes card; off also cancels its reads and turns Auto-fix off in every tab, and turning it back on never re-enables Auto-fix. The card, its GitHub lookup and Auto-fix: `pr-automation.md`.
+
+## Conversation management
+
+`rows-conversations.jsx` lists saved files across the selected profile's workspaces. Each listed record carries its source `profile`; resume, preview, rename, export and delete pass that identity instead of relying on whichever tab later becomes active. Opening a specific history item honors its exact file path and dismisses Settings, including when that tab was already active. Single-file deletion closes its owning tab through the busy-close guard first; failures remain visible and unsuccessful batch items stay selected.
+
+The search icon uses a positioned wrapper around the shared `Icon`, preserving its `.ui-icon` sizing class. Export menus use the existing `.st-menu` overflow contract rather than overriding shared card clipping globally.

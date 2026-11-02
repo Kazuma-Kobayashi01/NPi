@@ -14,17 +14,8 @@
 //! the aggregated result as JSON via `omp stats --json` (sync then
 //! `JSON.stringify(dashboardStats)` to stdout, no server started).
 //!
-//! **Also not all-time**: the installed CLI's `--json` path calls
-//! `getDashboardStats()` with no range argument, and the upstream
-//! aggregator's `DEFAULT_TIME_RANGE` is `"24h"` — confirmed by reading
-//! `@oh-my-pi/omp-stats`' `stats-cli.ts`/`aggregator.ts` source and cross
-//! -checked against this machine's own `~/.omp/stats.db` (all-time vs.
-//! last-24h totals differ by roughly 6x). The underlying package accepts
-//! a `range: "all"` value, but no currently-installed CLI flag reaches
-//! it — `omp stats --json` offers no `--range`/`--days` flag at all. Every
-//! number [`fetch`] returns is therefore a rolling last-24-hours window,
-//! not a lifetime total; the panel and every doc comment downstream of
-//! this module must say so rather than imply "everything".
+//! The JSON CLI accepts a time range; this panel requests 24h, 7d, 30d
+//! or all available history. The warehouse is still scoped to one profile.
 //!
 //! [`fetch`] is what shells out to `omp stats --json`; the field shapes
 //! below mirror `@oh-my-pi/omp-stats`'s `DashboardStats`/
@@ -136,27 +127,13 @@ pub struct DashboardStats {
 /// session log for this one profile) can still take several seconds on a
 /// first run or after a long gap — callers MUST run this off the main
 /// thread (see `usage_stats` in `lib.rs`).
-pub fn fetch(profile: Option<&str>) -> Result<DashboardStats, String> {
-    parse_stats_json(&crate::omp_cli::run(&stats_args(profile), "omp stats")?)
+pub fn fetch(profile: Option<&str>, range: &str) -> Result<DashboardStats, String> {
+    let mut args = Vec::with_capacity(5);
+    args.extend(crate::agent::spawn::profile_flag(profile));
+    args.extend(["stats", "--json", "--range", range].map(String::from));
+    parse_stats_json(&crate::omp_cli::run(&args, "omp stats")?)
 }
 
-/// Build the argv for [`fetch`]: `--profile=<id>` (via
-/// `agent::spawn::profile_flag`, so the flag's spelling and empty-id
-/// guard live in one place shared with `omp_args`) *before* `stats
-/// --json`, never after (see [`fetch`]'s doc for why the order is
-/// load-bearing). Extracted as a pure function, mirroring why `omp_args`
-/// in `spawn.rs` is pulled out the same way, so the one behavior this
-/// whole module exists to get right is unit-testable without spawning a
-/// process.
-fn stats_args(profile: Option<&str>) -> Vec<String> {
-    let mut args = Vec::with_capacity(3);
-    if let Some(flag) = crate::agent::spawn::profile_flag(profile) {
-        args.push(flag);
-    }
-    args.push("stats".to_string());
-    args.push("--json".to_string());
-    args
-}
 
 /// Parse `omp stats --json`'s stdout into [`DashboardStats`].
 ///
@@ -230,28 +207,6 @@ mod tests {
         assert!((parsed.overall.total_premium_requests - 0.33).abs() < f64::EPSILON);
     }
 
-    #[test]
-    fn stats_args_puts_profile_flag_before_subcommand() {
-        // Load-bearing order: verified against a real omp build that
-        // `--profile=<id>` after `stats` is rejected as an unknown
-        // option, while before it succeeds (see `fetch`'s doc).
-        assert_eq!(
-            stats_args(Some("work")),
-            vec!["--profile=work", "stats", "--json"]
-        );
-    }
-
-    #[test]
-    fn stats_args_omits_flag_for_no_profile() {
-        assert_eq!(stats_args(None), vec!["stats", "--json"]);
-    }
-
-    #[test]
-    fn stats_args_omits_flag_for_empty_profile() {
-        // Matches `agent::spawn::omp_args`' own `!p.is_empty()` filter —
-        // a blank id must never become a bare `--profile=`.
-        assert_eq!(stats_args(Some("")), vec!["stats", "--json"]);
-    }
 
     #[test]
     fn missing_optional_breakdown_arrays_default_empty() {

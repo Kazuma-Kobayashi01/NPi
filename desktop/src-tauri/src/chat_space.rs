@@ -90,19 +90,81 @@ impl ChatSpace {
         std::fs::write(self.config.join(PROFILE_FILE), json).map_err(|e| format!("profile: {e}"))
     }
 
+    pub fn memory_path(&self) -> PathBuf {
+        self.dir.join(MEMORY_FILE)
+    }
+
+    /// The context file representing chat space persistent memory.
+    #[allow(dead_code)]
+    pub fn context_file(&self) -> PathBuf {
+        self.memory_path()
+    }
+
+    /// Path to the user's standing instructions file.
+    #[allow(dead_code)]
+    pub fn instructions_path(&self) -> PathBuf {
+        self.config.join(INSTRUCTIONS_FILE)
+    }
+
+    /// Read the latest memory directly from disk, ensuring fresh context for
+    /// next or ongoing sessions.
+    #[allow(dead_code)]
+    pub fn reload_memory(&self) -> String {
+        self.memory()
+    }
+
+    /// Read the latest instructions directly from disk.
+    #[allow(dead_code)]
+    pub fn reload_instructions(&self) -> String {
+        self.instructions()
+    }
+
+    /// The structured memory and instructions context block without the base prompt.
+    pub fn memory_context(&self) -> String {
+        let mut out = String::new();
+        let instructions = self.instructions();
+        let instructions = instructions.trim();
+        if !instructions.is_empty() {
+            out.push_str("The user's standing instructions for how to answer (follow them):\n");
+            out.push_str(instructions);
+            out.push_str("\n\n");
+        }
+        let memory_path = self.memory_path();
+        out.push_str(&format!(
+            "Memory: notes about the user that persist across chats live in {}. When the user asks \
+             you to remember something, add it to that file (keep it short, one line per fact).",
+            memory_path.display()
+        ));
+        let memory = self.memory();
+        let memory = memory.trim();
+        if !memory.is_empty() {
+            out.push_str("\nWhat you remember now:\n");
+            out.push_str(memory);
+        }
+        out
+    }
+
     pub fn save(&self, instructions: &str, memory: &str) -> Result<(), String> {
         let cut = |s: &str| crate::text::prefix_within(s, MAX_BYTES).to_string();
         std::fs::create_dir_all(&self.config).map_err(|e| format!("config folder: {e}"))?;
         std::fs::write(self.config.join(INSTRUCTIONS_FILE), cut(instructions))
             .map_err(|e| format!("instructions: {e}"))?;
         self.ensure_dir()?;
-        std::fs::write(self.dir.join(MEMORY_FILE), cut(memory)).map_err(|e| format!("memory: {e}"))
+        let memory_file = self.memory_path();
+        let trimmed_memory = cut(memory);
+        std::fs::write(&memory_file, &trimmed_memory).map_err(|e| format!("memory: {e}"))?;
+        eprintln!(
+            "[omp-desktop] chat memory saved ({} bytes) to {}",
+            trimmed_memory.len(),
+            memory_file.display()
+        );
+        Ok(())
     }
 
     /// The Chat prompt: the base text, then the user's instructions and memory.
     pub fn system_prompt(&self, base: &str) -> String {
         let with_profile = compose_profile(base, &self.profile());
-        compose(&with_profile, &self.instructions(), &self.memory(), &self.dir.join(MEMORY_FILE))
+        compose(&with_profile, &self.instructions(), &self.memory(), &self.memory_path())
     }
 }
 
@@ -178,11 +240,14 @@ mod tests {
                 let _ = std::fs::remove_dir_all(&self.0);
             }
         }
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         fn rand_id() -> u128 {
-            std::time::SystemTime::now()
+            let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as u128;
+            (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())
-                .unwrap_or(0)
+                .unwrap_or(0) << 16)
+                | count
         }
     }
 
@@ -237,5 +302,25 @@ mod tests {
         let (_d, s) = space();
         s.save(&"x".repeat(MAX_BYTES * 2), "").unwrap();
         assert_eq!(s.instructions().len(), MAX_BYTES);
+    }
+
+    #[test]
+    fn context_file_and_memory_path_match() {
+        let (_d, s) = space();
+        assert_eq!(s.context_file(), s.memory_path());
+        assert!(s.memory_path().ends_with(MEMORY_FILE));
+        assert!(s.instructions_path().ends_with(INSTRUCTIONS_FILE));
+    }
+
+    #[test]
+    fn memory_context_reflects_saved_memory() {
+        let (_d, s) = space();
+        s.save("Follow rule.", "Fact 1.").unwrap();
+        assert_eq!(s.reload_memory(), "Fact 1.");
+        assert_eq!(s.reload_instructions(), "Follow rule.");
+        let ctx = s.memory_context();
+        assert!(ctx.contains("Follow rule."));
+        assert!(ctx.contains("Fact 1."));
+        assert!(ctx.contains("MEMORY.md"));
     }
 }

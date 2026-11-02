@@ -154,6 +154,18 @@
 .stats-body {
   padding: 14px;
 }
+.stats-ranges {
+  width: fit-content;
+  margin-bottom: 14px;
+}
+.stats-model-row { border-bottom: 1px solid var(--line); }
+.stats-model-row:last-child { border-bottom: none; }
+.stats-model-row .stats-row { border-bottom: none; }
+.stats-model-tokens {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  padding: 0 4px 8px;
+  color: var(--fg-4); font-size: var(--d-text-xs);
+}
 .stats-cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

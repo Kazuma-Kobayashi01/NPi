@@ -23,6 +23,17 @@ pub fn create_private_file(path: &Path, contents: &[u8]) -> io::Result<()> {
     create_and_finish(path, contents, |_| Ok(()))
 }
 
+/// Write `path` with `contents`, private to the user (unix `0600`).
+/// Creates or overwrites/truncates the file.
+pub fn write_private_file(path: &Path, contents: &[u8]) -> io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(path)?;
+    file.write_all(contents)
+}
+
 fn create_and_finish(
     path: &Path,
     bytes: &[u8],

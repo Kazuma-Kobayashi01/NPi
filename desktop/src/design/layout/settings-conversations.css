@@ -1,0 +1,814 @@
+/* settings-conversations.css — Conversation history management styles
+   Matching NPi Desktop design system: tokens, typography, cards, and transitions */
+
+.st-conversations-section {
+  width: 100%;
+}
+
+.st-conv-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  position: relative;
+  font-family: var(--font-sans);
+}
+
+/* ── Toast Notification ────────────────────────────────────────────── */
+.st-conv-toast {
+  position: sticky;
+  top: 8px;
+  align-self: center;
+  z-index: 100;
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 20px;
+  font-size: var(--d-text-xs);
+  font-weight: 550;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  animation: stConvFadeIn 0.18s ease-out;
+}
+
+.st-conv-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: color-mix(in oklab, var(--rose, #e05252) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--rose, #e05252) 30%, transparent);
+  border-radius: 8px;
+  color: var(--rose, #e05252);
+  font-size: var(--d-text-xs);
+}
+
+/* ── 1. Top Statistics Grid ────────────────────────────────────────── */
+.st-conv-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.st-conv-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.st-conv-stat-card:hover {
+  border-color: var(--line-bright);
+  background: var(--bg-elevated);
+}
+
+.st-conv-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.st-conv-stat-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.st-conv-stat-num {
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--fg);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-conv-stat-lbl {
+  font-size: var(--d-text-xs);
+  color: var(--fg-4);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* ── 2. Toolbar & Filters ─────────────────────────────────────────── */
+.st-conv-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+
+.st-conv-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.st-conv-search-icon {
+  position: absolute;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--fg-4);
+  pointer-events: none;
+}
+
+.st-conv-search-input {
+  width: 100%;
+  padding: 7px 30px 7px 32px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--fg);
+  font-size: var(--d-text-sm);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.st-conv-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 20%, transparent);
+}
+
+.st-conv-search-clear {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--fg-4);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.st-conv-search-clear:hover {
+  color: var(--fg);
+}
+
+.st-conv-filter-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-conv-select {
+  padding: 5px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: var(--d-text-xs);
+  outline: none;
+  cursor: pointer;
+  max-width: 180px;
+}
+
+.st-conv-select:focus {
+  border-color: var(--accent);
+}
+
+.st-conv-select.sort {
+  margin-left: auto;
+}
+
+.st-conv-pills {
+  display: inline-flex;
+  background: var(--bg-input);
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+}
+
+.st-conv-pill {
+  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--fg-3);
+  font-size: var(--d-text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.st-conv-pill:hover {
+  color: var(--fg);
+}
+
+.st-conv-pill.active {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+
+.st-conv-refresh-btn {
+  padding: 4px 6px;
+  color: var(--fg-3);
+}
+
+.st-conv-refresh-btn:hover {
+  color: var(--fg);
+}
+
+/* ── 3. List Header ───────────────────────────────────────────────── */
+.st-conv-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-4);
+}
+
+.st-conv-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.st-conv-checkbox {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: var(--bg-input);
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.12s, background 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.st-conv-checkbox:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.st-conv-checkbox:checked::after {
+  content: "";
+  display: block;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  margin-top: -1px;
+}
+
+.st-conv-header-count {
+  font-weight: 550;
+  color: var(--fg-3);
+}
+
+.st-conv-mini-pages {
+  font-size: var(--d-text-xs);
+  color: var(--fg-4);
+}
+
+/* ── 4. Card List ─────────────────────────────────────────────────── */
+.st-conv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-conv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 36px 16px;
+  color: var(--fg-4);
+  font-size: var(--d-text-sm);
+  background: var(--bg-surface);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+.st-conv-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.st-conv-card:hover {
+  border-color: var(--line-bright);
+  background: var(--bg-elevated);
+}
+
+.st-conv-card.selected {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--line));
+  background: color-mix(in oklab, var(--accent) 5%, var(--bg-surface));
+}
+
+.st-conv-card.is-pinned {
+  border-left: 3px solid var(--accent);
+}
+
+.st-conv-card.is-archived {
+  opacity: 0.72;
+}
+
+.st-conv-card-left {
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.st-conv-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.st-conv-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-conv-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.st-conv-card-title {
+  margin: 0;
+  font-size: var(--d-text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.st-conv-card-edit-btn {
+  opacity: 0;
+  padding: 2px;
+  transition: opacity 0.12s;
+}
+
+.st-conv-card:hover .st-conv-card-edit-btn {
+  opacity: 1;
+}
+
+.st-conv-rename-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.st-conv-rename-input {
+  padding: 3px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: var(--d-text-sm);
+  font-family: inherit;
+  outline: none;
+  min-width: 220px;
+}
+
+.st-conv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.st-conv-tag.pinned {
+  background: color-mix(in oklab, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.st-conv-tag.archived {
+  background: color-mix(in oklab, var(--fg-4) 15%, transparent);
+  color: var(--fg-3);
+}
+
+.st-conv-card-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.st-conv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  background: var(--bg-input);
+  border: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+}
+
+.st-conv-badge.project {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 25%, transparent);
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-input));
+}
+
+.st-conv-card-preview {
+  margin: 0;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-conv-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.st-conv-export-anchor {
+  position: relative;
+}
+
+.st-conv-card:has(.st-conv-menu) {
+  z-index: 25;
+}
+
+.st-conv-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: stConvFadeIn 0.12s ease-out;
+}
+
+.st-conv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--d-text-xs);
+  text-align: left;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.st-conv-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+/* ── 5. Pagination ────────────────────────────────────────────────── */
+.st-conv-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.st-conv-page-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.st-conv-page-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
+  color: var(--fg-3);
+  font-size: var(--d-text-xs);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.st-conv-page-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.st-conv-page-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.st-conv-page-ellipsis {
+  padding: 0 4px;
+  color: var(--fg-4);
+  font-size: var(--d-text-xs);
+}
+
+/* ── 6. Floating Action Bar ───────────────────────────────────────── */
+.st-conv-floating-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: color-mix(in oklab, var(--bg-elevated) 90%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line-bright);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: stConvSlideUp 0.18s ease-out;
+}
+
+.st-conv-floating-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--d-text-sm);
+  color: var(--fg);
+}
+
+.st-conv-floating-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: var(--d-text-xs);
+}
+
+.st-conv-floating-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── 7. Slide-out Preview Drawer ──────────────────────────────────── */
+.st-conv-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: flex-end;
+  animation: stConvFadeIn 0.15s ease-out;
+}
+
+.st-conv-drawer {
+  width: min(520px, 90vw);
+  height: 100%;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--line-bright);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+  animation: stConvSlideLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.st-conv-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.st-conv-drawer-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.st-conv-drawer-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.st-conv-drawer-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-conv-drawer-path {
+  font-size: var(--d-text-xs);
+  color: var(--fg-4);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-conv-drawer-close {
+  font-size: 20px;
+  color: var(--fg-3);
+  padding: 4px;
+}
+
+.st-conv-drawer-close:hover {
+  color: var(--fg);
+}
+
+.st-conv-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.st-conv-drawer-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+}
+
+.st-conv-drawer-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--fg-4);
+  font-size: var(--d-text-sm);
+}
+
+.st-conv-drawer-error {
+  padding: 10px 14px;
+  background: color-mix(in oklab, var(--rose, #e05252) 15%, transparent);
+  border-radius: 8px;
+  color: var(--rose, #e05252);
+  font-size: var(--d-text-xs);
+}
+
+.st-conv-drawer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.st-conv-drawer-section h5 {
+  margin: 0 0 6px 0;
+  font-size: var(--d-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  letter-spacing: 0.05em;
+}
+
+.st-conv-drawer-prompt,
+.st-conv-drawer-reply {
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: var(--d-text-sm);
+  color: var(--fg);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.st-conv-drawer-tree-summary {
+  display: flex;
+  gap: 16px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+}
+
+.st-conv-drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+/* ── Animations ───────────────────────────────────────────────────── */
+@keyframes stConvFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes stConvSlideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes stConvSlideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* ── Responsive Adaptations ───────────────────────────────────────── */
+@media (max-width: 860px) {
+  .st-conv-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .st-conv-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .st-conv-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .st-conv-floating-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .st-conv-floating-actions {
+    flex-wrap: wrap;
+  }
+}
+

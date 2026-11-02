@@ -168,8 +168,16 @@ function SettingsPage({ ctx }) {
     body = (
       <>
         <div className="st-head">
-          <div className="st-kicker">search · {hits.total} setting{hits.total === 1 ? "" : "s"}</div>
-          <div className="st-h1">“{q}”</div>
+          <div className="st-head-row">
+            <div className="st-head-icon" aria-hidden="true">
+              <_SP_Icon name="search" size={22} />
+            </div>
+            <div className="st-head-text">
+              <div className="st-kicker">search · {hits.total} setting{hits.total === 1 ? "" : "s"}</div>
+              <div className="st-h1">“{q}”</div>
+              <p className="st-blurb">Settings matching your query across all sections.</p>
+            </div>
+          </div>
         </div>
         {hits.groups.length === 0 && <div className="st-empty">No setting matches “{q}”.</div>}
         {hits.groups.map(g => (
@@ -182,9 +190,18 @@ function SettingsPage({ ctx }) {
     body = (
       <>
         <div className="st-head">
-          <div className="st-kicker">{String(idx + 1).padStart(2, "0")} · {section.title}</div>
-          <div className="st-h1">{section.title}</div>
-          <p className="st-blurb">{section.blurb}</p>
+          <div className="st-head-row">
+            {section.icon && (
+              <div className="st-head-icon" aria-hidden="true">
+                <_SP_Icon name={section.icon} size={22} />
+              </div>
+            )}
+            <div className="st-head-text">
+              <div className="st-kicker">{String(idx + 1).padStart(2, "0")} · {section.title}</div>
+              <div className="st-h1">{section.title}</div>
+              {section.blurb && <p className="st-blurb">{section.blurb}</p>}
+            </div>
+          </div>
         </div>
         {section.groups.map(g => {
           const rows = g.rows.filter(r => S.visible(r, t));
@@ -202,6 +219,7 @@ function SettingsPage({ ctx }) {
             <_SP_Icon name="search" size={14} />
             <input ref={searchRef} type="text" placeholder="Search" value={query} autoComplete="off"
               spellCheck={false} aria-label="Search settings" onChange={e => setQuery(e.target.value)} />
+            <span className="st-kbd">{_SP_IS_MAC ? "⌘F" : "Ctrl+F"}</span>
           </label>
           <_SP_Strip sections={sections} active={section.id} counts={counts} searching={!!q} onSelect={select} />
         </nav>

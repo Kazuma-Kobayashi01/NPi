@@ -1175,6 +1175,16 @@
     }
   }
 
+  // Unlike transcript listeners, these stay attached to every process while
+  // its tab is in the background. Replay must not emit completion twice.
+  const settledListeners = new Map();
+  const settledSubscribers = new Set();
+
+  function _dropSettledListener(id) {
+    settledListeners.get(id)?.stop();
+    settledListeners.delete(id);
+  }
+
   /** Spawn omp for session `id` under `profile` and wire its git-branch
    *  watcher. Split out of `_startProjectSession` because a profile switch
    *  respawns an *existing* tab's process under the same session id — the
@@ -1184,6 +1194,16 @@
    *  Side-effectful (Tauri IPC invoke, event listeners), so not unit-tested
    *  directly. */
   async function _spawnSession(id, cwd, { resume = null, profile }) {
+    _dropSettledListener(id);
+    const settled = _listen(`agent://line/${id}`, envelope => {
+      let frame;
+      try { frame = JSON.parse(envelope.text); } catch { return; }
+      if (frame.type === "session_settled") {
+        for (const subscriber of settledSubscribers) subscriber(profile);
+      }
+    });
+    settledListeners.set(id, settled);
+    await settled.ready;
     const approvalMode = await window.__TAURI__.core.invoke("start_session", {
       args: { sessionId: id, cwd: cwd ?? "", resume, profile },
     });
@@ -1255,6 +1275,7 @@
       window.__TAURI__.core.invoke("stop_git_watch", { sessionId: id }).catch(() => {});
     }
     _dropGitListener(id);
+    _dropSettledListener(id);
     sessionSnapshots.delete(id);
     computerStates.delete(id);
     return stopped;
@@ -1267,6 +1288,7 @@
   function _closeTab(id) {
     const closed = _invokeSafe("close_tab", { sessionId: id });
     _dropGitListener(id);
+    _dropSettledListener(id);
     sessionSnapshots.delete(id);
     computerStates.delete(id);
     return closed;
@@ -1987,6 +2009,10 @@
           ? { status: "done", shortSummary: d.shortSummary || null, summary: d.summary || null, tokensBefore: d.tokensBefore }
           : { status: "error" };
         state.messages = state.messages.map((m, i) => i === idx ? { ...m, ...update } : m);
+      }
+      if (resp.success) {
+        _send({ type: "get_state" });
+        _send({ type: "get_messages", fullHistory: true });
       }
       notify();
       return;
@@ -2834,8 +2860,9 @@
     const current = activeSessionId ? sessionRegistry.get(activeSessionId) : null;
     if (rpcState.sessionFile && current && current.sessionFile !== rpcState.sessionFile) {
       sessionRegistry.set(activeSessionId, { ...current, sessionFile: rpcState.sessionFile });
+      _saveOpenTabs();
+      notify();
     }
-
     // ── Auto-rename (src/app/session-title.js) ──────────────────────────
     // RPC-mode omp never titles a session, so after the first completed
     // exchange the app asks: send the bare `/rename` builtin, which
@@ -3611,9 +3638,15 @@
     },
     /** What each signed-in subscription still allows — `{ok, value: [{provider,
      *  plan, limits: [{label, resetsAt, remainingFraction, …}]}]}`. Asks the
-     *  providers over the network, so it takes a few seconds. */
-    usageLimits(profile = _activeProfileId()) {
-      return _invokeResult("usage_limits", { profile });
+     *  providers over the network, so it takes a few seconds. Force invalidates
+     *  cached reports first, without bypassing provider failure cooldowns. */
+    usageLimits(profile = _activeProfileId(), force = false) {
+      return _invokeResult("usage_limits", { profile, force });
+    },
+    /** Live completion notifications include background tabs and never replay. */
+    onSessionSettled(callback) {
+      settledSubscribers.add(callback);
+      return () => settledSubscribers.delete(callback);
     },
     /** The `default` model role (`provider/id[:level]`, null when unset). */
     defaultModel(profile = _activeProfileId()) {
@@ -4298,22 +4331,9 @@
       return _invokeResult("browser_capture", { sessionId: sid, rect });
     },
 
-    /** Usage statistics for the active tab's profile — see usage_stats in
-     *  lib.rs / stats.rs::fetch. Unlike the workspace methods above, this
-     *  is not scoped to the active tab's *project*, but it IS scoped to
-     *  its *profile*: `omp stats` itself resolves against one profile
-     *  per invocation (same as every other per-tab omp spawn), so a tab
-     *  running under a named profile sees that profile's own usage, not
-     *  a merge across every profile. Also not all-time — the installed
-     *  omp CLI's `--json` path has no way to request more than a rolling
-     *  last-24-hours window (see stats.rs's module doc).
-     *  Uses `_invokeResult` (not `_invokeSafe`) because "no usage in the
-     *  window yet" and "the backend call failed" (omp not on PATH, an
-     *  omp build old enough to predate the `stats` subcommand, a sync
-     *  error) need distinct panel messages — a swallowed rejection would
-     *  look identical to a profile with genuinely zero recent usage. */
-    async usageStats() {
-      return _invokeResult("usage_stats", { profile: _activeProfileId() });
+    /** Usage statistics for the active profile and selected time range. */
+    async usageStats(range) {
+      return _invokeResult("usage_stats", { profile: _activeProfileId(), range });
     },
 
     // ── Session management ───────────────────────────────────────────────────
@@ -4383,11 +4403,12 @@
      *  path is validated server-side against that profile's sessions root,
      *  so listing another profile's history here would offer entries this
      *  tab cannot resume. */
-    async listSavedSessions(cwd = null) {
+    async listSavedSessions(cwd = null, profile = null) {
+      const reqProfile = profile || _activeProfileId();
       const sessions = await _invokeSafe("list_saved_sessions", {
-        cwd: cwd || null, profile: _activeProfileId(),
+        cwd: cwd || null, profile: reqProfile,
       }, []);
-      return sessions || [];
+      return (sessions || []).map(s => (s.profile ? s : { ...s, profile: reqProfile }));
     },
 
     /** Return the full keybinding payload for the active tab's profile.
@@ -4419,7 +4440,7 @@
      *  `test-project-nav.mjs`. */
     async resumeSession(session) {
       if (!session || !session.path) return null;
-      const profile = _activeProfileId();
+      const profile = session.profile || _activeProfileId();
       const open = window.OMP_PROJECT_NAV.findConversationTab(
         [...sessionRegistry.values()], session.path, profile,
       );
@@ -4593,13 +4614,55 @@
     /** Sidebar actions on a saved conversation (deleted for good) / a folder. Resolve to `{ ok }`. */
     async deleteSavedSession(path, profile) {
       if (!window.__TAURI__) return { ok: false, error: "not connected" };
-      try { await window.__TAURI__.core.invoke("delete_saved_session", { path, profile: profile || _activeProfileId() }); return { ok: true }; }
-      catch (e) { return { ok: false, error: String(e) }; }
+      const targetProfile = profile || _activeProfileId();
+      const openTab = [...sessionRegistry.values()].find(t => t.sessionFile && t.sessionFile === path);
+      if (openTab) {
+        const closed = await window.OMP_BRIDGE.closeSessionGuarded(openTab.id);
+        if (!closed) return { ok: false, error: "Cannot delete session: tab close was cancelled" };
+      }
+      try {
+        await window.__TAURI__.core.invoke("delete_saved_session", {
+          path, profile: targetProfile,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: String(e) };
+      }
     },
     async revealPath(path) {
       if (!window.__TAURI__) return { ok: false, error: "not connected" };
       try { await window.__TAURI__.core.invoke("reveal_path", { path }); return { ok: true }; }
       catch (e) { return { ok: false, error: String(e) }; }
+    },
+    async renameSavedSession(path, newTitle, profile) {
+      if (!window.__TAURI__) return { ok: false, error: "not connected" };
+      try {
+        await window.__TAURI__.core.invoke("rename_saved_session", {
+          path, newTitle, profile: profile || _activeProfileId(),
+        });
+        return { ok: true };
+      } catch (e) { return { ok: false, error: String(e) }; }
+    },
+    async batchDeleteSavedSessions(paths, profile) {
+      if (!window.__TAURI__) return { ok: false, error: "not connected" };
+      const targetProfile = profile || _activeProfileId();
+      const openFiles = new Set([...sessionRegistry.values()].map(tab => tab.sessionFile));
+      const closedPaths = paths.filter(path => !openFiles.has(path));
+      try {
+        const deleted = await window.__TAURI__.core.invoke("batch_delete_saved_sessions", {
+          paths: closedPaths, profile: targetProfile,
+        });
+        return { ok: true, value: deleted };
+      } catch (e) { return { ok: false, error: String(e) }; }
+    },
+    async exportSessionMarkdown(path, outputPath, profile) {
+      if (!window.__TAURI__) return { ok: false, error: "not connected" };
+      try {
+        await window.__TAURI__.core.invoke("export_session_markdown", {
+          path, outputPath, profile: profile || _activeProfileId(),
+        });
+        return { ok: true };
+      } catch (e) { return { ok: false, error: String(e) }; }
     },
     /** What the user told the app about themselves: `{ call, work, interests, about }`. */
     async chatProfile() { return _invokeSafe("chat_profile_get", {}, null); },

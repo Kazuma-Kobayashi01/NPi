@@ -243,6 +243,79 @@
     };
   }
 
+  /** Deduplicate saved sessions into one row per connected conversation family
+   *  (using `family_path` and `resume_path`), excluding any family that already
+   *  has a session file open in `openFiles`. */
+  function collapseChatFamilies(saved, openFiles = []) {
+    if (!Array.isArray(saved) || saved.length === 0) return [];
+    const openList = openFiles instanceof Set ? [...openFiles] : (Array.isArray(openFiles) ? openFiles : []);
+    const openSet = new Set(openList.filter(Boolean));
+
+    const fileToFamily = new Map();
+    for (const s of saved) {
+      if (!s || !s.path) continue;
+      const fam = s.family_path || s.path;
+      fileToFamily.set(s.path, fam);
+    }
+
+    const openFamilies = new Set();
+    for (const f of openSet) {
+      openFamilies.add(fileToFamily.get(f) || f);
+    }
+
+    const familyMap = new Map();
+    for (const s of saved) {
+      if (!s || !s.path) continue;
+      const fam = s.family_path || s.path;
+      if (openFamilies.has(fam) || openSet.has(s.path)) {
+        continue;
+      }
+      let list = familyMap.get(fam);
+      if (!list) {
+        list = [];
+        familyMap.set(fam, list);
+      }
+      list.push(s);
+    }
+
+    const result = [];
+    for (const [, members] of familyMap) {
+      let rep = members.find(m => m.path === m.resume_path);
+      if (!rep) {
+        rep = members[0];
+        let bestAt = Date.parse(rep.updated_at || rep.timestamp) || 0;
+        for (let i = 1; i < members.length; i++) {
+          const at = Date.parse(members[i].updated_at || members[i].timestamp) || 0;
+          if (at > bestAt) {
+            bestAt = at;
+            rep = members[i];
+          }
+        }
+      }
+
+      let title = rep.title;
+      if (!title || title === "Untitled conversation") {
+        const explicit = members.find(m => m.title && m.title !== "Untitled conversation");
+        if (explicit) title = explicit.title;
+      }
+
+      let maxAt = Date.parse(rep.updated_at || rep.timestamp) || 0;
+      for (const m of members) {
+        const at = Date.parse(m.updated_at || m.timestamp) || 0;
+        if (at > maxAt) maxAt = at;
+      }
+
+      result.push({
+        ...rep,
+        title: title || "Untitled conversation",
+        _familyMembers: members.map(m => m.path),
+        _familyMaxAt: maxAt,
+      });
+    }
+
+    return result;
+  }
+
   window.OMP_PROJECT_NAV = {
     normPath,
     basename,
@@ -263,5 +336,6 @@
     sessionProjects,
     tabLayout,
     restoreSpec,
+    collapseChatFamilies,
   };
 })();

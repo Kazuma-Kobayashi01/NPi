@@ -43,6 +43,9 @@ function UsagePopover({ provider, quotas, stats, context, onSeeAll, onClose }) {
       </>) : (
         <div className="usage-head"><span>{provider ? `${M.vendorLabel(provider)} · API usage` : "API usage"}</span></div>
       )}
+      {quotas?.loading && !quotas.rows && <div className="usage-line usage-dim">Checking limits…</div>}
+      {quotas?.error && <div className="usage-line usage-dim" role="alert">Limits unavailable: {quotas.error}{quotas.rows ? " (showing last available)" : ""}</div>}
+      {quotas?.refresh && <button type="button" className="usage-all" onClick={quotas.refresh}>Refresh limits</button>}
       <div className="usage-sub">This conversation</div>
       <div className="usage-line"><span className="usage-name">Spend</span><span className="usage-pct">{U.formatCost(stats?.cost)}</span></div>
       {!mine && rows.map(r => (

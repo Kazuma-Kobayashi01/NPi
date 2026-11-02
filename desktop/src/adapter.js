@@ -122,15 +122,19 @@
 
   // ── RPC state + cost + tps → design ctx object ────────────────────────────
   function buildCtx(rpcState, sessionCost, tps) {
-    const cu    = rpcState?.contextUsage;
-    const used  = cu?.tokens ?? 0;
-    const total = cu?.contextWindow ?? 200000;
-    const pct   = cu?.percent ?? (used ? Math.round((used / total) * 100) : 0);
+    const cu        = rpcState?.contextUsage;
+    const used      = cu?.tokens ?? 0;
+    const hasWindow = (cu?.contextWindow ?? 0) > 0;
+    const total     = hasWindow ? cu.contextWindow : 0;
+    const pct       = hasWindow ? (cu?.percent ?? (used ? Math.round((used / total) * 100) : 0)) : 0;
+    const label     = hasWindow
+      ? `${formatTokens(used)} / ${formatTokens(total)}`
+      : formatTokens(used);
     return {
       used,
       total,
       pct,
-      label: `${formatTokens(used)} / ${formatTokens(total)}`,
+      label,
       cost: sessionCost != null ? `$${sessionCost.toFixed(2)}` : "$0.00",
       tokensPerSec: Math.round(tps ?? 0),
     };

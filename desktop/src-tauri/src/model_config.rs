@@ -50,12 +50,19 @@ pub fn catalog(profile: Option<&str>) -> Result<Value, String> {
 /// usedFraction, remainingFraction, unit, status}]}`. A provider used with an
 /// API key has no limits and is not listed. Account names and ids in omp's
 /// report are dropped (and asked to be redacted) — only the numbers are kept.
+/// A forced read invalidates cached reports first; omp still applies its
+/// provider failure cooldown.
 ///
 /// Spawns `omp`, which asks the providers over the network (a few seconds);
 /// callers MUST run this off the main thread.
-pub fn usage_limits(profile: Option<&str>) -> Result<Value, String> {
+pub fn usage_limits(profile: Option<&str>, force: bool) -> Result<Value, String> {
     let mut args: Vec<String> = Vec::with_capacity(4);
     args.extend(crate::agent::spawn::profile_flag(profile));
+    if force {
+        args.extend(["usage", "invalidate"].map(String::from));
+        crate::omp_cli::run(&args, "omp usage invalidate")?;
+        args.truncate(args.len() - 2);
+    }
     args.extend(["usage", "--json", "--redact"].map(String::from));
     parse_usage(&crate::omp_cli::run(&args, OMP_USAGE)?)
 }

@@ -160,6 +160,7 @@ function UsageCard({ provider, quotas, stats }) {
         <_SP2_Limits row={mine} />
       </>)}
       {!mine && quotas?.loading && !quotas.rows && <div className="sp-dim">Checking limits…</div>}
+      {quotas?.error && <div className="sp-dim" role="alert">Limits unavailable: {quotas.error}{quotas.rows ? " (showing last available)" : ""}</div>}
       {others.length > 0 && (<>
         <button type="button" className="sp-sub sp-fold" aria-expanded={othersOpen} onClick={() => setOthersOpen(v => !v)}>
           <span>Other accounts</span>

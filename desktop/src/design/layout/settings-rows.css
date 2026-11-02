@@ -6,17 +6,18 @@
 .st-pick { position: relative; flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 320px; }
 .st-sel {
   display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
-  padding: 6px 10px 6px 12px; border-radius: 9px;
-  border: 1px solid var(--line-bright); background: var(--bg-input); color: var(--fg);
+  padding: 6px 10px 6px 12px; border-radius: var(--r-2);
+  border: 1px solid var(--line-soft); background: var(--bg-input); color: var(--fg);
   font-family: var(--font-mono); font-size: var(--d-text-sm);
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
-.st-sel:hover { background: var(--bg-hover); }
+.st-sel:hover { background: var(--bg-hover); border-color: var(--line-bright); }
 .st-sel:disabled { opacity: 0.5; pointer-events: none; }
 .st-sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .st-sel-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-menu {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 260px;
-  display: flex; flex-direction: column; gap: 1px; padding: 4px;
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; min-width: 260px;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
   border: 1px solid var(--line-bright); border-radius: 10px; background: var(--bg-elevated);
   box-shadow: var(--shadow-pop);
 }

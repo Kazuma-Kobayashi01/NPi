@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0.230] - 2026-11-02
+
+### Added
+
+- Mode-specific compaction settings overlay: Chat mode applies `thresholdPercent: 70`, `methodOrder: ["soft"]`, and experimental context management; Academic mode configures `keepRecentTokens: 30000` with `handoff` and `soft` summarization.
+- Chat space memory hot reload and update broadcasting: saving profile memory now emits change notifications so running and subsequent sessions dynamically track user preferences.
+
+### Changed
+
+- Desktop version 2.0.0.230 with bundled kernel 2.0.1.
+
+### Fixed
+
+- Conversations search icons retain shared icon sizing instead of covering the page; action menus and narrow layouts remain usable.
+- Saved-session actions resolve the selected profile before path validation. History entries retain their source profile when opened, and failed sidebar deletions display an error instead of silently doing nothing.
+- The Chat sidebar groups related branch files into one main conversation row while Conversation Tree and conversation management retain individual historical files.
+- Resuming an already active conversation from Settings dismisses Settings and shows the selected conversation.
+- Sidebar conversation deletion now confirms and removes the complete conversation tree, including its branch files, after closing owning tabs through the busy-close guard; failures and partial completion remain visible.
+- Context usage display in adapter eliminates the arbitrary 200k fallback; unknown context windows present exact token counts without deceptive percentage rings.
+- Manual and automatic compaction completion triggers immediate state and message history synchronization over RPC.
+- Plan usage refreshes after a conversation settles, including background tabs, and manual refresh invalidates the active profile's cached reports. Profile-scoped requests serialize, and explicit read errors are shown.
+- Usage statistics provide 24h, 7d, 30d and total-history views for the active profile, including total tokens and per-provider/model input, output and cache usage.
 ## [2.0.0.130] - 2026-11-01
 
 ### Added

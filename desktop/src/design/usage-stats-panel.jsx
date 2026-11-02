@@ -1,19 +1,5 @@
-/* ═════════════════════════════════════════════════════════════════════
-   usage-stats-panel.jsx — usage/cost dashboard for the active tab's
-   profile, sourced from `omp stats --json` (src-tauri/src/stats.rs::fetch).
-   Two scope limits the panel makes explicit in its copy rather than
-   implying "everything": it is scoped to the active tab's *profile* (not
-   merged across every profile — omp itself resolves one profile per
-   invocation), and to the installed omp CLI's rolling last-24-hours
-   window (the `--json` path has no flag to request more). Unlike
-   approval-rules-panel.jsx it is not scoped to the
-   active tab's *project* — a tab switch that stays on the same profile
-   does not refetch, only the panel's own refresh button does. A tab
-   switch that changes profile DOES refetch: app-live.jsx keys this
-   component on the active profile id specifically so the header's
-   profileLabel prop can never show a different profile than the data
-   underneath it actually came from.
-   ═════════════════════════════════════════════════════════════════════ */
+/* Usage/cost dashboard scoped to the active profile and selected time range.
+   app-live.jsx keys the panel by profile, so changing profiles remounts it. */
 
 const { Icon: _StatsIcon } = window;
 
@@ -56,54 +42,60 @@ function displayFolder(folder) {
 }
 
 const EMPTY = { overall: null, byModel: [], byFolder: [], byAgentType: [] };
+const STATS_RANGES = [
+  { value: "24h", label: "24h", window: "last 24 hours" },
+  { value: "7d", label: "7d", window: "last 7 days" },
+  { value: "30d", label: "1mo", window: "last 30 days" },
+  { value: "all", label: "Total", window: "all local history" },
+];
+
+// Stats records normalize input to uncached input, with cache counts separate.
+function statsTotalTokens(stats) {
+  return stats.totalInputTokens + stats.totalOutputTokens +
+    stats.totalCacheReadTokens + stats.totalCacheWriteTokens;
+}
 
 // Mounted only while open (app-live.jsx gates on `statsOpen`), so there
 // is no `open` prop and no early return for it — see the matching note
 // in approval-rules-panel.jsx.
 function UsageStatsPanel({ onClose, profileLabel }) {
   const bridge = window.OMP_BRIDGE;
-  const [data, setData]       = React.useState(EMPTY);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError]     = React.useState(null);
+  const [range, setRange]     = React.useState("all");
+  const [result, setResult]   = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const request = React.useRef(0);
 
   const refresh = React.useCallback(async () => {
-    if (!bridge) return;
+    const id = ++request.current;
     setLoading(true);
-    setError(null);
-    const res = await bridge.usageStats();
-    if (!res.ok) {
-      // Backend rejection (omp not on PATH, an omp build old enough to
-      // predate the `stats` subcommand, a sync failure, ...) — see
-      // omp_cli.rs::exit_failure_message for why this is distinct from
-      // "zero sessions synced" below. Clears `data` too, not just
-      // `error`: without this, a refresh clicked after the panel already
-      // showed a dashboard would render the error/empty message directly
-      // above the previous, now-stale figures instead of replacing them.
-      setData(EMPTY);
-      setError(res.error);
-    } else if (res.value.overall.totalRequests > 0) {
-      // `overall` is always a populated struct on a successful call (see
-      // stats.rs::AggregatedStats — not optional), so a zero-request
-      // count, not `overall`'s presence, is what actually distinguishes
-      // "genuinely no usage yet" from a real dashboard.
-      setData(res.value);
-    } else {
-      setData(EMPTY);
-      setError("no usage in the last 24 hours");
-    }
+    setResult(null);
+    const res = await bridge.usageStats(range);
+    if (id !== request.current) return;
+    setResult({ range, res });
     setLoading(false);
-  }, [bridge]);
+  }, [bridge, range]);
 
-  React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    refresh();
+    return () => { request.current++; };
+  }, [refresh]);
 
-  const overall = data.overall;
+  const selectRange = value => {
+    if (value === range) return;
+    request.current++;
+    setRange(value);
+  };
+  const selected = STATS_RANGES.find(item => item.value === range);
+  const current = result?.range === range ? result.res : null;
+  const overall = current?.ok && current.value.overall.totalRequests > 0 ? current.value.overall : null;
+  const data = overall ? current.value : EMPTY;
 
   return (
     <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "6vh" }}>
       <div className="stats-panel" onClick={e => e.stopPropagation()}>
         <div className="stats-head">
           <_StatsIcon name="cost" size={13} color="var(--accent)" />
-          <span className="mono" style={{ color: "var(--fg-2)" }}>usage · {profileLabel} · last 24h</span>
+          <span className="mono" style={{ color: "var(--fg-2)" }}>usage · {profileLabel} · {selected.window}</span>
           <button className="btn icon ghost" style={{ marginLeft: "auto" }} onClick={refresh} title="Refresh">
             <_StatsIcon name="refresh" size={11} />
           </button>
@@ -112,9 +104,16 @@ function UsageStatsPanel({ onClose, profileLabel }) {
           </button>
         </div>
         <div className="stats-body">
-          {loading && !overall && <div className="panel-empty mono">syncing session logs…</div>}
-          {!loading && error && <div className="panel-empty mono">{error}</div>}
-          {overall && (
+          <div className="stats-ranges mode-seg" role="radiogroup" aria-label="Usage time range">
+            {STATS_RANGES.map(item => (
+              <button key={item.value} type="button" role="radio" aria-checked={range === item.value}
+                onClick={() => selectRange(item.value)}>{item.label}</button>
+            ))}
+          </div>
+          {(loading || !current) && <div className="panel-empty mono">syncing session logs…</div>}
+          {!loading && current && !current.ok && <div className="panel-empty mono">{current.error}</div>}
+          {!loading && current?.ok && !overall && <div className="panel-empty mono">no usage in {selected.window}</div>}
+          {!loading && overall && (
             <>
               <div className="stats-cards">
                 <div className="stats-card">
@@ -125,14 +124,12 @@ function UsageStatsPanel({ onClose, profileLabel }) {
                 <div className="stats-card">
                   <span className="stats-card-label">cost</span>
                   <span className="stats-card-value">{formatCost(overall.totalCost)}</span>
-                  <span className="stats-card-sub">{formatCount(overall.totalPremiumRequests)} premium</span>
+                  <span className="stats-card-sub">{formatCount(overall.totalPremiumRequests)} premium{overall.unpricedRequests > 0 ? ` · ${overall.unpricedRequests} unpriced` : ""}</span>
                 </div>
                 <div className="stats-card">
-                  <span className="stats-card-label">tokens</span>
-                  <span className="stats-card-value">
-                    {window.formatTokens(overall.totalInputTokens)} in / {window.formatTokens(overall.totalOutputTokens)} out
-                  </span>
-                  <span className="stats-card-sub">{formatPct(overall.cacheRate)} cached</span>
+                  <span className="stats-card-label">total tokens</span>
+                  <span className="stats-card-value">{window.formatTokens(statsTotalTokens(overall))}</span>
+                  <span className="stats-card-sub">uncached input + output + cache read + cache write</span>
                 </div>
                 <div className="stats-card">
                   <span className="stats-card-label">performance</span>
@@ -145,17 +142,24 @@ function UsageStatsPanel({ onClose, profileLabel }) {
                 </div>
               </div>
 
-              <div className="stats-section-label mono">by model</div>
+              <div className="stats-section-label mono">by provider / model</div>
               <div className="stats-table">
                 {data.byModel.length === 0 && <div className="panel-empty mono">no data</div>}
                 {data.byModel.map(m => (
-                  <div key={`${m.provider}-${m.model}`} className="stats-row">
-                    <span className="stats-row-name mono" title={`${m.provider}/${m.model}`}>{m.model}</span>
-                    <span className="stats-row-metric mono">{m.totalRequests.toLocaleString()} req</span>
-                    <span className="stats-row-metric mono">
-                      {window.formatTokens(m.totalInputTokens)}/{window.formatTokens(m.totalOutputTokens)}
-                    </span>
-                    <span className="stats-row-metric mono">{formatCost(m.totalCost)}</span>
+                  <div key={JSON.stringify([m.provider, m.model])} className="stats-model-row">
+                    <div className="stats-row">
+                      <span className="stats-row-name mono" title={`${m.provider}/${m.model}`}>{m.provider} / {m.model}</span>
+                      <span className="stats-row-metric mono">{window.formatTokens(statsTotalTokens(m))} tokens</span>
+                      <span className="stats-row-metric mono">{m.totalRequests.toLocaleString()} req</span>
+                      <span className="stats-row-metric mono">{formatCost(m.totalCost)}</span>
+                    </div>
+                    <div className="stats-model-tokens mono">
+                      <span>uncached input {window.formatTokens(m.totalInputTokens)}</span>
+                      <span>output {window.formatTokens(m.totalOutputTokens)}</span>
+                      <span>cache read {window.formatTokens(m.totalCacheReadTokens)}</span>
+                      <span>cache write {window.formatTokens(m.totalCacheWriteTokens)}</span>
+                      {m.unpricedRequests > 0 && <span>{m.unpricedRequests} unpriced</span>}
+                    </div>
                   </div>
                 ))}
               </div>

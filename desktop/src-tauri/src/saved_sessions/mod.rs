@@ -16,9 +16,10 @@
 //! - [`tests`] — unit tests for the pure parse/scan/validate helpers below.
 
 use std::ffi::OsStr;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 /// Information about a persisted session on disk.
@@ -53,6 +54,10 @@ pub struct SavedSession {
     pub path: String,
     pub message_count: usize,
     pub preview: Option<String>,
+    pub size_bytes: u64,
+    pub parent_session: Option<String>,
+    pub family_path: String,
+    pub resume_path: String,
 }
 
 /// Resolve the sessions directory from already-gathered inputs.
@@ -179,6 +184,7 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
     let reader = BufReader::new(file);
 
     let mut session_id = String::new();
+    let mut parent_session: Option<String> = None;
     let mut explicit_title = String::new();
     let mut fallback_title = String::new();
     let mut timestamp = String::new();
@@ -220,6 +226,16 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
             "session" => {
                 if let Some(id) = val.get("id").and_then(|s| s.as_str()) {
                     session_id = id.to_string();
+                }
+                if let Some(parent) = val
+                    .get("parentSession")
+                    .or_else(|| val.get("parent_session"))
+                    .and_then(|s| s.as_str())
+                {
+                    let trimmed = parent.trim();
+                    if !trimmed.is_empty() {
+                        parent_session = Some(trimmed.to_string());
+                    }
                 }
                 if let Some(ts) = val.get("timestamp").and_then(|s| s.as_str()) {
                     timestamp = ts.to_string();
@@ -265,6 +281,8 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
             .to_string()
     };
 
+    let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+
     Some(SavedSession {
         // Prefer the filename-derived uuid — the durable identity (see the
         // module doc comment) — over the JSONL body's `session.id` field.
@@ -280,7 +298,68 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
         path: path.to_string_lossy().into_owned(),
         message_count,
         preview: last_preview,
+        size_bytes,
+        parent_session,
+        family_path: path.to_string_lossy().into_owned(),
+        resume_path: path.to_string_lossy().into_owned(),
     })
+}
+
+/// Format Unix epoch seconds and milliseconds as UTC ISO-8601 string.
+pub fn format_epoch_iso(secs: u64, millis: u32) -> String {
+    const DAYS_IN_MONTH_NONLEAP: [u64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let days_total = secs / 86400;
+    let day_secs = secs % 86400;
+    let (hour, minute, second) = (day_secs / 3600, (day_secs % 3600) / 60, day_secs % 60);
+
+    let mut year = 1970i64;
+    let mut days_left = days_total as i64;
+    loop {
+        let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        let year_days = if leap { 366 } else { 365 };
+        if days_left < year_days {
+            break;
+        }
+        days_left -= year_days;
+        year += 1;
+    }
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let mut month = 1u32;
+    for (i, &dim) in DAYS_IN_MONTH_NONLEAP.iter().enumerate() {
+        let dim = if i == 1 && leap { dim + 1 } else { dim };
+        if days_left < dim as i64 {
+            month = (i + 1) as u32;
+            break;
+        }
+        days_left -= dim as i64;
+    }
+    let day = days_left + 1;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
+}
+
+/// Generate the current UTC time as an ISO-8601 string with millisecond precision.
+pub fn now_iso8601() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    format_epoch_iso(now.as_secs(), now.subsec_millis())
+}
+
+/// Appends a new title record to the session file so the updated title
+/// and activity timestamp take effect on subsequent reads.
+pub fn rename_session_file(path: &Path, new_title: &str) -> std::io::Result<()> {
+    let ts = now_iso8601();
+    let record = serde_json::json!({
+        "type": "title",
+        "v": 1,
+        "title": new_title.trim(),
+        "updatedAt": ts
+    });
+    let mut file = OpenOptions::new().append(true).open(path)?;
+    let line = serde_json::to_string(&record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    writeln!(file, "{line}")?;
+    Ok(())
 }
 
 /// Normalize a `cwd` value for cross-platform comparison: forward slashes,
@@ -310,6 +389,176 @@ pub fn canonical_id_from_stem(path: &Path) -> Option<&str> {
     let looks_like_uuid =
         (32..=36).contains(&uuid.len()) && uuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
     looks_like_uuid.then_some(uuid)
+}
+
+/// File name (last component, either separator) of a path.
+fn base_name(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
+/// Resolves a raw `parentSession` string to an existing session index in `indices`.
+fn resolve_parent(
+    raw: &str,
+    by_name: &std::collections::HashMap<&str, usize>,
+    by_id: &std::collections::HashMap<&str, usize>,
+) -> Option<usize> {
+    let has_suffix = Path::new(raw)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"));
+    if raw.contains(['/', '\\']) || has_suffix {
+        by_name.get(base_name(raw)).copied()
+    } else {
+        by_id.get(raw).copied()
+    }
+}
+
+struct Dsu {
+    parent: Vec<usize>,
+}
+
+impl Dsu {
+    fn new(size: usize) -> Self {
+        Self {
+            parent: (0..size).collect(),
+        }
+    }
+
+    fn find(&mut self, i: usize) -> usize {
+        let mut root = i;
+        while self.parent[root] != root {
+            root = self.parent[root];
+        }
+        let mut curr = i;
+        while curr != root {
+            let nxt = self.parent[curr];
+            self.parent[curr] = root;
+            curr = nxt;
+        }
+        root
+    }
+
+    fn union(&mut self, i: usize, j: usize) {
+        let root_i = self.find(i);
+        let root_j = self.find(j);
+        if root_i != root_j {
+            self.parent[root_i] = root_j;
+        }
+    }
+}
+
+/// Link all session files of each directory into conversation families,
+/// setting `family_path` to the root file's path and `resume_path` to the
+/// latest active member's path.
+pub fn assign_families(sessions: &mut [SavedSession]) {
+    use std::collections::HashMap;
+
+    if sessions.is_empty() {
+        return;
+    }
+
+    let mut dir_groups: HashMap<PathBuf, Vec<usize>> = HashMap::new();
+    for (i, session) in sessions.iter().enumerate() {
+        let dir = Path::new(&session.path)
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        dir_groups.entry(dir).or_default().push(i);
+    }
+
+    let mut dsu = Dsu::new(sessions.len());
+    let mut has_existing_parent = vec![false; sessions.len()];
+
+    for indices in dir_groups.values() {
+        let mut by_name: HashMap<&str, usize> = HashMap::new();
+        let mut by_id: HashMap<&str, usize> = HashMap::new();
+
+        for &i in indices {
+            let session = &sessions[i];
+            let path = Path::new(&session.path);
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                by_name.insert(name, i);
+            }
+            if !session.id.is_empty() {
+                by_id.insert(&session.id, i);
+            }
+            if let Some(uuid) = canonical_id_from_stem(path) {
+                by_id.insert(uuid, i);
+            }
+        }
+
+        let mut missing_parents: HashMap<String, usize> = HashMap::new();
+
+        for &i in indices {
+            let Some(raw_parent) = sessions[i].parent_session.as_deref() else {
+                continue;
+            };
+
+            if let Some(parent_idx) = resolve_parent(raw_parent, &by_name, &by_id) {
+                dsu.union(i, parent_idx);
+                has_existing_parent[i] = true;
+            } else {
+                let missing_key = if raw_parent.contains(['/', '\\'])
+                    || Path::new(raw_parent)
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("jsonl"))
+                {
+                    base_name(raw_parent).to_string()
+                } else {
+                    raw_parent.trim().to_string()
+                };
+
+                if let Some(&sibling_idx) = missing_parents.get(&missing_key) {
+                    dsu.union(i, sibling_idx);
+                } else {
+                    missing_parents.insert(missing_key, i);
+                }
+            }
+        }
+
+        let mut components: HashMap<usize, Vec<usize>> = HashMap::new();
+        for &i in indices {
+            let root = dsu.find(i);
+            components.entry(root).or_default().push(i);
+        }
+
+        for members in components.values() {
+            let mut candidates: Vec<usize> = members
+                .iter()
+                .copied()
+                .filter(|&idx| !has_existing_parent[idx])
+                .collect();
+            if candidates.is_empty() {
+                candidates = members.clone();
+            }
+
+            candidates.sort_by(|&a, &b| {
+                let sa = &sessions[a];
+                let sb = &sessions[b];
+                sa.timestamp.cmp(&sb.timestamp).then_with(|| sa.path.cmp(&sb.path))
+            });
+            let root_idx = candidates[0];
+            let family_path = sessions[root_idx].path.clone();
+
+            let mut sorted_by_activity = members.clone();
+            sorted_by_activity.sort_by(|&a, &b| {
+                let sa = &sessions[a];
+                let sb = &sessions[b];
+                let act_a = sa.updated_at.as_deref().unwrap_or(&sa.timestamp);
+                let act_b = sb.updated_at.as_deref().unwrap_or(&sb.timestamp);
+                act_b
+                    .cmp(act_a)
+                    .then_with(|| sb.timestamp.cmp(&sa.timestamp))
+                    .then_with(|| sb.path.cmp(&sa.path))
+            });
+            let latest_idx = sorted_by_activity[0];
+            let resume_path = sessions[latest_idx].path.clone();
+
+            for &idx in members {
+                sessions[idx].family_path = family_path.clone();
+                sessions[idx].resume_path = resume_path.clone();
+            }
+        }
+    }
 }
 
 /// Walk `root` for `.jsonl` session files, optionally filtered by `cwd_filter`.
@@ -364,6 +613,8 @@ fn scan_dir(root: &Path, cwd_filter: Option<&str>) -> Result<Vec<SavedSession>, 
             sessions.push(session);
         }
     }
+
+    assign_families(&mut sessions);
 
     // Sort descending by timestamp / updated_at (newest first)
     sessions.sort_by(|a, b| {
