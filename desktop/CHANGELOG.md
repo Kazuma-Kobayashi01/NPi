@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Generative UI (`ui.present`): version-1 data-only interactive forms in chat with 11 native controls (`text`, `input`, `textarea`, `number`, `slider`, `checkbox`, `switch`, `select`, `radio`, `multiselect`, `button`).
+- Full interaction lifecycle (`waiting_input` + `rendered` display milestone, `submitted` with `continuation: "pending" | "admitted"`, `cancelled`, `expired`), task/message identity binding, same-batch dependent-tool pause, cancellation without extra model calls, expiry on new user tasks or branch switches, and session-safe history restoration.
+- Settings → Agent → Execution behaviors: `Interaction policy` (`standard` | `aggressive` | `minimal`, default `standard`), decoupled from models/providers while preserving tool approvals and mandatory subagent Auto Ask gates.
+- Invalid or unsupported forms degrade to an isolated text error. Component counts, text, options and numeric ranges are bounded; generated HTML, scripts and commands are never executed.
+
 ## [2.0.0.258] - 2026-11-02
 
 ### Added

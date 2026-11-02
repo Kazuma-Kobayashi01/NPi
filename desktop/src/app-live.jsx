@@ -248,6 +248,7 @@ function App() {
   React.useEffect(() => { bridge?.setSubagentPreferences(t); }, [
     bridge, t.subagentModelMode, t.subagentCustomModel, t.subagentCustomThinking, t.subagentDelegation,
   ]);
+  React.useEffect(() => { bridge?.setInteractionPolicy(t.interactionPolicy); }, [bridge, t.interactionPolicy]);
   // Refuse a file or link drop no handler took (`refusesStrayDrop`), so the
   // webview never navigates to it now that Tauri's native file drop is off
   // (#50). The composer's handlers run first and accept their own drops.
@@ -1148,6 +1149,10 @@ function App() {
                     onAskAnswer={handleAskAnswer}
                     onAskDialogAnswer={handleAskDialogAnswer}
                     onConfirmAsk={handleConfirmAsk}
+                    onUiSubmit={bridge?.submitUi}
+                    onUiCancel={bridge?.cancelUi}
+                    onUiRendered={bridge?.renderedUi}
+                    uiDisabled={compacting || !bridge?.isConnected}
                     onCancelAsk={handleCancelAsk}
                     onGrantApproval={handleGrantApproval}
                     onStopRetry={handleStopRetry}

@@ -231,6 +231,7 @@
     };
   }
   let subagentPreferences = _readSubagentPreferences(window.OMP_TWEAKS_STORE.read());
+  let interactionPolicy = window.OMP_TWEAKS_STORE.read().interactionPolicy ?? window.TWEAK_DEFAULTS.interactionPolicy;
   // The busy-close confirmation on screen (`PREFS.tabCloseConfirm` /
   // `quitConfirm` shape), or null; `_closeConfirmAnswer` settles it.
   let closeConfirm = null;
@@ -1232,6 +1233,14 @@
       sessionId: id,
       json: JSON.stringify({ type: "set_subagent_preferences", ...subagentPreferences }),
     });
+    await window.__TAURI__.core.invoke("send_command", {
+      sessionId: id,
+      json: JSON.stringify({ type: "set_generative_ui", enabled: true }),
+    });
+    await window.__TAURI__.core.invoke("send_command", {
+      sessionId: id,
+      json: JSON.stringify({ type: "set_interaction_policy", policy: interactionPolicy }),
+    });
     // A fresh incarnation owns this id now, and `start_session` cleared the
     // backend's cached error for it — so a *new* startup failure must be
     // reportable again. Cleared after the spawn resolved, so a spawn that
@@ -2037,6 +2046,16 @@
       notify();
       return;
     }
+    if (resp.command === "set_generative_ui" && !resp.success) {
+      _pushAssistantNote(`Interactive UI could not be enabled: ${resp.error}`);
+      notify();
+      return;
+    }
+    if (resp.command === "set_interaction_policy" && !resp.success) {
+      _pushAssistantNote(`Could not apply interaction strategy: ${resp.error}`);
+      notify();
+      return;
+    }
     // Compact — handle success and failure both (must come before early-return below)
     if (resp.command === "compact") {
       state.isCompacting = false;
@@ -2209,6 +2228,24 @@
     const { type } = ev;
     const now  = Date.now();
     const time = timeNow();
+
+    if ((type === "message_start" || type === "message_end") &&
+        ev.message?.role === "custom" &&
+        ["ui.present", "ui.submit", "ui.state"].includes(ev.message.customType)) {
+      if (type === "message_end") {
+        state.messages = window.OMP_GENERATIVE_UI.upsertMessage(state.messages, ev.message);
+        notify();
+      }
+      return;
+    }
+    if (ev.toolName === "ui.present" && type.startsWith("tool_execution_")) {
+      if (type === "tool_execution_end" && ev.isError) {
+        const reason = (ev.result?.content ?? []).filter(c => c.type === "text").map(c => c.text).join("\n");
+        _pushAssistantNote(`Interactive UI could not be presented: ${reason.slice(0, 2048)}`);
+        notify();
+      }
+      return;
+    }
 
     if (type === "auto_compaction_start" || type === "manual_compaction_start") {
       state.isCompacting = true;
@@ -2954,7 +2991,8 @@
     // note will arrive, by a replay that lost frames (`_switchToSession`),
     // and below when omp switched sessions in-process — keyed on
     // `sessionId`, which a stale snapshot cannot misreport, unlike a title.
-    if (activeSessionId && sessionRegistry.has(activeSessionId)) {
+    if (activeSessionId && sessionRegistry.has(activeSessionId) &&
+        !rpcState.pendingUi && runStateCached(state) !== "waiting-user") {
       let entry = sessionRegistry.get(activeSessionId);
       // A budget that has no session binding yet (a fresh tab before its
       // first send, or `_resetForNewFile` after branch/fork, which mints a
@@ -3035,6 +3073,7 @@
         if (!sessionPrefs.autoCompaction) _send({ type: "set_auto_compaction", enabled: false });
         if (!sessionPrefs.autoRetry) _send({ type: "set_auto_retry", enabled: false });
         _send({ type: "set_subagent_preferences", ...subagentPreferences });
+        _send({ type: "set_interaction_policy", policy: interactionPolicy });
         _send({ type: "get_state" });
         // Fire-and-forget activity: don't block native input waiting for an indicator.
         void _computerCommand(activeSessionId, { type: "get_computer_use" });
@@ -3076,6 +3115,33 @@
       window.__TAURI__.core.invoke("send_command", { sessionId, json })
         .catch(e => console.warn(`[live] ${cmd.type} for '${sessionId}' not sent:`, e));
     }
+  }
+
+  /** UI actions stay bound to the originating conversation across IPC awaits. */
+  async function _uiAction(message, send, customType, values) {
+    const origin = activeSessionId;
+    if (!origin || message.session_id !== state.rpcState?.sessionId) {
+      throw new Error("This UI belongs to a different conversation.");
+    }
+    if (state.isCompacting) throw new Error("Wait until context compaction finishes before interacting.");
+    const current = state.messages.find(m => m.kind === "ui" && m.ui_id === message.ui_id);
+    const canResume = customType === "ui.submit" && current?.status === "submitted" && current.continuation === "pending";
+    if (!current || current.error || (current.status !== "waiting_input" && !canResume)) {
+      throw new Error("This UI has ended or is no longer available.");
+    }
+    const result = await send();
+    const target = origin === activeSessionId ? state : sessionSnapshots.get(origin);
+    if (target?.rpcState?.sessionId === message.session_id) {
+      target.messages = window.OMP_GENERATIVE_UI.upsertMessage(target.messages, {
+        role: "custom", customType,
+        details: { ...result, ...(customType === "ui.submit" ? { values } : {}) },
+      });
+      if (origin === activeSessionId) {
+        _send({ type: "get_state" });
+        notify();
+      }
+    }
+    return result;
   }
 
   function _logSendError(e) { console.error("[live] send error:", e); }
@@ -3823,6 +3889,21 @@
       const cur = sessionRegistry.get(id);
       const rest = STITLE.dropPendingNote(cur?.renameNotes, rename.note);
       if (rest) sessionRegistry.set(id, { ...cur, renameNotes: rest });
+    },
+    submitUi(message, values) {
+      return _uiAction(message, () => _sendWithResponse({
+        type: "submit_ui", ui_id: message.ui_id, session_id: message.session_id, values,
+      }, QUICK_CMD_TIMEOUT_MS), "ui.submit", values);
+    },
+    cancelUi(message) {
+      return _uiAction(message, () => _sendWithResponse({
+        type: "cancel_ui", ui_id: message.ui_id, session_id: message.session_id,
+      }, QUICK_CMD_TIMEOUT_MS), "ui.state");
+    },
+    renderedUi(message) {
+      return _uiAction(message, () => _sendWithResponse({
+        type: "render_ui", ui_id: message.ui_id, session_id: message.session_id,
+      }, QUICK_CMD_TIMEOUT_MS), "ui.state");
     },
     setModel(model)    { _send({ type: "set_model", provider: model.provider, modelId: model.id }); },
     /** Model keys (`provider/modelId`) `profile` used most recently, newest
@@ -4841,6 +4922,12 @@
       if (Object.keys(next).every(key => next[key] === subagentPreferences[key])) return;
       subagentPreferences = next;
       _sendToAll({ type: "set_subagent_preferences", ...next });
+    },
+
+    setInteractionPolicy(policy) {
+      if (policy === interactionPolicy) return;
+      interactionPolicy = policy;
+      _sendToAll({ type: "set_interaction_policy", policy });
     },
 
     /** Put the tabs in `ids` order (#40): a drag in the tab bar, the group

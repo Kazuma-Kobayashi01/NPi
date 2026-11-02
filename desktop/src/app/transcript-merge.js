@@ -23,6 +23,7 @@
    *  everything the desktop builds itself — cards, notes, job rows — and for
    *  a bubble whose echo never came (a command omp ran locally). */
   function messageKey(m) {
+    if (m?.kind === "ui") return `ui:${m.ui_id}`;
     if (m?.kind !== "user" && m?.kind !== "assistant") return null;
     return Number.isFinite(m.ts) ? `${m.kind}:${m.ts}` : null;
   }
@@ -37,6 +38,7 @@
   // for an attempt omp retried but kept in its context (a failed tool-call
   // turn), staying `retried` / `superseded` with its failure still pending.
   function _withLiveFields(copy, live) {
+    if (copy.kind === "ui") return window.OMP_GENERATIVE_UI.upsertMessage([live], copy)[0];
     let out = live._id == null ? copy : { ...copy, _id: live._id };
     const verdict = live.failure?.retryable;
     if (typeof verdict === "boolean" && copy.failure && copy.failure.retryable !== verdict) {

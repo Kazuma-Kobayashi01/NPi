@@ -46,6 +46,7 @@ function harness(opts = {}) {
     "app/turn-status.js",
     "app/transcript-merge.js",
     "app/usage-view.js",
+    "app/generative-ui.js",
     "adapter.js",
     "app/pr-automation.js",
   ]) {
@@ -293,6 +294,89 @@ async function run() {
     assert.equal(snapshot.isCompacting, false);
     assert.ok(snapshot.ctxBreakdown.parts.find(part => part.key === "compacted").tokens > 0);
     assert.equal(snapshot.messages.some(message => message.text === "earlier work"), false);
+  });
+
+  await test("UI history and live events deduplicate, and a submitted form cannot be sent twice or to another conversation", async () => {
+    const { bridge, invokes, emit } = harness();
+    const id = await bridge.openSession("/ui-project", "default");
+    let snapshot;
+    bridge.onUpdate(value => { snapshot = value; });
+    const rpcState = { sessionId: "ui-conversation", isCompacting: false, systemPrompt: [], dumpTools: [] };
+    emit(id, { type: "response", command: "get_state", success: true, data: rpcState });
+    const presentation = {
+      role: "custom", customType: "ui.present", timestamp: 100,
+      details: { ui_id: "ui-example", session_id: "ui-conversation", task_id: "ui-tool", message_id: "assistant-entry", status: "waiting_input", rendered: false, schema: {
+        version: 1, title: "Subagent settings", layout: "stack", components: [
+          { id: "concurrency", type: "slider", label: "Concurrency", min: 1, max: 32, step: 1, default: 4 },
+          { id: "reasoning", type: "select", label: "Reasoning", options: [{ label: "Low", value: "low" }, { label: "High", value: "high" }], default: "low" },
+          { id: "submit", type: "button", label: "Submit" },
+        ],
+      } },
+    };
+    emit(id, { type: "tool_execution_start", toolName: "ui.present", toolCallId: "ui-tool" });
+    emit(id, { type: "message_end", message: presentation });
+    emit(id, { type: "message_end", message: presentation });
+    emit(id, { type: "response", command: "get_messages", success: true, data: { messages: [presentation] } });
+    assert.equal(snapshot.messages.filter(message => message.kind === "ui").length, 1);
+    assert.equal(snapshot.messages.some(message => message.kind === "tool"), false);
+    const card = snapshot.messages.find(message => message.kind === "ui");
+    const values = { concurrency: 7, reasoning: "high" };
+    const submitted = bridge.submitUi(card, values);
+    const request = invokes.filter(call => call.command === "send_command")
+      .map(call => JSON.parse(call.args.json)).findLast(frame => frame.type === "submit_ui");
+    emit(id, { type: "response", command: "submit_ui", id: request.id, success: true, data: {
+      ui_id: card.ui_id, session_id: card.session_id, task_id: card.task_id, message_id: card.message_id,
+      status: "submitted", rendered: true, continuation: "admitted",
+    } });
+    await submitted;
+    assert.equal(snapshot.messages.find(message => message.kind === "ui").status, "submitted");
+    invokes.length = 0;
+    await assert.rejects(bridge.submitUi(card, values));
+    emit(id, { type: "response", command: "get_state", success: true, data: { ...rpcState, sessionId: "another-conversation" } });
+    await assert.rejects(bridge.submitUi(card, values));
+    assert.equal(invokes.some(call => call.command === "send_command" && JSON.parse(call.args.json).type === "submit_ui"), false);
+  });
+
+  await test("rendering is not an answer, and cancelling a form releases the waiting task across history replay", async () => {
+    const { bridge, invokes, emit } = harness();
+    const id = await bridge.openSession("/ui-cancel", "default");
+    let snapshot;
+    bridge.onUpdate(value => { snapshot = value; });
+    emit(id, { type: "response", command: "get_state", success: true, data: {
+      sessionId: "cancel-conversation", isStreaming: false, systemPrompt: [], dumpTools: [],
+    } });
+    const details = {
+      ui_id: "cancel-card", session_id: "cancel-conversation", task_id: "cancel-tool", message_id: "cancel-assistant",
+      status: "waiting_input", rendered: false,
+      schema: { version: 1, components: [
+        { type: "number", id: "workers", label: "Workers", min: 1, max: 32, default: 4 },
+        { type: "button", id: "send", label: "Apply" },
+      ] },
+    };
+    const presentation = { role: "custom", customType: "ui.present", details };
+    emit(id, { type: "message_end", message: presentation });
+    const card = snapshot.messages.find(message => message.kind === "ui");
+    assert.equal(snapshot.sessions.find(session => session.id === id).runState, "waiting-user");
+    const rendered = bridge.renderedUi(card);
+    const renderRequest = invokes.filter(call => call.command === "send_command")
+      .map(call => JSON.parse(call.args.json)).findLast(frame => frame.type === "render_ui");
+    const renderedDetails = { ...details, rendered: true };
+    emit(id, { type: "response", id: renderRequest.id, command: "render_ui", success: true, data: renderedDetails });
+    await rendered;
+    assert.equal(snapshot.messages.find(message => message.kind === "ui").rendered, true);
+    assert.equal(snapshot.sessions.find(session => session.id === id).runState, "waiting-user");
+    const cancelled = bridge.cancelUi(card);
+    const cancelRequest = invokes.filter(call => call.command === "send_command")
+      .map(call => JSON.parse(call.args.json)).findLast(frame => frame.type === "cancel_ui");
+    const cancellation = { role: "custom", customType: "ui.state", details: { ...renderedDetails, status: "cancelled" } };
+    emit(id, { type: "message_end", message: cancellation });
+    emit(id, { type: "response", id: cancelRequest.id, command: "cancel_ui", success: true, data: cancellation.details });
+    await cancelled;
+    emit(id, { type: "response", command: "get_messages", success: true, data: { messages: [presentation, cancellation] } });
+    assert.equal(snapshot.messages.filter(message => message.kind === "ui").length, 1);
+    assert.equal(snapshot.messages.find(message => message.kind === "ui").status, "cancelled");
+    assert.equal(snapshot.sessions.find(session => session.id === id).runState, "idle");
+    await assert.rejects(bridge.submitUi(card, { workers: 8 }));
   });
 
   console.log(`PASS test-history-actions-bridge.mjs (${passed} consumer scenarios)`);

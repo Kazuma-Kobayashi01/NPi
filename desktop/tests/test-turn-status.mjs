@@ -78,6 +78,18 @@ check("only an open ask waits on the user", () => {
   assert.equal(T.runStateOf({ ...base, messages: [ask(), ask({ answered: true })] }), "waiting-user");
 });
 
+check("rendered forms and unadmitted submissions keep waiting; terminal forms release the task", () => {
+  const base = { exitReason: null, isStreaming: false, asyncPending: false };
+  const ui = { kind: "ui", status: "waiting_input", rendered: true };
+  assert.equal(T.runStateOf({ ...base, messages: [ui] }), "waiting-user");
+  assert.equal(T.runStateOf({ ...base, messages: [{ ...ui, status: "submitted", continuation: "pending" }] }), "waiting-user");
+  assert.equal(T.runStateOf({ ...base, isStreaming: true, messages: [{ ...ui, status: "submitted", continuation: "admitted" }] }), "running");
+  for (const status of ["cancelled", "expired"]) {
+    assert.equal(T.runStateOf({ ...base, asyncPending: true, messages: [{ ...ui, status }] }), "background");
+  }
+  assert.equal(T.runStateOf({ ...base, messages: [{ ...ui, error: "Unsupported UI schema" }] }), "idle");
+});
+
 check("a yield is agent_end with yielded, or a terminal end from a frame without it", () => {
   // The captured background-job end: non-terminal, but the agent yielded.
   assert.equal(T.isYield({ type: "agent_end", isTerminal: false, yielded: true, awaitingAsyncWork: true }), true);

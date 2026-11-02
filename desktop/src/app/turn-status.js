@@ -10,8 +10,8 @@
   /** A tab's run state, the strongest condition first:
    *  - `failed`: the omp process exited with a reason; outranks a stale ask
    *    left open by a process that died mid-turn.
-   *  - `waiting-user`: an unanswered ask. Asks arrive mid-turn while
-   *    `isStreaming` is still true, so this must outrank `running`.
+   *  - `waiting-user`: an unanswered ask or an unfinished UI interaction.
+   *    This outranks `running`, including UI presentation's final frames.
    *  - `retrying`: omp is retrying a failed request (a live retry row); it
    *    covers the wait between attempts, when no turn streams.
    *  - `running`: a turn is streaming.
@@ -24,6 +24,8 @@
     let retrying = false;
     for (const m of messages) {
       if (m.kind === "ask" && !m.answered && !m.cancelled) return "waiting-user";
+      if (m.kind === "ui" && !m.error &&
+          (m.status === "waiting_input" || (m.status === "submitted" && m.continuation === "pending"))) return "waiting-user";
       if (m.kind === "retry" && !m.ended) retrying = true;
     }
     if (retrying) return "retrying";

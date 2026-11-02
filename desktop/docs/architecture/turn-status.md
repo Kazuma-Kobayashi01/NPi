@@ -24,6 +24,46 @@ live bubbles or dropping their stable IDs, tool cards, or pending prompts.
 `ChatView` allows scrolling to the first message and retains the reader's
 position when new output arrives while they are reading history.
 
+### Generative UI
+
+`ui.present` custom messages become independent `kind: "ui"` cards, never
+collapsible tool output. `app/generative-ui.js` validates the bounded,
+data-only version-1 schema across 11 controls (`text`, `input`, `textarea`,
+`number`, `slider`, `checkbox`, `switch`, `select`, `radio`, `multiselect`,
+`button`); `design/chat/generative-ui.jsx` renders text and native controls
+with the existing Settings primitives. No HTML, script, URL or action is
+interpreted. Invalid schemas or render failures show a local text error
+without taking down the transcript.
+
+Draft changes stay local (bounded per-identity cache across tab remounts).
+Lifecycle status is `waiting_input` (with an orthogonal `rendered: boolean`
+milestone acknowledged via idempotent `render_ui` after React mounts) or
+terminal `submitted` / `cancelled` / `expired`. `runStateOf` classifies
+unfinished forms (`waiting_input` or `submitted` with `continuation: "pending"`)
+as `waiting-user`, suppressing automatic `/rename` and PR auto-send.
+Full-history `ui.submit` and `ui.state` receipts fold into the original card;
+if continuation admission was interrupted after durable submission, the
+read-only card exposes **Resume task** to retry continuation without
+re-submitting new values.
+
+The Desktop sends `set_generative_ui {enabled:true}` and
+`set_interaction_policy {policy}` (`standard` | `aggressive` | `minimal`) to
+each newly spawned process before sending prompts. OMP registers `ui.present`
+alongside other host tools (`ui_present` on the wire). When `ui.present`
+succeeds, `AgentSession` aborts the remaining tool batch with
+`TERMINAL_TOOL_RESULT_ABORT_REASON` and gates subsequent model calls until
+`submit_ui` or `cancel_ui` settles the interaction, or a new user prompt /
+branch transition expires it. `cancel_ui` records `status: "cancelled"` without
+invoking the model. Inherited forked or unbound legacy forms project as
+read-only `expired` history.
+The local end-to-end fixture is
+`omp/packages/coding-agent/test/fixtures/generative-ui-rpc-agent.ts`: it runs
+the real SDK, RPC and persistence with a deterministic local provider.
+`desktop/tests/generative-ui-fixture.html` separately exercises all six native
+controls, rejected submissions, and isolated rendering errors without any
+model or real-user data. Neither fixture changes actual subagent settings.
+
+
 ## Compaction lifecycle
 
 `live.js` tracks `isCompacting` per tab from `get_state` and OMP's

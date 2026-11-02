@@ -99,6 +99,11 @@ const ALLOWED_COMMAND_TYPES: &[&str] = &[
     // and the one picked.
     "get_available_thinking_levels",
     "set_subagent_preferences",
+    "set_generative_ui",
+    "submit_ui",
+    "render_ui",
+    "cancel_ui",
+    "set_interaction_policy",
     "set_thinking_level",
     "compact",
     "new_session",

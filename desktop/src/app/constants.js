@@ -73,6 +73,7 @@
     "autoName": true,
     "autoCompaction": true,
     "autoRetry": true,
+    "interactionPolicy": "aggressive",
     "subagentModelMode": "auto",
     "subagentCustomModel": "",
     "subagentCustomThinking": "off",

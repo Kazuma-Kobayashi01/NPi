@@ -58,6 +58,7 @@ function harness() {
     "app/session-title.js",
     "app/turn-status.js",
     "app/transcript-merge.js",
+    "app/generative-ui.js",
     "adapter.js",
     "app/pr-automation.js",
   ]) {

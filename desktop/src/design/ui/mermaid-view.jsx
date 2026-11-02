@@ -59,6 +59,24 @@
     } catch (_) {}
   }
 
+  function normalizeMermaidSvg(rawSvg) {
+    if (typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") return rawSvg;
+    const doc = new DOMParser().parseFromString(rawSvg, "text/html");
+    const svgEl = doc.querySelector("svg");
+    if (!svgEl) return rawSvg;
+    if (!svgEl.getAttribute("xmlns")) {
+      svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    const vb = (svgEl.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+    if (vb.length === 4 && Number.isFinite(vb[2]) && vb[2] > 0 && Number.isFinite(vb[3]) && vb[3] > 0) {
+      const wAttr = svgEl.getAttribute("width") || "";
+      if (!wAttr || wAttr.endsWith("%")) svgEl.setAttribute("width", String(Math.ceil(vb[2])));
+      const hAttr = svgEl.getAttribute("height") || "";
+      if (!hAttr || hAttr.endsWith("%")) svgEl.setAttribute("height", String(Math.ceil(vb[3])));
+    }
+    return new XMLSerializer().serializeToString(svgEl);
+  }
+
   function MermaidView({ code, isClosed }) {
     const themeSig = useCurrentTheme();
     const [svgUrl, setSvgUrl] = React.useState(null);
@@ -95,8 +113,9 @@
         .render(id, text)
         .then((res) => {
           if (!active) return;
-          const svg = res?.svg ?? "";
-          if (svg) {
+          const rawSvg = res?.svg ?? "";
+          if (rawSvg) {
+            const svg = normalizeMermaidSvg(rawSvg);
             const dataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
             setSvgUrl(dataUrl);
             setError(null);
@@ -109,6 +128,8 @@
           setError(err || new Error("Mermaid syntax error"));
         })
         .finally(() => {
+          document.getElementById("d" + id)?.remove();
+          document.getElementById(id)?.remove();
           if (active) setRendering(false);
         });
 
@@ -173,7 +194,15 @@
           </button>
         </div>
         <div className="mermaid-img-wrap">
-          <img src={svgUrl} alt="Mermaid diagram" className="mermaid-img" />
+          <img
+            src={svgUrl}
+            alt="Mermaid diagram"
+            className="mermaid-img"
+            onError={() => {
+              setSvgUrl(null);
+              setError(new Error("Failed to decode rendered Mermaid SVG"));
+            }}
+          />
         </div>
       </div>
     );

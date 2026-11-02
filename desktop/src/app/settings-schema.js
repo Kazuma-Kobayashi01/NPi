@@ -188,6 +188,8 @@
         custom("startupProfile", "Startup profile", "The profile of the tab opened at launch and of new tabs. Profiles are created and renamed from the profile menu.", "profile account"),
       ] },
       { name: "Execution behaviors", rows: [
+        tweak("interactionPolicy", "seg", "Interaction policy", "How readily the agent offers structured forms. Clear tasks run directly; permissions and required Ask dialogs stay separate.", "generative ui interaction form structured standard aggressive minimal choices parameters",
+          { options: opts(["standard", "aggressive", "minimal"], { standard: "Standard", aggressive: "Aggressive", minimal: "Minimal" }) }),
         tweak("autoCompaction", "toggle", "Auto-compact context", "omp summarises older turns when the context fills up. Off: you run `/compact` yourself.", "compaction context window"),
         tweak("autoRetry", "toggle", "Retry failed requests", "omp retries a request the provider refused or dropped, with a retry row you can stop.", "retry error rate limit"),
         custom("goalContinue", "Keep working on a goal", "omp continues an active goal on its own after each turn instead of waiting for you. Costs tokens while unattended.", "goal auto continue"),

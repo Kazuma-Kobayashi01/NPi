@@ -482,7 +482,7 @@
   // `ts` is omp's message timestamp: the merge after a tab switch matches
   // live entries to these by it (app/transcript-merge.js).
   function adaptAgentMessages(apiMessages) {
-    const result = [];
+    let result = [];
     const messages = Array.isArray(apiMessages) ? apiMessages : [];
     const failures = window.OMP_TURN_STATUS.finalFailures(messages);
     for (const [index, msg] of messages.entries()) {
@@ -491,6 +491,12 @@
       const time   = _formatTime(msg.timestamp ?? msg.createdAt);
       const ts     = window.OMP_TRANSCRIPT.tsOf(msg);
       const blocks = Array.isArray(content) ? content : [{ type: "text", text: String(content ?? "") }];
+
+      if (role === "custom" && ["ui.present", "ui.submit", "ui.state"].includes(msg.customType)) {
+        const ui = window.OMP_GENERATIVE_UI.messageToUi(msg);
+        result = window.OMP_GENERATIVE_UI.upsertMessage(result, { ...ui, time });
+        continue;
+      }
 
       if (role === "user") {
         const { text, images } = adaptUserContent(blocks);
