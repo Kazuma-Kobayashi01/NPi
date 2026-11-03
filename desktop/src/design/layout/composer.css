@@ -48,8 +48,8 @@
   background: var(--bg-hover); color: var(--fg); outline: 1px solid var(--accent);
 }
 .attach-remove {
-  position: absolute; top: 2px; right: 2px;
-  width: 16px; height: 16px; padding: 0;
+  position: absolute; top: 2px; right: 2px; z-index: 1;
+  width: 18px; height: 18px; padding: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%; border: none;
   background: color-mix(in oklab, var(--bg-elevated) 70%, black);

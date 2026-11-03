@@ -35,12 +35,19 @@ function hintKeyFor(actionId, fallback) {
   return window.OMP_KEYMAP ? window.OMP_KEYMAP.hintKeyFor(actionId) : fallback;
 }
 
+// Attachment ids live in the per-tab drafts, which outlive this component: a
+// per-instance counter restarted at 1 after a remount and handed two images the
+// same id, so removing one removed (or hid) the other.
+let attachmentSeq = 0;
+const nextAttachmentId = () => `att-${Date.now().toString(36)}-${++attachmentSeq}`;
+
 // Keyed by tab: neither an open viewer nor the attachment menu crosses tabs.
 function ComposerAttachments({ attachments, onRemove }) {
   const [openId, setOpenId] = React.useState(null);
   const thumbsRef = React.useRef([]);
   const sources = React.useMemo(() => attachments.map(a => a.src), [attachments]);
   const index = attachments.findIndex(a => a.id === openId);
+  thumbsRef.current.length = attachments.length;
   const thumbFor = React.useCallback(i => thumbsRef.current[i] ?? null, []);
   const close = React.useCallback(() => setOpenId(null), []);
   return (
@@ -139,7 +146,6 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
   // tab's history, null = not recalling), so each tab keeps its own recall.
   // onKey steps it via recallInDraft.
   const listRef = React.useRef(null);
-  const attachCounterRef = React.useRef(0);
   const fileInputRef     = React.useRef(null);
   // Image drop from the OS file manager (#50): the element the drag is over
   // (`dropHoverAfter`) lives in a ref, so crossing children re-renders only
@@ -335,7 +341,7 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
     replaceDraft(promptInsert.append ? window.OMP_WIDGETS.appendToDraft(text, promptInsert.text) : promptInsert.text);
     const images = promptInsert.images ?? [];
     if (images.length === 0) return;
-    const back = images.map(image => ({ id: `att-${++attachCounterRef.current}`, name: "", image, src: toDataUrl(image) }));
+    const back = images.map(image => ({ id: nextAttachmentId(), name: "", image, src: toDataUrl(image) }));
     updateDraft(sessionId, d => ({ ...d, attachments: [...d.attachments, ...back].slice(0, MAX_ATTACHMENTS) }));
   }, [promptInsert?.nonce, sessionIds]);
 
@@ -490,7 +496,7 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
       const prepared = await Promise.all(slice.map(async (file) => {
         try {
           const image = await prepareImage(file);
-          return { id: `att-${++attachCounterRef.current}`, name: file.name, image, src: toDataUrl(image) };
+          return { id: nextAttachmentId(), name: file.name, image, src: toDataUrl(image) };
         } catch {
           return null; // undecodable file — drop, don't block the rest of the batch
         }
