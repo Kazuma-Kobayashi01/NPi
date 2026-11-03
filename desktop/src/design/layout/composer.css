@@ -30,6 +30,23 @@
 .attach-strip, .paste-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .attach-chip { position: relative; width: 48px; height: 48px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-bright); flex: none; }
 .attach-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.attach-preview { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.attach-preview:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.attach-thumb.is-lifted { visibility: hidden; }
+.composer-attach-wrap { position: relative; flex: none; }
+.composer-attach-menu {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 10;
+  min-width: 200px; padding: 5px; border: 1px solid var(--line-bright);
+  border-radius: 8px; background: var(--bg-elevated); box-shadow: 0 8px 24px #0003;
+}
+.composer-attach-menu > button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--fg-2);
+  font: inherit; text-align: left; cursor: pointer; white-space: nowrap;
+}
+.composer-attach-menu > button:hover, .composer-attach-menu > button:focus-visible {
+  background: var(--bg-hover); color: var(--fg); outline: 1px solid var(--accent);
+}
 .attach-remove {
   position: absolute; top: 2px; right: 2px;
   width: 16px; height: 16px; padding: 0;

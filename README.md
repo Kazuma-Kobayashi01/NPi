@@ -188,11 +188,12 @@ Nothing is removed: a setting you do not see still reads from the config file.
 ## Build from source
 
 ```bash
-# the app (the Python runtime archive is a generated, gitignored input)
+# the app (the Python runtime archive and the bundled Chromium are generated, gitignored inputs)
 cd desktop
 npm install
 npm test
 ../scripts/build-python-runtime.sh
+../scripts/fetch-chromium.sh            # the bundled browser (chrome-headless-shell), gitignored
 npx tauri build --config src-tauri/tauri.dist.conf.json --bundles app,dmg
 
 # the command line (an omp checkout on the `npi` branch, built with Bun)

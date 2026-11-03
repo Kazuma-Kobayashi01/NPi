@@ -1,6 +1,6 @@
 [package]
 name = "omp-desktop"
-version = "2.0.0-378"
+version = "3.0.0-52"
 edition = "2021"
 
 [lib]
@@ -68,6 +68,14 @@ windows-registry = "0.6"
 # `RunEvent::Opened` and needs no plugin - see `src/external_open.rs`.
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"
+
+# Real notification permission and clicks on macOS (`src/notify/macos.rs`);
+# the versions already in the tree through tauri/wry.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSBundle", "NSError", "NSObject", "NSString"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSettings", "UNNotificationSound", "UNNotificationTrigger", "UNUserNotificationCenter"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

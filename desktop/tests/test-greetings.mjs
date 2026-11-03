@@ -33,8 +33,14 @@ check("the second half is the mode's own line; each mode has a dozen", () => {
   assert.notEqual(G.greeting({ mode: "chat", name: "K", hour: 9, seed: 0.9 }), G.greeting({ mode: "code", name: "K", hour: 9, seed: 0.9 }));
   assert.ok(G.BY_MODE.code.some(t => G.fill(t, "K") === G.greeting({ mode: "code", name: "K", hour: 9, seed: 0.75 })));
 });
+check("academic words both halves for study", () => {
+  assert.ok(G.BY_MODE.academic.length >= 10);
+  assert.ok(G.ACADEMIC_PERIODS.morning.some(t => G.fill(t, "K") === G.greeting({ mode: "academic", name: "K", hour: 8, seed: 0.1 })));
+  assert.ok(G.BY_MODE.academic.some(t => G.fill(t, "K") === G.greeting({ mode: "academic", name: "K", hour: 8, seed: 0.9 })));
+  assert.notEqual(G.greeting({ mode: "academic", name: "K", hour: 2, seed: 0 }), G.greeting({ mode: "code", name: "K", hour: 2, seed: 0 }));
+});
 check("every seed gives a line, with or without a name, and never a leftover token", () => {
-  for (const mode of ["chat", "code"]) for (let h = 0; h < 24; h++) for (let i = 0; i < 100; i++) {
+  for (const mode of ["chat", "code", "academic"]) for (let h = 0; h < 24; h++) for (let i = 0; i < 100; i++) {
     for (const name of ["", "Kazuma"]) {
       const g = G.greeting({ mode, name, hour: h, seed: i / 100 });
       assert.ok(g.length > 0 && !g.includes("{") && !g.includes("  ") && !/,\s*[?.!]/.test(g), g);

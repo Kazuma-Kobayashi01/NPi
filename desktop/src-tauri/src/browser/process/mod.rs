@@ -1,16 +1,15 @@
-//! The Chromium processes behind the panel: which browser to run (the
-//! user's setting or automatic discovery), starting and stopping it, the
+//! The Chromium processes behind the panel: which browser to run (the one
+//! bundled with the app), starting and stopping it, the
 //! private files of this app instance, and reaping what a crashed earlier
 //! run left behind.
 
+mod bundled;
 mod instance;
 mod launch;
-mod locate;
 mod pipe;
 mod reap;
-mod settings;
 mod stderr;
 
 pub use instance::{prepare_instance_dir, prune_dead, remove_dir_retrying, write_overlay};
 pub use launch::Chromium;
-pub use settings::{BrowserSettings, SettingsStore};
+pub use bundled::BundledChromium;

@@ -5,7 +5,7 @@ use std::process::{ChildStderr, ChildStdin, ChildStdout};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::approval::{self, RuleBook};
 use crate::redaction::{is_credential_key, REDACTED_PLACEHOLDER};
@@ -204,6 +204,22 @@ pub(super) struct StdoutReaderConfig {
     /// otherwise invisible until `session_status` is asked, which is
     /// exactly what a later tab switch does.
     pub(super) last_errors: Arc<Mutex<HashMap<String, String>>>,
+    /// Answers this worker's `host_tool_call` frames (the Academic Copilot).
+    /// `None`: omp's own tools only, and a `host_tool_call` is not expected.
+    pub(super) host: Option<Arc<dyn crate::copilot::HostTools>>,
+}
+
+/// Executes a `host_tool_call` frame and writes its `host_tool_result` to
+/// omp's stdin. A malformed frame is answered with an error when it has an id.
+fn answer_host_call(host: &dyn crate::copilot::HostTools, frame: &serde_json::Value, stdin: &Mutex<ChildStdin>) {
+    use std::io::Write;
+    let Some(id) = frame.get("id").and_then(serde_json::Value::as_str) else { return };
+    let tool = frame.get("toolName").and_then(serde_json::Value::as_str).unwrap_or("");
+    let reply = host.call(id, tool, frame.get("arguments").unwrap_or(&serde_json::Value::Null));
+    if let (Ok(line), Ok(mut w)) = (serde_json::to_string(&reply), stdin.lock()) {
+        // A failed write means omp is gone; the reader reports its exit.
+        let _ = writeln!(w, "{line}");
+    }
 }
 
 /// Whether an event from this incarnation should still reach the
@@ -265,6 +281,7 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
         alive,
         stderr_tail,
         last_errors,
+        host,
     } = config;
     thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
@@ -311,6 +328,18 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
                         .as_ref()
                         .and_then(|frame| frame.get("type"))
                         .and_then(serde_json::Value::as_str);
+                    // Notifications are decided here, where every tab's frames pass (a
+                    // background tab's never reach the webview).
+                    if let Some(frame) = parsed.as_ref() {
+                        if let Some(notify) = app.try_state::<crate::notify::NotifyState>() {
+                            notify.observe(&app, &sid, project_root.as_deref(), frame_type, frame);
+                        }
+                    }
+                    // The Copilot's tools run here, in Rust; the page never sees the call.
+                    if let (Some(host), Some("host_tool_call"), Some(frame)) = (&host, frame_type, parsed.as_ref()) {
+                        answer_host_call(host.as_ref(), frame, &stdin);
+                        continue;
+                    }
                     // A rule-covered approval prompt is answered directly on
                     // stdin and replaced with a synthetic notice — the human
                     // never sees the original ask, but does see that it was
@@ -397,6 +426,9 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
         // AgentBridge doc-comment for the full event contract.
         if announce {
             crate::computer_overlay::clear_session(&app, &sid);
+            if let Some(notify) = app.try_state::<crate::notify::NotifyState>() {
+                notify.session_exited(&app, &sid, project_root.as_deref(), &exit_reason);
+            }
             if !exit_reason.is_empty() {
                 // Recorded before the emit so a `session_status` query that
                 // races the event still finds it. Only for the incarnation

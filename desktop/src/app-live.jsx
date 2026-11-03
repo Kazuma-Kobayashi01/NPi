@@ -159,8 +159,11 @@ function App() {
   });
   useThemeEffect(t);
   const computerUseAccentError = window.useComputerUseAccent(bridge, t.theme, t.accent);
-  // The mode picks the system prompt omp starts with (app_mode.rs).
-  React.useEffect(() => { bridge?.setAppMode?.(t.appMode === "chat" ? "chat" : "code"); }, [bridge, t.appMode]);
+  // The UI language (app/i18n.js), set during render so every component below reads the new one.
+  window.OMP_I18N.setLocale(window.OMP_I18N.resolve(t.language));
+  // The mode picks the system prompt omp starts with (app_mode.rs); anything unknown is Code.
+  const appModeName = ["chat", "academic"].includes(t.appMode) ? t.appMode : "code";
+  React.useEffect(() => { bridge?.setAppMode?.(appModeName); }, [bridge, appModeName]);
 
   // Chat and Code live apart: a chat is a tab in the Chat folder (chat_space.rs),
   // everything else is a code project. Each mode remembers the tab it had open.
@@ -228,9 +231,18 @@ function App() {
   const [chatDirs, setChatDirs] = React.useState([]);
   const [savedChats, setSavedChats] = React.useState([]);
   React.useEffect(() => { let live = true; Promise.resolve(bridge?.chatDir?.()).then(d => { if (live && d) setChatDir(d); }); Promise.resolve(bridge?.chatDirs?.()).then(l => { if (live && Array.isArray(l)) setChatDirs(l); }); return () => { live = false; }; }, [bridge]);
+  // Academic projects are folders directly under the Academic space.
+  const [academicDir, setAcademicDir] = React.useState("");
+  React.useEffect(() => { let live = true; Promise.resolve(bridge?.academicDir?.()).then(d => { if (live && d) setAcademicDir(d); }); return () => { live = false; }; }, [bridge]);
+  const isAcademicPath = p => !!p && !!academicDir && p.startsWith(academicDir) && /[\\/]/.test(p[academicDir.length] ?? "");
   const isChatTab = s => !!s.path && (s.path === chatDir || chatDirs.includes(s.path));
+  const isAcademicTab = s => !isChatTab(s) && isAcademicPath(s.path);
+  const spaceOf = s => (isChatTab(s) ? "chat" : isAcademicTab(s) ? "academic" : "code");
   const chatTabs = sessions.filter(isChatTab);
-  const codeTabs = sessions.filter(s => !isChatTab(s));
+  const academicTabs = sessions.filter(isAcademicTab);
+  const codeTabs = sessions.filter(s => spaceOf(s) === "code");
+  // The sidebar of the current mode: Academic lists its own projects, Code the rest.
+  const projectTabs = appModeName === "academic" ? academicTabs : codeTabs;
   React.useEffect(() => {
     if (!isChat || !chatDir) return undefined;
     let live = true;
@@ -245,6 +257,10 @@ function App() {
   // Behaviours live.js owns (app/session-prefs.js): it takes its keys from
   // the tweaks and acts only on a changed one.
   React.useEffect(() => { bridge?.setSessionPrefs(t); }, [bridge, t]);
+  // OS notifications: Rust decides (notify/); it gets the switches and which tab is on screen.
+  const notifyCfg = window.OMP_NOTIFY.configFrom(t, navigator.language);
+  const notifyKey = JSON.stringify(notifyCfg);
+  React.useEffect(() => { bridge?.notifyConfigure(notifyCfg); }, [bridge, notifyKey]);
   React.useEffect(() => { bridge?.setSubagentPreferences(t); }, [
     bridge, t.subagentModelMode, t.subagentCustomModel, t.subagentCustomThinking, t.subagentDelegation,
   ]);
@@ -293,7 +309,7 @@ function App() {
   const activeProfileId    = activeProject.id ? activeProject.profile : noTabProfileId;
   const activeProfileLabel = profiles.find(p => p.id === activeProfileId)?.name ?? activeProfileId;
   const [projectHistory, setProjectHistory] = React.useState({ profile: null, sessions: [] });
-  const projectHistoryKey = JSON.stringify(codeTabs.map(tab => [tab.id, tab.profile, tab.sessionFile, tab.name]));
+  const projectHistoryKey = JSON.stringify(projectTabs.map(tab => [tab.id, tab.profile, tab.sessionFile, tab.name]));
   React.useEffect(() => {
     if (isChat || !bridge) return undefined;
     let live = true;
@@ -347,7 +363,7 @@ function App() {
   // Collapse all / Expand all: one toggle per block in this tab, replacing
   // the tab's earlier ones; later blocks follow the modes again.
   const handleCollapseAll = (collapsed) => setCollapseOverrides(m => updateEntry(m, planKey, NO_COLLAPSE_OVERRIDES,
-    () => _collapseOverridesForAll(messages, collapsed, { hidden: window.OMP_TURN_STATUS.isHidden })));
+    () => _collapseOverridesForAll(messages, collapsed, { hidden: window.OMP_TURN_STATUS.isHidden, work: foldModes.work })));
   const openSettings = section => setStab(s => window.OMP_SETTINGS_TAB.open(s, section));
   const closeSettings = () => setStab(window.OMP_SETTINGS_TAB.close);
   // Another omp tab shown (opened, picked, restored) leaves the settings tab.
@@ -718,7 +734,7 @@ function App() {
   // Open project → new session → new tab with its own omp process
   const handleNewProject = async () => {
     if (!bridge) return;
-    const path = await bridge.pickFolder();
+    const path = await bridge.pickFolder(appModeName === "academic" ? "academic" : undefined);
     if (!path) return;
     try {
       await bridge.openSession(path);
@@ -916,9 +932,10 @@ function App() {
   // No tab open (the app starts that way): the session column shows the
   // empty state instead of a transcript and a composer with nowhere to send.
   const noTab = sessions.length === 0;
-  const activeIsChat = isChatTab(activeProject);
+  // A path belongs to this mode's sidebar: Academic its own space, Code neither Chat nor Academic.
+  const inCurrentSpace = p => (appModeName === "academic" ? isAcademicPath(p) : p !== chatDir && !chatDirs.includes(p) && !isAcademicPath(p));
   // The other mode's tab is not shown: this mode's start page is.
-  const showHome = noTab || home || (sessions.length > 0 && activeIsChat !== isChat);
+  const showHome = noTab || home || (sessions.length > 0 && spaceOf(activeProject) !== appModeName);
   // One artwork behind the whole column, the prompt box included.
   const sessionWallpaper = t.wallpaper === false ? null
     : window.OMP_WALLPAPERS.pick(t.wallpaperArt, showHome ? `home-${new Date().toDateString()}` : activeSessionId).file;
@@ -929,13 +946,15 @@ function App() {
     setHome(true);
   };
   const quotas = useQuotas({ bridge, profileId: activeProfileId, enabled: !showHome || showSidebar });
+  const notifyTab = showHome || (stab.open && stab.active) ? null : activeSessionId;
+  React.useEffect(() => { bridge?.notifySetActive(notifyTab); }, [bridge, notifyTab]);
   const welcomeProjects = (() => {
     const seen = new Set();
     const rows = [];
     const add = path => { if (path && !seen.has(path)) { seen.add(path); rows.push({ path }); } };
-    add(activeProject.path);
-    sessions.forEach(s => add(s.path));
-    recentRows(recentProjects, sessions, activeProfileId).forEach(r => add(r.path));
+    if (spaceOf(activeProject) === appModeName) add(activeProject.path);
+    sessions.filter(s => spaceOf(s) === appModeName).forEach(s => add(s.path));
+    recentRows(recentProjects, sessions, activeProfileId).filter(r => inCurrentSpace(r.path)).forEach(r => add(r.path));
     return rows;
   })();
 
@@ -946,6 +965,8 @@ function App() {
   const browserFull = side === "browser" && browser.fullView;
   const splitShown = showSplit && !browserFull;
   const sideChatShown = sideChatOpen && !browserFull;
+  // In Academic, beside an open project the side pane is that project's Copilot.
+  const copilotProject = appModeName === "academic" && !showHome && isAcademicTab(activeProject) ? activeProject.path : "";
   // No side column on the welcome page: there is no session to describe.
   const sideRail = showHome ? null : side !== "browser" && showRail ? "rail" : null;
   const treeShown = !showHome && !browserFull && treeOpen;
@@ -1026,7 +1047,7 @@ function App() {
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
     "-",
     { label: "Command palette", icon: "command", hint: keyHint("desktop.commands.open"), onClick: () => setBridgeOpen(true) },
-    { label: "Settings", icon: "cog", hint: keyHint("desktop.settings.open"), onClick: () => (stab.open ? closeSettings() : openSettings()) },
+    { label: window.OMP_I18N.t("Settings"), icon: "cog", hint: keyHint("desktop.settings.open"), onClick: () => (stab.open ? closeSettings() : openSettings()) },
   ];
 
   // Stable across reopen: the backend cache key is profile + session file
@@ -1057,7 +1078,7 @@ function App() {
       <div className="app">
         {/* `is-running`: the active tab streams; the always-visible loops
             (status/model dots, activity radar) run only then (styles.css). */}
-        <div className={`window scanlines mode-${t.appMode === "chat" ? "chat" : "code"} ${showSplit ? "is-split" : ""}${streaming ? " is-running" : ""}`} style={panes.style}>
+        <div className={`window scanlines mode-${appModeName} ${showSplit ? "is-split" : ""}${streaming ? " is-running" : ""}`} style={panes.style}>
           <WindowChrome
             project={activeProject}
             profiles={profiles}
@@ -1074,9 +1095,7 @@ function App() {
             canForward={home && !noTab}
             onBack={() => setHome(true)}
             onForward={() => setHome(false)}
-            mode={t.appMode}
             home={showHome}
-            onMode={handleMode}
             toolbar={
               <ChromeToolbar
                 onTerminal={() => terminal.toggle(planKey)}
@@ -1095,31 +1114,34 @@ function App() {
                 onPanel={() => setTweak("layout", floatingOn ? "focus" : "rail")}
                 onSideChat={() => setSideChatOpen(o => !o)}
                 sideChatOpen={sideChatOpen}
+                copilot={!!copilotProject}
               />
             }
           />
           <div ref={workspaceRef} className="workspace" style={panes.style}>
             {showSidebar && isChat && (
               <ChatSidebar
+                mode={appModeName} onMode={handleMode}
                 tabs={chatTabs} saved={savedChats} activeId={showHome ? null : activeSessionId}
                 pinned={pinned} archived={archived} unread={unread}
                 onRename={handleRenameTab} onPin={handlePin} onArchive={handleArchiveRow} onDelete={handleDeleteRow} onMarkUnread={handleMarkUnread}
                 onSelectTab={handleSelectTab} onCloseTab={handleCloseTab}
                 onResume={handleResumeSession}
                 onNew={() => setHome(true)} onHide={toggleSidebar}
-                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} plan={window.OMP_USAGE.quotaFor(quotas?.rows, model?.provider).mine?.plan} onClick={() => openSettings("account")} />}
+                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} onClick={() => openSettings("account")} />}
               />
             )}
             {showSidebar && !isChat && (
               <ProjectSidebar
-                tabs={codeTabs}
+                mode={appModeName} onMode={handleMode}
+                tabs={projectTabs}
                 saved={projectHistory.profile === activeProfileId ? projectHistory.sessions : []}
                 historyProfile={activeProfileId} onResume={handleResumeSession}
                 unread={unread} onReveal={handleReveal} onMarkUnread={handleMarkUnread}
                 onArchiveTab={tab => handleCloseTab(tab.id)}
                 onDeleteTab={tab => trashConversation(tab, tab.sessionFile, tab.profile)}
                 activeId={activeSessionId}
-                recents={recentRows(recentProjects, sessions, activeProfileId).filter(r => r.path !== chatDir && !chatDirs.includes(r.path))}
+                recents={recentRows(recentProjects, sessions, activeProfileId).filter(r => inCurrentSpace(r.path))}
                 profileLabel={profileLabel}
                 onSelectTab={handleSelectTab}
                 onCloseTab={handleCloseTab}
@@ -1132,7 +1154,7 @@ function App() {
                 onHide={toggleSidebar}
                 onHistory={() => setHistoryOpen(true)}
                 onReorder={handleReorder}
-                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} plan={window.OMP_USAGE.quotaFor(quotas?.rows, model?.provider).mine?.plan} onClick={() => openSettings("account")} />}
+                footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} onClick={() => openSettings("account")} />}
               />
             )}
             <div ref={stageRef} style={stageStyle} className={`stage ${side === "browser" ? `with-browser${browserFull ? " browser-full" : ""}` : sideRail ? `with-${sideRail}` : ""}`}>
@@ -1141,9 +1163,9 @@ function App() {
                 {showHome ? (
                   <EmptyWorkspace notes={workspaceNotes}
                     recents={welcomeProjects}
-                    onPickFolder={() => bridge?.pickFolder()}
+                    onPickFolder={() => bridge?.pickFolder(appModeName === "academic" ? "academic" : undefined)}
                     onStart={handleStartFromWelcome}
-                    chat={isChat ? chatDir : ""} appMode={isChat ? "chat" : "code"} userName={t.accountCall}
+                    chat={isChat ? chatDir : ""} appMode={appModeName} userName={t.accountCall}
                     bridge={bridge} approvalModes={approvalModes} profileId={activeProfileId}
                     wallpaper={null}
                     favorites={t.favoriteModels} onManageModels={() => openSettings("models")} />
@@ -1312,10 +1334,15 @@ function App() {
               <TerminalPanels sessions={sessions} activeId={showHome ? null : planKey} terminal={terminal} />
               {sideChatShown && <ResizeHandle className="at-sidechat" style={{ gridColumn: sidechatCol }} {...panes.handle("sidechat")} />}
               <SideChat
+                key={copilotProject || "plain"}
+                copilotProject={copilotProject}
                 open={sideChatShown}
                 onClose={() => setSideChatOpen(false)}
                 model={t.sidechatModel}
                 profile={activeProfileId}
+                bridge={bridge}
+                favorites={t.favoriteModels}
+                onManageModels={() => openSettings("models")}
               />
             </div>
           </div>
@@ -1325,10 +1352,10 @@ function App() {
 
       {settingsCtx && (
         <div className="st-overlay" onMouseDown={e => { if (e.target === e.currentTarget) closeSettings(); }}>
-          <div className="st-modal" role="dialog" aria-label="Settings">
+          <div className="st-modal" role="dialog" aria-label={window.OMP_I18N.t("Settings")}>
             <div className="st-modal-head">
-              <span>Settings</span>
-              <button type="button" className="btn icon ghost" onClick={closeSettings} aria-label="Close settings" title="Close (Esc)">×</button>
+              <span>{window.OMP_I18N.t("Settings")}</span>
+              <button type="button" className="btn icon ghost" onClick={closeSettings} aria-label={window.OMP_I18N.t("Close settings")} title={window.OMP_I18N.t("Close (Esc)")}>×</button>
             </div>
             <div className="st-modal-body">
               <SettingsPage ctx={settingsCtx} />

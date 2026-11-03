@@ -3,8 +3,7 @@
 // panel: address normalisation, chat links, annotation text and merge into
 // the outgoing message, the submit routing it rides on (app/slash-commands.js
 // `routeSubmit` / `queuedFrame`), page coordinates, key and mouse events for
-// CDP, per-session chips, width, popover placement and the Chromium setting menu (over
-// app/path-setting.js).
+// CDP, per-session chips, width and popover placement.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -15,12 +14,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const win = {};
 const load = (path) => new Function("window", readFileSync(join(root, path), "utf8"))(win); // eslint-disable-line no-new-func
 // constants.js: truncateText; session-ui.js: the per-tab chip map;
-// project-nav.js + path-setting.js: pathMenu's names and rows;
 // layout-widths.js: the chat minimum clampWidth keeps.
 load("src/app/constants.js");
 load("src/app/session-ui.js");
 load("src/app/project-nav.js");
-load("src/app/path-setting.js");
 load("src/app/layout-widths.js");
 new Function("window", readFileSync(join(root, "src/app/image-attach.js"), "utf8"))(win);
 new Function("window", readFileSync(join(root, "src/app/marked-setup.js"), "utf8"))(win);
@@ -540,55 +537,6 @@ check("escapeAction: Esc closes the popover, then leaves annotate, else is the p
   assert.equal(B.escapeAction(false, { pick: {} }), "cancelPick", "the popover stays the panel's after annotate ended");
   assert.equal(B.escapeAction(true, null), "leaveAnnotate");
   assert.equal(B.escapeAction(false, null), null);
-});
-
-// ---- Chromium setting menu --------------------------------------------------
-
-const CHROME = "/opt/google/chrome/chrome";
-const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const settings = (path, over = {}) => ({ path, automatic: CHROME, installed: [CHROME, EDGE], error: null, ...over });
-const checkedOf = (m) => m.rows.filter((r) => r.checked).map((r) => r.name);
-
-check("pathMenu: automatic is checked when nothing is stored and names what it finds", () => {
-  const m = B.pathMenu(settings(""));
-  assert.equal(m.label, "chrome");
-  assert.deepEqual(m.rows.map((r) => [r.name, r.hint, r.value, r.checked]), [
-    ["automatic", "chrome", "", true], ["chrome", "", CHROME, false], ["msedge", "", EDGE, false],
-  ]);
-  assert.equal(m.rows[0].path, CHROME);
-});
-
-check("pathMenu: a stored installed browser is checked, Windows paths ignoring case and slashes", () => {
-  assert.deepEqual(checkedOf(B.pathMenu(settings(EDGE))), ["msedge"]);
-  for (const stored of ["c:\\program files (x86)\\microsoft\\edge\\application\\MSEDGE.EXE", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"]) {
-    const m = B.pathMenu(settings(stored));
-    assert.deepEqual(checkedOf(m), ["msedge"], stored);
-    assert.equal(m.rows.length, 3, "no extra row");
-  }
-  assert.equal(B.pathMenu(settings(EDGE)).label, "msedge", ".exe stripped");
-});
-
-check("pathMenu: a stored path outside the list is appended once, marked other", () => {
-  const custom = "/home/me/bin/chromium-dev";
-  const m = B.pathMenu(settings(custom, { error: "not an executable file" }));
-  assert.equal(m.label, "chromium-dev");
-  assert.deepEqual(m.rows.map((r) => [r.name, r.hint, r.checked]), [
-    ["automatic", "chrome", false], ["chrome", "", false], ["msedge", "", false], ["chromium-dev", "other", true],
-  ]);
-});
-
-check("pathMenu: nothing found, or settings not loaded yet", () => {
-  const none = B.pathMenu({ path: "", automatic: null, installed: [], error: null });
-  assert.equal(none.label, "automatic");
-  assert.deepEqual(none.rows, [{ name: "automatic", hint: "none found", path: "", value: "", checked: true }]);
-  assert.deepEqual(B.pathMenu(null), none);
-});
-
-check("pathMenu: browsers sharing a name are told apart by their folder", () => {
-  const m = B.pathMenu({ path: "/usr/bin/chromium", automatic: "/usr/lib/chromium/chromium", installed: ["/usr/lib/chromium/chromium", "/usr/bin/chromium", "/opt/google/chrome/chrome"], error: null });
-  assert.deepEqual(m.rows.map((r) => [r.name, r.hint, r.checked]), [
-    ["automatic", "chromium", false], ["chromium", "/usr/lib/chromium", false], ["chromium", "/usr/bin", true], ["chrome", "", false],
-  ]);
 });
 
 console.log(`test-browser: ${passed} checks passed`);

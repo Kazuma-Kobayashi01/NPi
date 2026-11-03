@@ -12,7 +12,6 @@
 //   clampWidth(px, stageWidth)      panel width bounds (MIN_WIDTH .. maxWidth)
 //   maxWidth(stageWidth)            the widest the panel goes
 //   popoverTop(rect, pageH, popH, margin)  annotate popover's top, view fraction
-//   pathMenu(settings)              Settings → Browser's Chromium menu rows
 // Which keys the page gives back to the app is OMP_KEYMAP.guestShouldBypass
 // (shared with the terminal). Whether the panel follows the agent's page is
 // decided in Rust (the view holds the user's tab choice for 5 s), so there is
@@ -320,36 +319,6 @@
     return Math.max(margin, Math.min(bottom, 1 - popH - margin));
   }
 
-  // ---- Chromium setting ----------------------------------------------------
-
-  const browserName = (path) => window.OMP_PATH_SETTING.programName(path, "browser");
-
-  /**
-   * Settings → Browser's Chromium button and menu for Rust's `BrowserSettings`
-   * (`{ path, automatic, installed, error }`, null before it loaded):
-   * `OMP_PATH_SETTING.menu`'s `{ label, rows }`. `label` names what the
-   * panel launches (the stored path, else what auto-detection finds); the
-   * first row is `automatic` (hint: the browser it finds, or "none found"),
-   * then each installed browser (`hint` its folder when another one has the
-   * same name, e.g. `/usr/bin/chromium` next to the real
-   * `/usr/lib/chromium/chromium`). `value` is what `browserSetPath` stores.
-   */
-  function pathMenu(settings) {
-    const path = settings?.path ?? "";
-    const automatic = settings?.automatic ?? null;
-    const installed = settings?.installed ?? [];
-    const names = installed.map(browserName);
-    const folder = (p) => p.replace(/[\\/][^\\/]*$/, "");
-    return window.OMP_PATH_SETTING.menu({
-      stored: path,
-      name: browserName,
-      fallback: { name: "automatic", hint: automatic ? browserName(automatic) : "none found", path: automatic ?? "" },
-      installed: installed.map((p, i) => ({
-        name: names[i], path: p, hint: names.indexOf(names[i]) !== names.lastIndexOf(names[i]) ? folder(p) : "",
-      })),
-    });
-  }
-
   window.OMP_BROWSER = {
     MAX_IMAGES,
     normalizeUrl,
@@ -376,6 +345,5 @@
     maxWidth,
     clampWidth,
     popoverTop,
-    pathMenu,
   };
 })();

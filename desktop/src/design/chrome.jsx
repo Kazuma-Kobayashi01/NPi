@@ -1,10 +1,12 @@
 /* ═════════════════════════════════════════════════════════════════════
    chrome.jsx — the window's top bar and the floating details cards
-   - WindowChrome: sidebar toggle, back / forward, Chat | Code switch, title
+   - WindowChrome: sidebar toggle, back / forward, title (the Chat | Code | Academic switch lives atop the sidebar: mode-switch.jsx)
    - ChromeToolbar: terminal, git, and the "More" menu
    - AmbientRail: the right panel (environment, context, usage, then widgets)
    ═════════════════════════════════════════════════════════════════════ */
 
+// The UI language (app/i18n.js).
+const _CH_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon, ProfileMenu, SubagentRailCard } = window;
 
 // Thin wrapper around the shared `OMP_KEYMAP.hintFor` — same guard and
@@ -36,23 +38,6 @@ function ChevronGlyph({ dir }) {
     </svg>
   );
 }
-function ChatGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <path d="M9 2.75c-3.45 0-6.25 2.4-6.25 5.4 0 1.5.7 2.85 1.85 3.85L4 14.75l2.7-1.1c.7.2 1.5.3 2.3.3 3.45 0 6.25-2.4 6.25-5.4S12.45 2.75 9 2.75Z"
-        stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function CodeGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <path d="M6.5 5.5 3 9l3.5 3.5M11.5 5.5 15 9l-3.5 3.5M10.2 4 7.8 14"
-        stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 // ── Window chrome ─────────────────────────────────────────────────────
 // One bar: the left segment (traffic lights, sidebar toggle) is as wide as
 // the sidebar and shares its background, so the sidebar reads as running the
@@ -62,31 +47,23 @@ function WindowChrome({
   profiles, activeProfileId, startupProfileId,
   onSelectProfile, onCreateProfile, onRenameProfile, onDeleteProfile, onSetStartupProfile,
   sidebarOpen, onToggleSidebar, toolbar,
-  canBack, canForward, onBack, onForward, mode, onMode, home = false,
+  canBack, canForward, onBack, onForward, home = false,
 }) {
   return (
     <div className={`chrome ${sidebarOpen ? "with-sidebar" : ""}`} data-tauri-drag-region>
       <div className="chrome-left" data-tauri-drag-region>
         <button className={`chrome-btn ${sidebarOpen ? "on" : ""}`}
-          title={`project sidebar (${hintFor("desktop.sidebar.toggle", "Ctrl+B")})`}
+          title={_CH_T("project sidebar ({hint})", { hint: hintFor("desktop.sidebar.toggle", "Ctrl+B") })}
           aria-pressed={!!sidebarOpen}
           onClick={onToggleSidebar}>
           <SidebarGlyph />
         </button>
-        <button className="chrome-btn chrome-arrow" title="Back to the start page" disabled={!canBack} onClick={onBack}>
+        <button className="chrome-btn chrome-arrow" title={_CH_T("Back to the start page")} disabled={!canBack} onClick={onBack}>
           <ChevronGlyph dir="left" />
         </button>
-        <button className="chrome-btn chrome-arrow" title="Back to the conversation" disabled={!canForward} onClick={onForward}>
+        <button className="chrome-btn chrome-arrow" title={_CH_T("Back to the conversation")} disabled={!canForward} onClick={onForward}>
           <ChevronGlyph dir="right" />
         </button>
-        {sidebarOpen && <div className="chrome-seg" role="radiogroup" aria-label="Mode">
-          <button type="button" role="radio" aria-checked={mode === "chat"} title="Chat" className={mode === "chat" ? "on" : ""} onClick={() => onMode?.("chat")}>
-            <ChatGlyph />
-          </button>
-          <button type="button" role="radio" aria-checked={mode !== "chat"} title="Code" className={mode !== "chat" ? "on" : ""} onClick={() => onMode?.("code")}>
-            <CodeGlyph />
-          </button>
-        </div>}
       </div>
 
       <div className="chrome-main" data-tauri-drag-region>
@@ -117,13 +94,13 @@ function WindowChrome({
           {/* Windows controls — right side, hidden on macOS/Linux */}
           {IS_WIN && (
             <div className="win-controls">
-              <button className="win-ctrl win-min" title="Minimize">
+              <button className="win-ctrl win-min" title={_CH_T("Minimize")}>
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5.5h8" stroke="currentColor" strokeWidth="1" /></svg>
               </button>
-              <button className="win-ctrl win-max" title="Maximize / Restore">
+              <button className="win-ctrl win-max" title={_CH_T("Maximize / Restore")}>
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" /></svg>
               </button>
-              <button className="win-ctrl win-close" title="Close">
+              <button className="win-ctrl win-close" title={_CH_T("Close")}>
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.1" /></svg>
               </button>
             </div>
@@ -137,40 +114,40 @@ function WindowChrome({
 // The tool buttons that used to sit in the footer status bar.
 
 // ── Toolbar: the two code-mode tools, then everything else under "More" ──
-function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen }) {
+function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen, copilot = false }) {
   return (
     <div className="chrome-toolbar">
       {!chat && <button className={`chrome-btn ${terminalOpen ? "on" : ""}`} aria-pressed={!!terminalOpen}
-        title={`Terminal (${hintFor("desktop.terminal.toggle", "Ctrl+`")})`} onClick={onTerminal}>
+        title={_CH_T("Terminal ({hint})", { hint: hintFor("desktop.terminal.toggle", "Ctrl+`") })} onClick={onTerminal}>
         <Icon name="terminal" size={15} />
       </button>}
-      {!chat && <button className="chrome-btn" title="Changes" onClick={onChanges}>
+      {!chat && <button className="chrome-btn" title={_CH_T("Changes")} onClick={onChanges}>
         <Icon name="diff2" size={15} />
       </button>}
       {!chat && onBrowser && (
         <button className={`chrome-btn ${browserOpen ? "on" : ""}`} aria-pressed={!!browserOpen}
-          title={`Browser panel${browserHint ? ` (${browserHint})` : ""}`} onClick={onBrowser}>
+          title={`${_CH_T("Browser panel")}${browserHint ? ` (${browserHint})` : ""}`} onClick={onBrowser}>
           <Icon name="web" size={15} />
         </button>
       )}
       {!chat && onSubagents && (
-        <button className={`chrome-btn ${subagentsOpen ? "on" : ""}`} aria-pressed={!!subagentsOpen} title="Subagents" onClick={onSubagents}>
+        <button className={`chrome-btn ${subagentsOpen ? "on" : ""}`} aria-pressed={!!subagentsOpen} title={_CH_T("Subagents")} onClick={onSubagents}>
           <Icon name="agent" size={15} />
         </button>
       )}
       {!chat && onTree && (
-        <button className={`chrome-btn ${treeOpen ? "on" : ""}`} aria-pressed={!!treeOpen} title="Conversation tree" onClick={onTree}>
+        <button className={`chrome-btn ${treeOpen ? "on" : ""}`} aria-pressed={!!treeOpen} title={_CH_T("Conversation tree")} onClick={onTree}>
           <Icon name="branch" size={15} />
         </button>
       )}
       {onSideChat && (
-        <button className={`chrome-btn ${sideChatOpen ? "on" : ""}`} aria-pressed={!!sideChatOpen} title="SideChat (temporary scratchpad)" onClick={onSideChat}>
+        <button className={`chrome-btn ${sideChatOpen ? "on" : ""}`} aria-pressed={!!sideChatOpen} title={_CH_T(copilot ? "Academic Copilot (this project's files)" : "SideChat (temporary scratchpad)")} onClick={onSideChat}>
           <Icon name="thinking" size={15} />
         </button>
       )}
       <MoreMenu items={moreItems} />
       {onPanel && (
-        <button className={`chrome-btn ${panelOpen ? "on" : ""}`} aria-pressed={!!panelOpen} title="Side panel" onClick={onPanel}>
+        <button className={`chrome-btn ${panelOpen ? "on" : ""}`} aria-pressed={!!panelOpen} title={_CH_T("Side panel")} onClick={onPanel}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2.2" stroke="currentColor" strokeWidth="1.3" />
             <path d="M10 3v10" stroke="currentColor" strokeWidth="1.3" />
@@ -197,7 +174,7 @@ function MoreMenu({ items }) {
   }, [open]);
   return (
     <div className="more-menu" ref={rootRef}>
-      <button className={`chrome-btn ${open ? "on" : ""}`} title="More" aria-haspopup="menu" aria-expanded={open}
+      <button className={`chrome-btn ${open ? "on" : ""}`} title={_CH_T("More")} aria-haspopup="menu" aria-expanded={open}
         onClick={() => setOpen(v => !v)}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <circle cx="3.25" cy="8" r="1.35" /><circle cx="8" cy="8" r="1.35" /><circle cx="12.75" cy="8" r="1.35" />

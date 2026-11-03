@@ -2,6 +2,8 @@
    composer.jsx — input area + slash palette + ⌘K command bridge
    ═════════════════════════════════════════════════════════════════════ */
 
+// The UI language (app/i18n.js).
+const _CP_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon } = window;
 const { parseMentionQuery, applyMention } = window.OMP_MENTIONS;
 const { prepareImage, carriesFiles, dropHoverAfter, imageFilesFromTransfer, imageFilesFromClipboardAsync, toDataUrl, MAX_ATTACHMENTS } = window.OMP_IMAGES;
@@ -31,6 +33,63 @@ function hintFor(actionId, fallback) {
 }
 function hintKeyFor(actionId, fallback) {
   return window.OMP_KEYMAP ? window.OMP_KEYMAP.hintKeyFor(actionId) : fallback;
+}
+
+// Keyed by tab: neither an open viewer nor the attachment menu crosses tabs.
+function ComposerAttachments({ attachments, onRemove }) {
+  const [openId, setOpenId] = React.useState(null);
+  const thumbsRef = React.useRef([]);
+  const sources = React.useMemo(() => attachments.map(a => a.src), [attachments]);
+  const index = attachments.findIndex(a => a.id === openId);
+  const thumbFor = React.useCallback(i => thumbsRef.current[i] ?? null, []);
+  const close = React.useCallback(() => setOpenId(null), []);
+  return (
+    <>
+      <div className="attach-strip">
+        {attachments.map((a, i) => (
+          <div className="attach-chip" key={a.id}>
+            <button type="button" className="attach-preview" title={_CP_T("View image")}
+              aria-label={`View image: ${a.name || "attached image"}`} onClick={() => setOpenId(a.id)}>
+              <img ref={el => { thumbsRef.current[i] = el; }} className={`attach-thumb${index === i ? " is-lifted" : ""}`}
+                src={a.src} alt={a.name || "attached image"} />
+            </button>
+            <button type="button" className="attach-remove" title={_CP_T("Remove image")} aria-label={_CP_T("Remove image")}
+              onClick={() => onRemove(a.id)}><Icon name="close" size={9} /></button>
+          </div>
+        ))}
+      </div>
+      {index >= 0 && <window.ImageLightbox images={sources} index={index}
+        onIndex={i => setOpenId(attachments[i].id)} onClose={close} thumbFor={thumbFor} />}
+    </>
+  );
+}
+
+function ComposerAttachMenu({ onImages, onFolder }) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef(null);
+  const buttonRef = React.useRef(null);
+  const close = () => { setOpen(false); buttonRef.current.focus(); };
+  window.usePopoverDismiss(open, rootRef, () => setOpen(false), close);
+  React.useEffect(() => {
+    if (open) rootRef.current.querySelector('[role="menuitem"]').focus();
+  }, [open]);
+  return (
+    <div className="composer-attach-wrap" ref={rootRef}>
+      <button type="button" ref={buttonRef} className="btn icon ghost composer-attach" title={_CP_T("Add attachment")}
+        aria-label={_CP_T("Add attachment")} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(v => !v)}>
+        <Icon name="plus" size={16} />
+      </button>
+      {open && <div className="composer-attach-menu" role="menu" aria-label={_CP_T("Add attachment")}
+        onKeyDown={e => window.menuKeyNav(e, e.currentTarget, '[role="menuitem"]', close)}>
+        <button type="button" role="menuitem" onClick={() => { close(); onImages(); }}>
+          <Icon name="image" size={15} /> {_CP_T("Add images")}
+        </button>
+        <button type="button" role="menuitem" onClick={() => { close(); onFolder(); }}>
+          <Icon name="folder" size={15} /> {_CP_T("Add folder address")}
+        </button>
+      </div>}
+    </div>
+  );
 }
 
 // ── The composer (input + plan/steer modes + send) ────────────────────
@@ -452,6 +511,23 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
   const removeAttachment = (attId) =>
     updateDraft(sessionId, d => ({ ...d, attachments: d.attachments.filter(a => a.id !== attId) }));
 
+  const addFolder = async () => {
+    const target = sessionId;
+    const folder = await window.OMP_BRIDGE.pickFolder();
+    if (!folder) return;
+    const reference = `@${/\s/.test(folder) ? JSON.stringify(folder) : folder}`;
+    updateOpenDraft(target, d => ({
+      ...d, text: window.OMP_WIDGETS.appendToDraft(d.text, reference), historyNav: null,
+    }));
+    requestAnimationFrame(() => {
+      if (sessionIdRef.current !== target || !sessionIdsRef.current.includes(target)) return;
+      const ta = taRef.current;
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
+      setCaret(ta.value.length);
+    });
+  };
+
   // Image files dropped from the OS file manager (#50) go the paste/pick
   // way (`addFiles`: same preparation, limits and tab); non-images are
   // ignored. One handler for all four drag events (dragleave is not
@@ -629,26 +705,15 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
         onRemove={onRemoveBrowserChip}
         onChipClick={onBrowserChipClick} />
 
-      {attachments.length > 0 && (
-        <div className="attach-strip">
-          {attachments.map(a => (
-            <div className="attach-chip" key={a.id}>
-              <img className="attach-thumb" src={a.src} alt={a.name || "attached image"} />
-              <button className="attach-remove" title="Remove" onClick={() => removeAttachment(a.id)}>
-                <Icon name="close" size={9} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {attachments.length > 0 && <ComposerAttachments key={sessionId}
+        attachments={attachments} onRemove={removeAttachment} />}
 
       {/* Keyed by tab: an open preview is that tab's, not the next one's. */}
       <PasteStrip key={sessionId} pastes={collapsed} onExpand={expandPaste} />
 
       <div className="composer-row">
-        <button className="btn icon ghost composer-attach" title="Attach image" onClick={() => fileInputRef.current?.click()}>
-          <Icon name="plus" size={16} />
-        </button>
+        <ComposerAttachMenu key={sessionId}
+          onImages={() => fileInputRef.current.click()} onFolder={addFolder} />
         <input
           ref={fileInputRef}
           type="file"
@@ -663,12 +728,12 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
             rows="1"
             placeholder={
               goalMode && !isStreaming
-                ? "describe the goal — the agent works toward it until it calls it done…"
+                ? _CP_T("describe the goal — the agent works toward it until it calls it done…")
                 : planMode && !isStreaming
-                ? (microcopy?.planTip ?? "describe what to build, or give feedback on the plan…")
+                ? (microcopy?.planTip ?? _CP_T("describe what to build, or give feedback on the plan…"))
                 : isStreaming
                   ? microcopy?.streamingTip
-                  : (microcopy?.paletteTip ?? `what should we ship?  ·  / for commands${bridgeHint ? `  ·  ${bridgeHint} for the bridge` : ""}`)
+                  : (microcopy?.paletteTip ?? `${_CP_T("what should we ship?  ·  / for commands")}${bridgeHint ? _CP_T("  ·  {hint} for the bridge", { hint: bridgeHint }) : ""}`)
             }
             value={text}
             onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart); }}
@@ -732,14 +797,14 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
         <button className={`composer-pill ${planMode ? "on" : ""}`} onClick={onTogglePlan}
           disabled={!!planBlocked && !planMode} title={planBlocked && !planMode ? planBlocked : undefined}>
           <Icon name="plan" size={11} color={planMode ? "var(--amber)" : "var(--fg-3)"} />
-          <span style={{ color: planMode ? "var(--amber)" : "var(--fg-2)" }}>Plan mode</span>
+          <span style={{ color: planMode ? "var(--amber)" : "var(--fg-2)" }}>{_CP_T("Plan mode")}</span>
         </button>
         {goalMode && (
           <button className={`composer-pill goal-pill${goalMode ? " on" : ""}`} onClick={onToggleGoal}
             disabled={!!goalBlocked && !goalMode}
             title={goalBlocked && !goalMode ? goalBlocked : "goal mode: your next message becomes a goal the agent works toward"}>
             <Icon name="goal" size={11} color={goalMode ? "var(--lilac)" : "var(--fg-3)"} />
-            <span style={{ color: goalMode ? "var(--lilac)" : "var(--fg-2)" }}>Goal</span>
+            <span style={{ color: goalMode ? "var(--lilac)" : "var(--fg-2)" }}>{_CP_T("Goal")}</span>
           </button>
         )}
         {approvalMode && (
@@ -853,14 +918,14 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, pro
       <div className="bridge-scrim" onClick={onClose}>
         <div className="bridge slide-in" onClick={(e) => e.stopPropagation()}>
           <div className="bridge-input-row">
-            <button className="btn icon ghost" title="Back"
+            <button className="btn icon ghost" title={_CP_T("Back")}
               onClick={() => { setView("commands"); setQ(""); }}
               style={{ marginRight: 4 }}>
               <Icon name="chevR" size={12} color="var(--fg-3)"
                 style={{ transform: "rotate(180deg)", display: "block" }} />
             </button>
             <input ref={inputRef} className="bridge-input mono"
-              placeholder="Filter models…" value={q}
+              placeholder={_CP_T("Filter models…")} value={q}
               onChange={(e) => setQ(e.target.value)} />
             <span className="kbd">esc</span>
           </div>
@@ -904,7 +969,7 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, pro
       <div className="bridge-scrim" onClick={onClose}>
         <div className="bridge slide-in" onClick={(e) => e.stopPropagation()}>
           <div className="bridge-input-row">
-            <button className="btn icon ghost" title="Back"
+            <button className="btn icon ghost" title={_CP_T("Back")}
               onClick={() => { setView("commands"); setQ(""); }}
               style={{ marginRight: 4 }}>
               <Icon name="chevR" size={12} color="var(--fg-3)"
@@ -966,7 +1031,7 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, pro
         <div className="bridge-input-row">
           <Icon name="command" size={14} color="var(--accent)" />
           <input ref={inputRef} className="bridge-input mono"
-            placeholder="Cross the bridge — type to filter…" value={q}
+            placeholder={_CP_T("Cross the bridge — type to filter…")} value={q}
             onChange={(e) => setQ(e.target.value)} />
           <span className="kbd">esc</span>
         </div>

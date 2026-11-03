@@ -10,6 +10,19 @@ The same menu ticks one profile as the **startup default**, stored as `ProfilesF
 
 **Composer and plan mode are per tab too** (#28), but desktop-only state omp never sees, so they live in React rather than in the bridge snapshot: `app-live.jsx` keeps a `plans` map and `design/composer.jsx` a `drafts` map (text, attachments, collapsed pastes, prompt-history recall position, in-flight image count), both keyed by session id via `app/session-ui.js` (regression `test-session-ui.mjs`) and pruned when a tab closes. Both key on `activeProject.id` (the tab being rendered, `""` with none open — a no-op key). The `Composer` deliberately stays mounted across tab switches rather than being re-keyed: a remount would re-fire its `draftInsert`/`promptInsert` effects, and an image still being prepared must land in the tab it was pasted into (`addFiles` captures the id), not in whichever tab is active when it resolves. Purely visual state (caret, slash selection, mention list) is reset on a switch instead. Plan state is not reset by `/new` or a profile respawn inside the same tab. The column beside the chat is per tab the same way (`app-live.jsx` `sides`: the rail, the conversation tree or the browser panel; `docs/architecture/browser.md`).
 
+The composer `+` menu selects images or appends a folder address using
+`OMP_BRIDGE.pickFolder` (the existing OS directory picker only, not
+`openProject`). Whitespace-containing paths are quoted in the `@` reference.
+The asynchronous result updates the originating open tab's latest draft;
+cancellation leaves it unchanged and a closed tab is never recreated.
+The menu and `ComposerAttachments` viewer are keyed by session id. Image
+preview reuses `ImageLightbox`, including modal focus, Escape and previous/
+next navigation; the thumbnail remove button is a separate sibling.
+Completed assistant output has an always-visible footer `CopyButton`,
+copying the original Markdown rather than rendered DOM or action labels.
+
+The mode switch (Chat, Code, Academic) is the picker `ModeSwitch` at the very top of the left sidebar (`design/mode-switch.jsx`, rendered first by `ChatSidebar` and `ProjectSidebar`; it is hidden with the sidebar). It shows the current mode with a chevron and opens a menu (`role=menu`, `menuitemradio`) of the three with a one-line hint each and a check on the current; arrows/Home/End move, Enter picks, Escape closes and returns focus, a click outside closes. The window chrome keeps just the sidebar toggle and back/forward. `app-live.jsx` normalises `t.appMode` to `appModeName` (anything but `chat`/`academic` is Code), sends it through `bridge.setAppMode`, and passes it to the start page, whose greeting (`app/greetings.js`) is Academic-worded. Academic currently shares Code's project tabs and sidebar; only Chat has its own folder space.
+
 ## Chat rich interaction and image ownership
 
 `app_mode.rs::CHAT_PROMPT` is the English, human-centered Chat base prompt,

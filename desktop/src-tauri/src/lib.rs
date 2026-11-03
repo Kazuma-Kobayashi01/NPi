@@ -7,13 +7,15 @@
 // their helper processes (`git`, `sh`, stand-in browsers) directly.
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
+mod academic_space;
 mod agent;
 mod approval;
 mod app_mode;
 mod chat_space;
+mod copilot;
 mod chat_image;
 mod mcp_skills;
-mod system_notice;
+mod notify;
 mod screen_capture;
 mod session_actions;
 mod approval_mode;
@@ -213,7 +215,12 @@ fn start_session(
         ),
         None => None,
     };
-    bridge.start_session(
+    // The agent can look things up in the user's Academic library, read only
+    // (`copilot::ResearchHub`).
+    let research: Arc<dyn copilot::HostTools> = Arc::new(copilot::ResearchHub::new(Arc::clone(
+        &*app.state::<Arc<academic_space::AcademicSpace>>(),
+    )));
+    bridge.start_session_with_host(
         // Owned by the bridge's map; the widget hook below still needs the id.
         args.session_id.clone(),
         agent::Launch {
@@ -233,9 +240,30 @@ fn start_session(
         },
         app,
         Arc::clone(rule_book.inner()),
+        Some(research),
     )?;
     widget_host.session_started(&args.session_id, cwd_opt.map(Path::new));
     Ok(mode.as_str().to_string())
+}
+
+/// The cwd and `--config` policy of a worker that must not see any project:
+/// `<app cache>/<name>`, private, with workspace discovery switched off.
+fn isolated_workspace(app: &AppHandle, name: &str) -> Result<(PathBuf, PathBuf), String> {
+    let cwd = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("{name} cache directory: {e}"))?
+        .join(name);
+    private_fs::private_dirs(true)
+        .create(&cwd)
+        .map_err(|e| format!("{name} workspace: {e}"))?;
+    let config = cwd.join("runtime.yml");
+    std::fs::write(
+        &config,
+        "includeWorkspaceTree: false\nworkspace:\n  additionalDirectories: []\nplan:\n  enabled: false\n  defaultOnStartup: false\ngit:\n  enabled: false\n",
+    )
+    .map_err(|e| format!("{name} policy: {e}"))?;
+    Ok((cwd, config))
 }
 
 /// Start an independent, ephemeral conversation, irrespective of the main app mode.
@@ -253,20 +281,7 @@ fn sidechat_start(
     let profile = store.resolve(profile.as_deref())?;
     // Never inherit the app's project cwd, browser overlay, chat-space memory or
     // widgets. Keep the small runtime policy outside any selected worktree.
-    let cwd = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| format!("SideChat cache directory: {e}"))?
-        .join("sidechat");
-    private_fs::private_dirs(true)
-        .create(&cwd)
-        .map_err(|e| format!("SideChat workspace: {e}"))?;
-    let config = cwd.join("runtime.yml");
-    std::fs::write(
-        &config,
-        "includeWorkspaceTree: false\nworkspace:\n  additionalDirectories: []\nplan:\n  enabled: false\n  defaultOnStartup: false\ngit:\n  enabled: false\n",
-    )
-    .map_err(|e| format!("SideChat policy: {e}"))?;
+    let (cwd, config) = isolated_workspace(&app, "sidechat")?;
     let cwd_text = cwd
         .to_str()
         .ok_or_else(|| "SideChat workspace path is not UTF-8".to_string())?;
@@ -296,6 +311,63 @@ fn sidechat_start(
         },
         app,
         Arc::clone(rule_book.inner()),
+    )
+}
+
+const COPILOT_PROMPT: &str = "\
+You are NPi Academic Copilot, a local literature assistant bound to one research project. \
+Your only tools are research_search, research_read and research_save, which see this project's \
+files and nothing else. You have no network, shell or other file access; never claim otherwise. \
+Answer only from the project's files: cite the file and line for every claim taken from them, \
+quote exactly, and say plainly when the files do not contain the answer. PDFs have no extracted \
+text yet, so you cannot read them; ask the user for a text or Markdown version instead of \
+guessing. Save notes, digests and artifacts with research_save only when asked or when it \
+clearly helps. Reply in the user's language.
+
+# Project rules
+";
+
+/// Start the Academic Copilot for one project: an independent worker with no
+/// omp tools, only the fixed research host tools bound to `project`
+/// (`copilot.rs`). `project` must be a folder directly under the Academic space.
+#[tauri::command]
+fn academic_copilot_start(
+    session_id: String,
+    project: String,
+    profile: Option<String>,
+    bridge: State<'_, AgentBridge>,
+    rule_book: State<'_, Arc<RuleBook>>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+    terminal: State<'_, Arc<terminal::TerminalManager>>,
+    space: State<'_, Arc<academic_space::AcademicSpace>>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let root = space
+        .project(Path::new(&project))
+        .ok_or_else(|| "not an Academic project".to_string())?;
+    let profile = store.resolve(profile.as_deref())?;
+    let (cwd, config) = isolated_workspace(&app, "copilot")?;
+    let cwd_text = cwd
+        .to_str()
+        .ok_or_else(|| "Copilot workspace path is not UTF-8".to_string())?;
+    let prompt = format!("{COPILOT_PROMPT}{}", academic_space::AcademicSpace::rules(&root));
+    terminal.register_tab(&session_id, None);
+    bridge.start_session_with_host(
+        session_id,
+        agent::Launch {
+            cwd: Some(cwd_text),
+            resume: None,
+            profile,
+            mode: app.state::<Arc<ApprovalModeStore>>().resolve(None),
+            app_mode: "academic",
+            config: Some(&config),
+            prompt: Some(&prompt),
+            append_prompt: None,
+            sidechat: true,
+        },
+        app,
+        Arc::clone(rule_book.inner()),
+        Some(Arc::new(copilot::CopilotHost::new(root)) as Arc<dyn copilot::HostTools>),
     )
 }
 
@@ -697,42 +769,6 @@ fn picked_program(
         .map_err(|p| format!("{} is not a UTF-8 path", p.to_string_lossy()))
 }
 
-/// The browser panel's Chromium setting, what automatic discovery finds and
-/// whether the stored browser still works. `spawn_blocking`: discovery
-/// checks files.
-#[tauri::command]
-async fn browser_settings(
-    settings: State<'_, Arc<browser::SettingsStore>>,
-) -> Result<browser::BrowserSettings, String> {
-    with_blocking(&settings, |s| Ok(s.settings())).await
-}
-
-/// Store the Chromium setting (empty = automatic, else an absolute path to
-/// an executable file; surrounding quotes are dropped) in `browser.json`;
-/// the next launch uses it.
-#[tauri::command]
-async fn browser_set_path(
-    path: String,
-    settings: State<'_, Arc<browser::SettingsStore>>,
-) -> Result<browser::BrowserSettings, String> {
-    with_blocking(&settings, move |s| s.set_path(&path)).await
-}
-
-/// "other…" in the browser menu: pick a program with the native file dialog
-/// and store it as `browser_set_path` would; `None` when cancelled. The path
-/// comes from the OS dialog, never from the webview.
-#[tauri::command]
-async fn browser_pick_path(
-    window: tauri::WebviewWindow,
-    settings: State<'_, Arc<browser::SettingsStore>>,
-) -> Result<Option<browser::BrowserSettings>, String> {
-    let picked = pick_program(&window, "Choose a Browser");
-    with_blocking(&settings, move |s| {
-        picked_program(&picked)?.map_or(Ok(None), |path| s.set_path(&path).map(Some))
-    })
-    .await
-}
-
 /// Query a session's last error. Returns `None` if the session is
 /// running (or has never been started under this id), `Some(reason)`
 /// if its last `start_session` attempt failed.
@@ -880,7 +916,7 @@ fn parse_rule_scope(scope: &str) -> Result<approval::RuleScope, String> {
 }
 
 /// The approval-mode default and per-project overrides (a cache read).
-/// The app's mode (`"chat"` or `"code"`): picks the system prompt the next omp
+/// The app's mode (`"chat"`, `"code"` or `"academic"`): picks the system prompt the next omp
 /// start appends (`app_mode`).
 #[tauri::command]
 fn app_mode_set(mode: String, store: State<'_, app_mode::AppModeStore>) -> Result<(), String> {
@@ -998,10 +1034,11 @@ async fn list_project_files(
     off_ipc(move || files::list(&cwd, &query, limit)).await?
 }
 
-/// The default folder for new work: `~/Documents/NPi`, created on demand.
-fn workspace_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+/// The folder of a space (`Code`, `Academic`): `~/Documents/NPi/<space>`,
+/// created on demand. Where the folder picker opens and new work goes.
+fn workspace_dir(app: &tauri::AppHandle, space: &str) -> Option<std::path::PathBuf> {
     use tauri::Manager;
-    let dir = app.path().document_dir().ok()?.join("NPi");
+    let dir = app.path().document_dir().ok()?.join("NPi").join(space);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }
@@ -1018,11 +1055,17 @@ fn workspace_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
 /// an `mpsc` channel + `spawn_blocking` so the async executor is never
 /// stalled.
 #[tauri::command]
-async fn open_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
+async fn open_project(
+    app: tauri::AppHandle,
+    kind: Option<String>,
+    space: State<'_, Arc<academic_space::AcademicSpace>>,
+) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = std::sync::mpsc::channel();
     let dialog = app.dialog().file().set_title("Open Project Folder");
-    let dialog = match workspace_dir(&app) {
+    let academic = kind.as_deref() == Some("academic");
+    let space = Arc::clone(&space);
+    let dialog = match workspace_dir(&app, if academic { "Academic" } else { "Code" }) {
         Some(dir) => dialog.set_directory(dir),
         None => dialog,
     };
@@ -1044,9 +1087,21 @@ async fn open_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
         // focus-existing lookup), so a folder picked through a symlink must
         // not look like a different project. Off the async thread: it is a
         // filesystem call.
-        external_open::canonical_folder(&path).map(Some)
+        let folder = external_open::canonical_folder(&path)?;
+        // A folder picked under the Academic space becomes a project.
+        if academic {
+            space.prepare(Path::new(&folder))?;
+        }
+        Ok(Some(folder))
     })
     .await?
+}
+
+/// The Academic space folder (created on demand): a tab whose `path` is a
+/// folder directly under it is an Academic project.
+#[tauri::command]
+fn academic_dir(space: State<'_, Arc<academic_space::AcademicSpace>>) -> Result<String, String> {
+    space.ensure_root().map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Start watching `.git/HEAD` for a session's project path.
@@ -1682,24 +1737,24 @@ fn setup(app: &tauri::App) {
     // fallback: another account could plant a `yolo` there; without a config
     // dir the choice stays in memory.
     app.manage(app_mode::AppModeStore::new());
+    app.manage(notify::NotifyState::default());
+    notify::install(app.handle());
     let legacy_chats = app.path().app_data_dir().map_or_else(|_| std::env::temp_dir().join("npi"), |d| d).join("Chats");
     app.manage(chat_space::ChatSpace::new(
-        app.path().document_dir().map_or_else(|_| legacy_chats.clone(), |d| d.join("NPi").join("Chats")),
+        app.path().document_dir().map_or_else(|_| legacy_chats.clone(), |d| d.join("NPi").join("Chat")),
         app.path().app_config_dir().map_or_else(|_| std::env::temp_dir().join("npi-config"), |d| d),
     ).with_legacy(legacy_chats));
+    app.manage(Arc::new(academic_space::AcademicSpace::new(
+        app.path().document_dir().map_or_else(|_| std::env::temp_dir().join("npi-academic"), |d| d.join("NPi").join("Academic")),
+    )));
     app.manage(Arc::new(ApprovalModeStore::load(config_file(
         "approval-mode.json",
     ))));
-    // The browser panel's Chromium setting: <app_config_dir>/browser.json.
-    // No temp-dir fallback: another account could plant the browser this one
-    // runs; without a config dir the setting stays in memory. An
-    // unresolvable home only loses the candidates under it (omp's Chrome for
-    // Testing cache, macOS `~/Applications`).
-    let browser_store = Arc::new(browser::SettingsStore::load(
-        config_file("browser.json"),
-        app.path().home_dir().ok(),
+    // The browser panel runs the Chromium bundled with the app (resources/chromium);
+    // there is no setting and no discovery of an installed browser.
+    let browser_store = Arc::new(browser::BundledChromium::locate(
+        app.path().resource_dir().ok().as_deref(),
     ));
-    app.manage(Arc::clone(&browser_store));
     // Approval-rule store: project-scoped grants persist under
     // <app_config_dir>/approval-rules/<project-hash>.json. No temp-dir
     // fallback: another account could plant grants there that approve
@@ -1868,9 +1923,6 @@ pub fn run() {
             terminal_settings,
             terminal_set_shell,
             terminal_pick_shell,
-            browser_settings,
-            browser_set_path,
-            browser_pick_path,
             close_tab,
             close_all_tabs,
             browser::commands::browser_open_panel,
@@ -1891,6 +1943,8 @@ pub fn run() {
             extension_ui_state,
             streaming_message,
             open_project,
+            academic_dir,
+            academic_copilot_start,
             take_pending_open_projects,
             start_git_watch,
             stop_git_watch,
@@ -1931,7 +1985,11 @@ pub fn run() {
             mcp_skills::mcp_server_upsert,
             mcp_skills::skills_list,
             mcp_skills::skill_open,
-            system_notice::system_notification_send,
+            notify::notify_configure,
+            notify::notify_set_active,
+            notify::notify_status,
+            notify::notify_request_permission,
+            notify::notify_test,
             pr_automation::pr_automation_snapshot,
             screen_capture::capture_screen_to_tmp,
             workspace_accept,

@@ -222,6 +222,20 @@ impl AgentBridge {
         app: AppHandle,
         rule_book: Arc<crate::approval::RuleBook>,
     ) -> Result<(), String> {
+        self.start_session_with_host(session_id, launch, app, rule_book, None)
+    }
+
+    /// [`Self::start_session`] for a worker whose only tools are the
+    /// `host` ones: Rust registers them with `set_host_tools` before anything
+    /// else and the stdout reader answers their calls (`crate::copilot`).
+    pub fn start_session_with_host(
+        &self,
+        session_id: String,
+        launch: Launch<'_>,
+        app: AppHandle,
+        rule_book: Arc<crate::approval::RuleBook>,
+        host: Option<Arc<dyn crate::copilot::HostTools>>,
+    ) -> Result<(), String> {
         let cwd = launch.cwd;
         let (mut child, supervisor) = match spawn_omp(launch) {
             Ok(c) => c,
@@ -236,6 +250,10 @@ impl AgentBridge {
         // A failed write means omp is already gone; the stdout reader reports
         // its exit like any other.
         let _ = writeln!(stdin, "{DELTA_EVENT_FILTER}");
+        if let Some(host) = &host {
+            let frame = serde_json::json!({ "type": "set_host_tools", "tools": host.definitions() });
+            let _ = writeln!(stdin, "{frame}");
+        }
         let stdout = child.stdout.take().expect("stdout piped");
         let stderr = child.stderr.take().expect("stderr piped");
         let stdin_arc = Arc::new(Mutex::new(stdin));
@@ -327,6 +345,7 @@ impl AgentBridge {
             alive,
             stderr_tail: Arc::clone(&stderr_tail),
             last_errors: Arc::clone(&self.last_errors),
+            host,
         });
         spawn_stderr_reader(session_id, stderr, stderr_tail);
         Ok(())

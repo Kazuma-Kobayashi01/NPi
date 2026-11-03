@@ -9,12 +9,12 @@ function _SRD_Detail({ row, ctx, query }) {
   const pick = (l) => ctx.setTweak({ uiDetail: l.level, ...l.patch });
   return (
     <Row stack label={row.label} desc={D.levelOf(cur).note} query={query}>
-      <div className="st-detail" role="radiogroup" aria-label="Interface detail">
+      <div className="st-detail" role="radiogroup" aria-label={window.OMP_I18N.t("Interface detail")}>
         {D.LEVELS.map(l => (
           <button key={l.level} type="button" role="radio" aria-checked={cur === l.level}
             className={`st-detail-step${cur === l.level ? " on" : ""}`} onClick={() => pick(l)}>
             <span className="st-detail-n">{l.level}</span>
-            <span className="st-detail-name">{l.name}</span>
+            <span className="st-detail-name">{window.OMP_I18N.t(l.name)}</span>
           </button>
         ))}
       </div>

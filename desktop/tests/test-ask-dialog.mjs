@@ -219,4 +219,85 @@ check("backtick pairs become code runs; an unpaired backtick stays literal", () 
   assert.deepEqual(A.codeRuns(""), []);
 });
 
+// ── subagent preferences form ────────────────────────────────────────────
+
+const subRaw = [
+  { id: "model", question: "Which model should this subagent batch use?", recommended: 1,
+    options: [{ label: "anthropic/claude-opus-5-5" }, { label: "deepseek/deepseek-flash" }, { label: "anthropic/claude-sonnet-5-5", description: "fast" }] },
+  { id: "thinking", question: "Which thinking level should this subagent batch use?", recommended: 3,
+    options: A.THINKING_LEVELS.map(label => ({ label })) },
+];
+const subQs = A.parseQuestions(subRaw);
+const subForm = A.subagentForm(subQs);
+const memory = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
+
+check("only omp's model + thinking ask is the form; any other ask stays generic", () => {
+  assert.deepEqual({ ...subForm }, { model: 0, thinking: 1 });
+  assert.deepEqual({ ...A.subagentForm(A.parseQuestions([...subRaw].reverse())) }, { model: 1, thinking: 0 });
+  assert.equal(A.subagentForm(qs), null);
+  assert.equal(A.subagentForm([subQs[0]]), null);
+  const odd = A.parseQuestions([subRaw[0], { id: "thinking", question: "?", options: [{ label: "fast" }, { label: "slow" }] }]);
+  assert.equal(A.subagentForm(odd), null, "a thinking question with other labels is not omp's");
+  const multi = A.parseQuestions([{ ...subRaw[0], multi: true }, subRaw[1]]);
+  assert.equal(A.subagentForm(multi), null);
+});
+
+check("models list recommended first, then the last pick, then omp's order", () => {
+  assert.deepEqual(A.modelOrder(subQs[0], null), [1, 0, 2]);
+  assert.deepEqual(A.modelOrder(subQs[0], "anthropic/claude-sonnet-5-5"), [1, 2, 0]);
+  assert.deepEqual(A.modelOrder(subQs[0], "deepseek/deepseek-flash"), [1, 0, 2], "last == recommended is not listed twice");
+  assert.deepEqual(A.modelOrder(subQs[0], "gone/model"), [1, 0, 2]);
+});
+
+check("typing filters models by every word of label or description", () => {
+  const order = A.modelOrder(subQs[0], null);
+  assert.deepEqual(A.filterModels(subQs[0], order, ""), order);
+  assert.deepEqual(A.filterModels(subQs[0], order, "ANTHROPIC"), [0, 2]);
+  assert.deepEqual(A.filterModels(subQs[0], order, "claude fast"), [2]);
+  assert.deepEqual(A.filterModels(subQs[0], order, "zzz"), []);
+});
+
+check("the first draft preselects the recommended options, else last time's, else the first model and medium", () => {
+  const d = A.subagentDraft(subQs, subForm, { model: "anthropic/claude-opus-5-5", thinking: "low" });
+  assert.deepEqual(d.map(e => e.picks), [[1], [3]], "recommended wins over memory");
+  const bare = A.parseQuestions([{ id: "model", question: "?", options: [{ label: "a" }, { label: "b" }] }, { id: "thinking", question: "?", options: A.THINKING_LEVELS.map(label => ({ label })) }]);
+  const f = A.subagentForm(bare);
+  assert.deepEqual(A.subagentDraft(bare, f, null).map(e => e.picks), [[0], [3]]);
+  assert.deepEqual(A.subagentDraft(bare, f, { model: "b", thinking: "high" }).map(e => e.picks), [[1], [4]]);
+  assert.deepEqual(A.subagentDraft(bare, f, { model: "zz", thinking: "nope" }).map(e => e.picks), [[0], [3]]);
+});
+
+check("the form's reply is exactly what omp validates, for a pick and for a typed model", () => {
+  let d = A.subagentDraft(subQs, subForm, null);
+  d = A.pick(d, subQs, 1, 5);
+  assert.equal(ompAccepts(subQs, A.answers(subQs, d)), null);
+  assert.deepEqual(A.answers(subQs, d), [{ id: "model", selectedOptions: ["deepseek/deepseek-flash"] }, { id: "thinking", selectedOptions: ["xhigh"] }]);
+  const typed = A.applyModelQuery(subQs, subForm, d, "  openai/gpt-x ");
+  assert.equal(ompAccepts(subQs, A.answers(subQs, typed)), null);
+  assert.deepEqual(A.answers(subQs, typed)[0], { id: "model", selectedOptions: [], customInput: "openai/gpt-x" });
+});
+
+check("typed text picks a model when it names one or matches only one", () => {
+  const d = A.subagentDraft(subQs, subForm, null);
+  assert.deepEqual(A.applyModelQuery(subQs, subForm, d, "ANTHROPIC/claude-sonnet-5-5")[0], { picks: [2], text: "" });
+  assert.deepEqual(A.applyModelQuery(subQs, subForm, d, "sonnet")[0], { picks: [2], text: "" });
+  assert.deepEqual(A.applyModelQuery(subQs, subForm, d, "claude")[0], { picks: [], text: "claude" }, "two matches: typed as is");
+  assert.equal(A.applyModelQuery(subQs, subForm, d, "   "), d);
+  assert.equal(A.applyModelQuery(subQs, subForm, d, null), d);
+});
+
+check("the remembered pair stores labels only and survives broken storage", () => {
+  const st = memory();
+  assert.equal(A.readSubagentMemory(st), null);
+  const d = A.subagentDraft(subQs, subForm, null);
+  A.saveSubagentMemory(A.subagentMemory(subQs, subForm, d), st);
+  assert.deepEqual({ ...A.readSubagentMemory(st) }, { model: "deepseek/deepseek-flash", thinking: "medium" });
+  const typed = A.applyModelQuery(subQs, subForm, d, "openai/gpt-x");
+  assert.equal(A.subagentMemory(subQs, subForm, typed).model, null, "a typed model is not remembered");
+  const broken = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+  assert.equal(A.readSubagentMemory(broken), null);
+  A.saveSubagentMemory({ model: "a", thinking: "b" }, broken);
+  assert.equal(A.readSubagentMemory({ getItem: () => "{not json" }), null);
+});
+
 console.log(`ask-dialog: ${passed} checks passed`);

@@ -164,7 +164,7 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
     <div className="mm" ref={rootRef}>
       <button type="button" className={`mm-btn${open ? " on" : ""}`} aria-haspopup="menu" aria-expanded={open}
         title="Model and effort" onClick={() => { setOpen(v => !v); setView("main"); }}>
-        <span className="mm-btn-name">{current?.name ?? current?.id ?? "Choose a model"}</span>
+        <span className="mm-btn-name">{current?.name ?? current?.id ?? window.OMP_I18N.t("Choose a model")}</span>
         {level && <span className="mm-btn-level">{_mmCap(level)}</span>}
       </button>
       {open && <div ref={popRef} className={`mm-pop mm-model-pop ${up ? "up" : "down"}`} role="menu">{body}</div>}

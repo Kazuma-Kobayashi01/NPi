@@ -101,3 +101,10 @@
   display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 16px;
   border-top: 1px solid var(--line); color: var(--fg-4); font-size: var(--d-text-xs);
 }
+
+/* System notifications row (design/settings/rows-notifications.jsx). */
+.st-notify { display: flex; flex-direction: column; gap: 10px; }
+.st-notify-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--fg-2); font-size: var(--d-text-sm, 13px); }
+.st-notify-state { margin: 0; font-size: 12px; color: var(--fg-3); }
+.st-notify-state.is-ok { color: var(--lime, var(--accent)); }
+.st-notify-state.is-warn { color: var(--amber, var(--fg-2)); }

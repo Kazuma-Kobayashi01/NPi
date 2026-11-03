@@ -2423,12 +2423,6 @@
         return;
       }
 
-      if (!document.hasFocus() && window.__TAURI__ && (ev.method === "select" || ev.method === "ask" || ev.method === "confirm")) {
-        window.__TAURI__.core.invoke("system_notification_send", {
-          title: "NPi Desktop — Approval Requested",
-          body: ev.title || ev.message || "A tool or decision is waiting for your review.",
-        }).catch(() => {});
-      }
       // Agent asks the user to pick from a list: every tool-approval prompt
       // ("Allow tool: X", options ["Approve","Deny"]) and extension pickers
       // like /review's. The ask tool uses the `ask` dialog below instead.
@@ -2542,15 +2536,6 @@
       }
       _send({ type: "get_session_stats" });
       _send({ type: "get_state" });
-      if (!document.hasFocus() && window.__TAURI__) {
-        const lastMsg = state.messages[state.messages.length - 1];
-        const snippet = lastMsg?.text || lastMsg?.blocks?.find(b => b.type === "text")?.text || "Turn complete.";
-        const body = snippet.length > 80 ? snippet.slice(0, 78) + "…" : snippet;
-        window.__TAURI__.core.invoke("system_notification_send", {
-          title: "NPi Desktop",
-          body,
-        }).catch(() => {});
-      }
       notify();
       return;
     }
@@ -4407,30 +4392,6 @@
       return res.ok ? { ok: true, settings: res.value ?? null } : res;
     },
 
-    /** The saved Chromium setting for the browser panel: `{ path,
-     *  automatic, installed, error }` (`path` "" = automatic, `automatic` =
-     *  what auto-detection finds now, `installed` = the browsers the menu
-     *  offers, `error` = why the stored path no longer works); `null`
-     *  without Tauri or when Rust refused. Rust reads it at each launch. */
-    browserSettings() {
-      return _invokeSafe("browser_settings", {}, null);
-    },
-
-    /** Save the Chromium path ("" = automatic). Rust validates and persists
-     *  it: `{ ok: true, settings }` or `{ ok: false, error }`. */
-    async browserSetPath(path) {
-      const res = await _invokeResult("browser_set_path", { path: typeof path === "string" ? path : "" });
-      return res.ok ? { ok: true, settings: res.value } : res;
-    },
-
-    /** "other…": Rust opens the native file dialog and stores the browser
-     *  picked. `{ ok: true, settings }` (`settings` null = cancelled) or
-     *  `{ ok: false, error }`. */
-    async browserPickPath() {
-      const res = await _invokeResult("browser_pick_path", {});
-      return res.ok ? { ok: true, settings: res.value ?? null } : res;
-    },
-
     // ── Browser panel (src-tauri/src/browser/commands.rs) ──────────────────
     // IPC glue only: Rust owns Chromium, the views, the screencast's flow
     // control and the annotation overlay (docs/architecture/browser.md).
@@ -4963,9 +4924,16 @@
     },
 
     /** Open native folder picker and return the chosen (canonical) path, or
-     *  null when cancelled or the pick is unusable (logged). */
-    async pickFolder() {
-      return _invokeSafe("open_project", undefined, null);
+     *  null when cancelled or the pick is unusable (logged). `kind` "academic"
+     *  opens it in the Academic space and scaffolds the folder picked there. */
+    async pickFolder(kind) {
+      return _invokeSafe("open_project", kind ? { kind } : undefined, null);
+    },
+    /** The Academic space folder (academic_space.rs); a tab on a folder directly
+     *  under it is an Academic project. "" outside the desktop app. */
+    async academicDir() {
+      if (!window.__TAURI__) return "";
+      return (await _invokeSafe("academic_dir", {}, "")) || "";
     },
 
     /** List project-relative file/dir paths matching `query`, for the
@@ -5053,6 +5021,20 @@
     },
 
     getState() { return state; },
+
+    /** OS notifications (src-tauri/src/notify/; app/notify.js). Rust decides and
+     *  sends; these pass the Settings switches and the visible tab, and drive the
+     *  Settings row. `notifyStatus`/`notifyRequest`/`notifyTest` resolve to
+     *  "granted" | "denied" | "notDetermined" | "unsupported", or null off-desktop. */
+    notifyConfigure(cfg) {
+      return _invokeSafe("notify_configure", cfg, null);
+    },
+    notifySetActive(tab) {
+      return _invokeSafe("notify_set_active", { tab: tab || null }, null);
+    },
+    notifyStatus() { return _invokeSafe("notify_status", {}, null); },
+    notifyRequest() { return _invokeSafe("notify_request_permission", {}, null); },
+    notifyTest() { return _invokeSafe("notify_test", {}, null); },
   };
 
   // ── Connect to Tauri IPC ──────────────────────────────────────────────────
@@ -5063,6 +5045,11 @@
       computerStates.set(sessionId, { state: computerState, error: null });
       notify();
     }).catch(error => console.error("[live] Computer Use state listener failed:", error));
+    // A click on a system notification: Rust brought the window forward; show its tab.
+    window.__TAURI__.event.listen("notify://open", event => {
+      const id = event.payload?.sessionId;
+      if (typeof id === "string") void window.OMP_BRIDGE.activateSession(id);
+    }).catch(error => console.error("[live] notification click listener failed:", error));
     window.__TAURI__.event.listen("computer-use://error", event => {
       const { sessionId, error } = event.payload;
       computerStates.set(sessionId, { state: computerStates.get(sessionId)?.state ?? null, error });

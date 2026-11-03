@@ -18,13 +18,6 @@ pub(super) fn tempdir(name: &str) -> PathBuf {
     crate::test_support::tempdir("browser", name)
 }
 
-/// The user's home, as the app would resolve it; `None` when unset.
-pub(super) fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-}
-
 /// Ample time for a proxy connection's peer check (`lsof` may take
 /// seconds).
 pub(super) const PEER_CHECK: Duration = Duration::from_secs(10);
@@ -68,7 +61,7 @@ pub(super) fn http_get(port: u16, path: &str) -> io::Result<String> {
 /// environment sets `OMP_REQUIRE_CHROMIUM=1` (CI): then a missing browser
 /// fails the test instead of letting it pass without running.
 pub(super) fn chromium_or_skip(test: &str) -> Option<PathBuf> {
-    let found = SettingsStore::load(None, home_dir())
+    let found = BundledChromium::in_tree()
         .launch_candidates()
         .and_then(|binaries| binaries.into_iter().next().ok_or_else(|| "none".to_owned()));
     let required = std::env::var_os("OMP_REQUIRE_CHROMIUM").is_some_and(|v| v == "1");
@@ -90,7 +83,6 @@ fn warm_up(binary: &Path) {
         flag.push(&profile);
         let started = std::process::Command::new(binary)
             .args([
-                "--headless=new",
                 "--no-first-run",
                 "--dump-dom",
                 "about:blank",
@@ -130,7 +122,7 @@ fn require_chromium(test: &str, found: Result<PathBuf, String>, required: bool) 
 pub(super) fn manager(name: &str) -> BrowserManager {
     BrowserManager::new(
         &tempdir(name),
-        Arc::new(SettingsStore::load(None, home_dir())),
+        Arc::new(BundledChromium::in_tree()),
     )
     .expect("manager")
 }
@@ -143,14 +135,10 @@ pub(super) fn manager_with_chromium(name: &str) -> Option<BrowserManager> {
     Some(manager(name))
 }
 
-/// A manager on `root` whose browser setting is `binary`.
+/// A manager on `root` whose browser is the fake `binary`.
 #[cfg(unix)]
 fn manager_using(root: &Path, binary: &Path) -> BrowserManager {
-    let settings = SettingsStore::load(None, home_dir());
-    settings
-        .set_path(&binary.display().to_string())
-        .expect("an executable test browser");
-    BrowserManager::new(root, Arc::new(settings)).expect("manager")
+    BrowserManager::new(root, Arc::new(BundledChromium::at(binary.to_path_buf()))).expect("manager")
 }
 
 /// A real-Chromium manager with session `s1`'s panel open at 400×300 CSS px
@@ -292,33 +280,11 @@ fn session_ids_that_are_not_file_name_safe_are_refused() {
     assert!(m.allocate("session-1700000000000_a").is_ok());
 }
 
-/// The settings store, not the webview, says what runs, and it is read at
-/// every launch: a change applies to the next one.
+/// A bundled browser that is gone at launch is the launch's error (the panel
+/// shows it); no other browser stands in.
 #[cfg(unix)]
 #[test]
-fn the_browser_setting_is_read_at_launch_time() {
-    let dir = tempdir("mgr-setting");
-    let (a, b) = (dir.join("a"), dir.join("b"));
-    std::fs::create_dir_all(&a).unwrap();
-    std::fs::create_dir_all(&b).unwrap();
-    let (bin_a, bin_b) = (fake_chromium(&a, "0"), fake_chromium(&b, "0"));
-    let settings = Arc::new(SettingsStore::load(None, home_dir()));
-    settings.set_path(&bin_a.display().to_string()).unwrap();
-    let m = BrowserManager::new(&dir.join("root"), Arc::clone(&settings)).unwrap();
-    m.allocate("s1").unwrap();
-    m.chromium("s1").unwrap();
-    assert_eq!((launch_count(&a), launch_count(&b)), (1, 0));
-    settings.set_path(&bin_b.display().to_string()).unwrap();
-    m.kill_chromium_for_test("s1");
-    m.chromium("s1").unwrap();
-    assert_eq!((launch_count(&a), launch_count(&b)), (1, 1));
-}
-
-/// A configured browser that is gone at launch is the launch's error (the
-/// panel shows it); no other browser stands in.
-#[cfg(unix)]
-#[test]
-fn a_configured_browser_that_vanished_is_an_error_not_a_fallback() {
+fn a_bundled_browser_that_vanished_is_an_error_not_a_fallback() {
     let dir = tempdir("mgr-vanished");
     let bin = fake_chromium(&dir, "0");
     let m = manager_using(&dir.join("root"), &bin);
@@ -327,7 +293,7 @@ fn a_configured_browser_that_vanished_is_an_error_not_a_fallback() {
     let Err(err) = m.chromium("s1") else {
         panic!("a vanished browser launched");
     };
-    assert!(err.contains("Settings → Browser"), "{err}");
+    assert!(err.contains("bundled Chromium is missing"), "{err}");
     assert_eq!(launch_count(&dir), 0);
     assert!(
         m.profile_dir_for_test("s1").is_none(),
@@ -352,7 +318,7 @@ fn pruning_deletes_only_the_directories_of_dead_processes() {
     std::fs::write(root.join("keep.txt"), "x").unwrap();
     std::fs::create_dir(root.join("keep-dir")).unwrap();
 
-    let m = BrowserManager::new(&root, Arc::new(SettingsStore::load(None, home_dir()))).unwrap();
+    let m = BrowserManager::new(&root, Arc::new(BundledChromium::in_tree())).unwrap();
     assert!(
         root.join(dead.to_string()).exists(),
         "startup itself prunes nothing"
@@ -464,7 +430,7 @@ fn pruning_reaps_an_orphaned_browser_before_deleting_its_dead_instance() {
     let _supervisor = ProcessSupervisor::attach(&child);
     std::fs::write(profile.with_extension("pid"), child.id().to_string()).unwrap();
     let status = reap_concurrently(child);
-    BrowserManager::new(&root, Arc::new(SettingsStore::load(None, home_dir())))
+    BrowserManager::new(&root, Arc::new(BundledChromium::in_tree()))
         .unwrap()
         .prune_stale_instances();
     let status = status
@@ -492,7 +458,7 @@ fn a_leftover_directory_with_our_own_pid_is_reaped_and_recreated() {
     let _supervisor = ProcessSupervisor::attach(&child);
     std::fs::write(profile.with_extension("pid"), child.id().to_string()).unwrap();
     let status = reap_concurrently(child);
-    let m = BrowserManager::new(&root, Arc::new(SettingsStore::load(None, home_dir()))).unwrap();
+    let m = BrowserManager::new(&root, Arc::new(BundledChromium::in_tree())).unwrap();
     assert!(!status
         .recv_timeout(Duration::from_secs(2))
         .expect("the earlier run's browser is killed")
@@ -518,7 +484,7 @@ fn pruning_does_not_kill_a_pid_without_the_exact_profile_argument() {
         let mut child = orphan_browser(suffix.map(|_| other.as_path()), true);
         let supervisor = ProcessSupervisor::attach(&child);
         std::fs::write(profile.with_extension("pid"), child.id().to_string()).unwrap();
-        BrowserManager::new(&root, Arc::new(SettingsStore::load(None, home_dir())))
+        BrowserManager::new(&root, Arc::new(BundledChromium::in_tree()))
             .unwrap()
             .prune_stale_instances();
         assert!(
@@ -544,7 +510,7 @@ fn pruning_does_not_kill_a_matching_pid_that_is_not_its_group_leader() {
         .spawn()
         .unwrap();
     std::fs::write(profile.with_extension("pid"), child.id().to_string()).unwrap();
-    BrowserManager::new(&root, Arc::new(SettingsStore::load(None, home_dir())))
+    BrowserManager::new(&root, Arc::new(BundledChromium::in_tree()))
         .unwrap()
         .prune_stale_instances();
     let alive = child.try_wait().unwrap().is_none();
@@ -561,7 +527,7 @@ fn a_symlinked_root_is_refused() {
     std::fs::create_dir(&target).unwrap();
     let link = dir.join("link");
     std::os::unix::fs::symlink(&target, &link).unwrap();
-    assert!(BrowserManager::new(&link, Arc::new(SettingsStore::load(None, home_dir()))).is_err());
+    assert!(BrowserManager::new(&link, Arc::new(BundledChromium::in_tree())).is_err());
     assert_eq!(
         std::fs::read_dir(&target).unwrap().count(),
         0,
@@ -574,7 +540,7 @@ fn a_symlinked_root_is_refused() {
 fn an_overlay_path_that_is_a_symlink_is_not_written_through() {
     let dir = tempdir("mgr-link-overlay");
     let root = dir.join("root");
-    let m = BrowserManager::new(&root, Arc::new(SettingsStore::load(None, home_dir()))).unwrap();
+    let m = BrowserManager::new(&root, Arc::new(BundledChromium::in_tree())).unwrap();
     let victim = dir.join("victim");
     std::fs::write(&victim, "precious").unwrap();
     let instance = root.join(std::process::id().to_string());
@@ -624,7 +590,7 @@ fn an_unavailable_manager_refuses_to_allocate() {
 #[test]
 fn shutdown_all_removes_only_its_own_instance_directory() {
     let dir = tempdir("mgr-shutdown-dir");
-    let m = BrowserManager::new(&dir, Arc::new(SettingsStore::load(None, home_dir()))).unwrap();
+    let m = BrowserManager::new(&dir, Arc::new(BundledChromium::in_tree())).unwrap();
     let instance = dir.join(std::process::id().to_string());
     let other = dir.join("other-instance");
     std::fs::create_dir(&other).unwrap();

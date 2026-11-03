@@ -2,10 +2,16 @@
 // mounted SideChat owns this controller and disposes it only on actual unmount.
 (function () {
   class CommandError extends Error {}
+  // `startCommand`/`startArgs`: the Rust command that starts the worker and its extra arguments
+  // (the Academic Copilot starts through `academic_copilot_start` with its project).
   function create({ sessionId, profile = null, model = "", invoke, listen, onChange,
-    timeoutMs = 30000, schedule = setTimeout, cancel = clearTimeout }) {
+    startCommand = "sidechat_start", startArgs = {}, timeoutMs = 30000, schedule = setTimeout, cancel = clearTimeout }) {
     const D = window.OMP_STREAM_DELTA;
-    let state = { phase: "idle", messages: [], liveText: null, error: null, model: "" };
+    // `level`: the thinking level in use ("off" when unset), "" while unknown or when the model has none.
+    let state = { phase: "idle", messages: [], liveText: null, error: null, model: "", level: "" };
+    let rawLevel = null;          // omp's effective level; null until it reports one
+    let levels = [];              // the levels the current model lists, `off` first
+    let desiredLevel = "";        // the pane's own pick, kept for the worker's lifetime
     let desiredModel = model;
     let defaultModel = "";
     let appliedModel = null;
@@ -24,6 +30,11 @@
     function update(patch) {
       state = { ...state, ...patch };
       if (!disposed) onChange(state);
+    }
+    /** What the pane shows: the level in use, but only for a model with thinking. */
+    function publishLevel() {
+      const level = levels.some(l => l !== "off") ? (rawLevel ?? "off") : "";
+      if (level !== state.level) update({ level });
     }
     function detail(error) { return error instanceof Error ? error.message : String(error); }
     function deferred(label) {
@@ -85,6 +96,8 @@
         return;
       }
       if (frame.type === "prompt_result") { finishPrompt(frame); return; }
+      // Every change of the applied level (a pick, a model switch re-clamping it): the effective one.
+      if (frame.type === "thinking_level_changed") { rawLevel = frame.thinkingLevel ?? "off"; publishLevel(); return; }
       if (!activePrompt) return;
       if (frame.type === "message_start" && frame.message.role === "assistant") {
         accumulator = D.seed(frame.message);
@@ -113,6 +126,25 @@
       else unlisteners.push(unlisten);
     }
     function detach() { for (const unlisten of unlisteners.splice(0)) unlisten(); }
+    /** The levels omp lists for the current model; `[]` when it cannot say. */
+    async function loadLevels() {
+      if (disposed || !started) return [];
+      try {
+        const data = await request("get_available_thinking_levels");
+        levels = Array.isArray(data?.levels) ? data.levels.filter(l => typeof l === "string") : [];
+      } catch { levels = []; }
+      publishLevel();
+      return levels;
+    }
+    /** Sends the pane's pick when omp lists it for this model; never a level omp did not list. */
+    async function applyLevel() {
+      if (!desiredLevel || desiredLevel === rawLevel || !levels.includes(desiredLevel)) return;
+      await request("set_thinking_level", { level: desiredLevel });
+    }
+    /** After a model switch: the list follows the model, the pick is re-applied where it still exists. */
+    function refreshLevels() {
+      loadLevels().then(applyLevel).catch(() => {});
+    }
     async function applyModel() {
       const key = desiredModel || defaultModel;
       if (key === appliedModel) return;
@@ -121,6 +153,7 @@
       await request("set_model", { provider: key.slice(0, slash), modelId: key.slice(slash + 1) });
       appliedModel = key;
       update({ model: key });
+      refreshLevels();
       // A setting changed during the acknowledgment: do not send using the old model.
       if ((desiredModel || defaultModel) !== key) await applyModel();
     }
@@ -141,12 +174,13 @@
           ready = deferred("SideChat startup handshake");
           const readyOutcome = ready.promise.then(() => null, error => error);
           started = true;
-          await invoke("sidechat_start", { sessionId, profile });
+          await invoke(startCommand, { sessionId, profile, ...startArgs });
           const startupError = await readyOutcome;
           if (startupError) throw startupError;
           if (disposed) return;
           const snapshot = await request("get_state");
           defaultModel = `${snapshot.model.provider}/${snapshot.model.id}`;
+          rawLevel = snapshot.thinkingLevel ?? "off";
           await applyModel();
           if (!disposed && state.phase !== "failed") update({ phase: "ready" });
         } catch (error) {
@@ -171,6 +205,8 @@
       update({ phase: "sending", error: null });
       try {
         await applyModel();
+        if (disposed) return false;
+        await applyLevel().catch(() => {});
         if (disposed) return false;
         activePrompt = id;
         accumulator = [];
@@ -220,8 +256,32 @@
       })();
       return disposeTask;
     }
-    return { start, send, stop, clear, dispose, setModel(value) { desiredModel = value; },
-      getState() { return state; } };
+    /** The levels of the current model, `off` first; `[]` for a model without thinking or before the worker is ready. */
+    function thinkingLevels() { return loadLevels(); }
+    /** The pane's own level pick. It is sent now when the worker is idle, else with the next message;
+     *  resolves false for a level the model does not list (nothing is sent). */
+    async function setThinkingLevel(level) {
+      if (disposed || !started) return false;
+      if (!levels.includes(level)) await loadLevels();
+      if (!levels.includes(level)) return false;
+      desiredLevel = level;
+      if (["ready", "error"].includes(state.phase)) {
+        try { await applyLevel(); } catch { return false; }
+      }
+      return true;
+    }
+    return { start, send, stop, clear, dispose, thinkingLevels, setThinkingLevel,
+      setModel(value) { desiredModel = value; }, getState() { return state; } };
   }
-  window.OMP_SIDECHAT = { create };
+  /** The model key a pane asks its worker for: the pane's own pick, else the Settings default, else
+   *  "" (the worker keeps the profile's model). */
+  const wantedModel = (picked, setting) => picked || setting || "";
+  /** A menu entry for `provider/id` when the catalog lacks it (or has not loaded); null for a bad key. */
+  function stubModel(key) {
+    const slash = String(key || "").indexOf("/");
+    return slash > 0 && slash < key.length - 1
+      ? { provider: key.slice(0, slash), id: key.slice(slash + 1), name: key.slice(slash + 1) }
+      : null;
+  }
+  window.OMP_SIDECHAT = { create, wantedModel, stubModel };
 })();

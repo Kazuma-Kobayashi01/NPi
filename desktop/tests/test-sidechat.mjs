@@ -35,6 +35,7 @@ function harness(options = {}) {
   };
   h.controller = win.OMP_SIDECHAT.create({
     sessionId: "sidechat-test", profile: "test-profile", model: options.model || "",
+    ...(options.copilot ? { startCommand: "academic_copilot_start", startArgs: { project: "/p/Thesis" } } : {}),
     onChange: state => views.push(state),
     schedule(fn) { const id = ++timerId; timers.set(id, fn); return id; },
     cancel(id) { timers.delete(id); },
@@ -45,9 +46,11 @@ function harness(options = {}) {
     },
     async invoke(name, args) {
       calls.push({ name, args });
-      if (name === "sidechat_start") {
+      if (name === "sidechat_start" || name === "academic_copilot_start") {
         assert.equal(listeners.size, 2, "listen before starting the process");
-        assert.deepEqual(args, { sessionId: "sidechat-test", profile: "test-profile" });
+        assert.deepEqual(args, options.copilot
+          ? { sessionId: "sidechat-test", profile: "test-profile", project: "/p/Thesis" }
+          : { sessionId: "sidechat-test", profile: "test-profile" });
         if (h.startError) throw new Error(h.startError);
         if (!h.noReady) h.emit({ type: "ready" });
         if (h.spawnGate) await h.spawnGate.promise;
@@ -57,6 +60,11 @@ function harness(options = {}) {
         if (command.type === "get_state") h.response(command, { model: { provider: "default", id: "chat" } });
         if (command.type === "set_model" && h.autoModel) h.response(command, {});
         if (command.type === "prompt" && h.autoPrompt) h.response(command, {});
+        if (command.type === "get_available_thinking_levels" && h.levels) h.response(command, { levels: h.levels });
+        if (command.type === "set_thinking_level" && h.autoLevel !== false) {
+          h.emit({ type: "thinking_level_changed", thinkingLevel: command.level });
+          h.response(command, {});
+        }
         if (command.type === "new_session" && h.autoClear) h.response(command, { cancelled: false });
         if (command.type === "abort" && h.autoAbort) h.response(command, {});
       }
@@ -272,6 +280,121 @@ await check("a rejected prompt response stops thinking without pretending it suc
   assert.equal(h.state().phase, "error");
   assert.equal(h.state().liveText, null);
   assert.equal(h.state().error, "prompt admission failed");
+  await h.dispose();
+});
+await check("the Academic Copilot starts through its own command with its project", async () => {
+  const h = harness({ copilot: true });
+  await h.controller.start();
+  assert.equal(h.state().phase, "ready");
+  assert.equal(h.calls.filter(call => call.name === "academic_copilot_start").length, 1);
+  assert.equal(h.calls.filter(call => call.name === "sidechat_start").length, 0);
+  await h.dispose();
+});
+await check("the pane's pick overrides the Settings model; bad keys give no menu entry", async () => {
+  const S = win.OMP_SIDECHAT;
+  assert.equal(S.wantedModel(null, "a/one"), "a/one");
+  assert.equal(S.wantedModel("b/two", "a/one"), "b/two");
+  assert.equal(S.wantedModel(null, ""), "");
+  assert.deepEqual(JSON.parse(JSON.stringify(S.stubModel("openai/gpt-5.5"))), { provider: "openai", id: "gpt-5.5", name: "gpt-5.5" });
+  assert.equal(S.stubModel("nope"), null);
+  assert.equal(S.stubModel("a/"), null);
+  assert.equal(S.stubModel(""), null);
+});
+await check("a model picked after start is applied with the next message, through the switching phase", async () => {
+  const h = harness();
+  await h.controller.start();
+  h.autoModel = false;
+  h.controller.setModel("picked/model");
+  const sent = h.controller.send("hi");
+  await tick();
+  assert.equal(h.state().phase, "sending");
+  const set = h.last("set_model");
+  assert.equal(set.provider, "picked");
+  assert.equal(h.last("prompt"), undefined);
+  h.response(set, {});
+  await sent;
+  assert.equal(h.state().phase, "generating");
+  assert.equal(h.state().model, "picked/model");
+  await h.dispose();
+});
+const settle = async () => { for (let i = 0; i < 6; i++) await tick(); };
+const levelCommands = h => h.commands.filter(command => command.type === "set_thinking_level").map(command => command.level);
+
+await check("the model's thinking levels are listed and the level in use is shown", async () => {
+  const h = harness({ levels: ["off", "low", "high"] });
+  assert.equal(h.state().level, "", "unknown before the worker is ready");
+  await h.controller.start();
+  await settle();
+  assert.equal(h.state().level, "off", "an unset level reads as off");
+  assert.deepEqual(await h.controller.thinkingLevels(), ["off", "low", "high"]);
+  h.emit({ type: "thinking_level_changed", thinkingLevel: "low" });
+  assert.equal(h.state().level, "low");
+  await h.dispose();
+});
+
+await check("a pick is validated against the list, sent, and never a level omp did not list", async () => {
+  const h = harness({ levels: ["off", "low", "high"] });
+  await h.controller.start();
+  await settle();
+  assert.equal(await h.controller.setThinkingLevel("xhigh"), false);
+  assert.deepEqual(levelCommands(h), []);
+  assert.equal(await h.controller.setThinkingLevel("high"), true);
+  assert.deepEqual(levelCommands(h), ["high"]);
+  assert.equal(h.state().level, "high", "the level shown follows omp's thinking_level_changed");
+  await h.dispose();
+});
+
+await check("a model without thinking shows no level, whatever omp reports", async () => {
+  for (const levels of [[], ["off"]]) {
+    const h = harness({ levels });
+    await h.controller.start();
+    await settle();
+    assert.equal(h.state().level, "");
+    h.emit({ type: "thinking_level_changed", thinkingLevel: "off" });
+    assert.equal(h.state().level, "");
+    assert.equal(await h.controller.setThinkingLevel("low"), false);
+    await h.dispose();
+  }
+});
+
+await check("a model change refreshes the list and the pick is applied again where it still exists", async () => {
+  const h = harness({ levels: ["off", "low", "high"] });
+  await h.controller.start();
+  await settle();
+  await h.controller.setThinkingLevel("high");
+  h.emit({ type: "thinking_level_changed", thinkingLevel: "low" });   // the new model clamped it
+  const listed = h.commands.filter(command => command.type === "get_available_thinking_levels").length;
+  h.controller.setModel("picked/model");
+  await h.controller.send("hi");
+  await settle();
+  assert.ok(h.commands.filter(command => command.type === "get_available_thinking_levels").length > listed, "the list was asked again");
+  assert.deepEqual(levelCommands(h), ["high", "high"]);
+  h.levels = [];
+  h.controller.setModel("plain/model");
+  h.emit({ type: "prompt_result", id: h.last("prompt").id, status: "success" });
+  await settle();
+  await h.controller.send("again");
+  await settle();
+  assert.equal(h.state().level, "", "the new model has no thinking: the level goes away");
+  await h.dispose();
+});
+
+await check("a pick made while the worker is busy waits for the next message", async () => {
+  const h = harness({ levels: ["off", "low", "high"], autoPrompt: false });
+  await h.controller.start();
+  await settle();
+  const sent = h.controller.send("work");
+  await settle();
+  assert.equal(h.state().phase, "generating");
+  assert.equal(await h.controller.setThinkingLevel("low"), true);
+  assert.deepEqual(levelCommands(h), [], "nothing is sent mid-reply");
+  h.response(h.last("prompt"), {});
+  await sent;
+  h.emit({ type: "prompt_result", id: h.last("prompt").id, status: "success" });
+  await settle();
+  h.autoPrompt = true;
+  await h.controller.send("next");
+  assert.deepEqual(levelCommands(h), ["low"]);
   await h.dispose();
 });
 console.log(`SideChat: ${passed} deterministic regressions passed`);

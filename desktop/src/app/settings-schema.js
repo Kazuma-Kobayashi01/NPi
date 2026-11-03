@@ -51,6 +51,10 @@
       ] },
     ] },
     { id: "appearance", icon: "sparkle", title: "Appearance", blurb: "Colour theme, accent, density and text size of the whole window.", groups: [
+      { name: "Language", rows: [
+        tweak("language", "seg", "Language", "The language of this interface. It does not change the language the model replies in or any system prompt: tell the model in your instructions or message.", "language locale i18n translation chinese japanese english 语言 中文 繁體 日本語",
+          { stack: true, get options() { const I = window.OMP_I18N; return opts(["auto", ...(I?.LOCALES ?? [])], { auto: "Auto", ...(I?.NAMES ?? {}) }); } }),
+      ] },
       { name: "Detail", rows: [
         custom("uiDetail", "Interface detail", "Five steps from the barest window to the fullest. A step sets the side panel, folding and the prompt box's extras at once; each can still be changed on its own.", "detail minimal simple full complexity density panel",
           { keys: ["uiDetail"] }),
@@ -101,6 +105,8 @@
         custom("chatMemory", "Memory", "What the assistant remembers about you across chats. It reads this at the start of each chat and can add to it when you ask it to remember something.", "memory remember notes"),
       ] },
       { name: "Folding", rows: [
+        tweak("foldWork", "seg", "Thinking and tools", "`box` folds a turn's thinking and tool calls into one line you can open; `rows` shows each as its own row (the Detailed and Full steps).", "group box summary one line claude",
+          { workMode: true, get options() { return opts(collapse()?.WORK_MODES ?? ["box", "rows"], { box: "one line", rows: "rows" }); } }),
         tweak("foldThinking", "seg", "Thinking", "`auto` folds it once newer turns arrive, `open` and `folded` fix it.", "collapse reasoning",
           { fold: "thinking", get options() { return foldOptions(); } }),
         tweak("foldTools", "seg", "Tool output", "Same choice for tool cards. A card you toggle yourself stays that way.", "collapse cards",
@@ -176,9 +182,6 @@
       ] },
     ] },
     { id: "browser", icon: "web", title: "Browser", blurb: "The Chromium panel the agent and you share in each tab.", groups: [
-      { name: "Chromium", src: "browser.json", rows: [
-        custom("chromium", "Browser", "Which Chromium the panel runs; panels started afterwards use it. `automatic` finds one installed on this PC.", "chrome edge chromium"),
-      ] },
       { name: "Links", rows: [
         tweak("browserLocalhostInPanel", "toggle", "Open localhost links in the panel", "A click on a `localhost` link in the chat opens it here instead of your system browser.", "dev server url"),
       ] },
@@ -215,6 +218,10 @@
         tweak("restoreTabs", "toggle", "Reopen tabs on launch", "Start with the tabs and conversations that were open when you quit.", "restore session startup"),
         tweak("confirmBusyClose", "toggle", "Ask before closing a working tab", "Closing a tab whose agent is mid-turn stops it. Ask first, also when quitting.", "confirm quit close"),
         tweak("autoName", "toggle", "Name tabs automatically", "omp titles a new conversation from its first turns (one small model call). `/rename` always wins.", "rename title"),
+      ] },
+      { name: "Notifications", rows: [
+        custom("notifications", "System notifications", "A banner from the system when the window is not in front: a long run finished, a question or approval is waiting, or a request failed. It names the project and says nothing of the conversation.", "notification notify banner alert toast permission sound",
+          { keys: ["notifications", "notifyDone", "notifyAsk", "notifyFailed"] }),
       ] },
     ] },
     { id: "approvals", icon: "check", title: "Approvals", sep: true, blurb: "When the agent asks before it runs a tool.", groups: [
@@ -261,6 +268,7 @@
   function value(row, values) {
     const v = values?.[row.key];
     if (row.fold) return collapse()?.foldModes(values)[row.fold] ?? v ?? "auto";
+    if (row.workMode) return collapse()?.foldModes(values).work ?? v ?? "box";
     return clamp(row, v === undefined ? defaults()[row.key] : v);
   }
 
@@ -341,8 +349,10 @@
   // `moreKw`: keywords known only at runtime (the shortcut action names).
   // Custom rows show `label` and `desc` too, plus runtime text of their own;
   // `version` shows runtime text as its desc, `shortcuts` only its editor.
+  // The text in the UI language is searched as well as the English one.
+  const tr = (s) => (s ? window.OMP_I18N?.t(s) ?? s : s);
   const searchText = (row) =>
-    `${row.label} ${(row.desc ?? "").replace(/`/g, "")} ${row.kw ?? ""} ${row.moreKw?.() ?? ""}`.toLowerCase();
+    `${row.label} ${tr(row.label)} ${(row.desc ?? "").replace(/`/g, "")} ${tr(row.desc ?? "").replace(/`/g, "")} ${row.kw ?? ""} ${row.moreKw?.() ?? ""}`.toLowerCase();
 
   /** Visible rows whose label, desc or keywords contain the query,
    *  case-insensitive, grouped by section › group in page order. */

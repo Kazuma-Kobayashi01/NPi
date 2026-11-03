@@ -1,0 +1,118 @@
+/* Generative UI Display components (text, card, stat, badge, alert, progress,
+   table, key-value, collapsible, tabs, timeline, charts, divider). The shell
+   and the Interactive controls are in generative-ui.css, whose `.gui-card`
+   defines the --gui-* aliases used here. */
+.gui-text { flex: 1 1 100%; white-space: pre-wrap; }
+.gui-text-label { display: block; margin-bottom: 4px; color: var(--fg); font-weight: 600; }
+.gui-text p { margin: 0; color: var(--fg-2); line-height: 1.6; }
+
+/* Item card */
+.gui-item-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--gui-raise); transition: border-color 150ms ease; }
+.gui-item-card:hover { border-color: var(--line); }
+.gui-item-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.gui-item-card-title { margin: 0; color: var(--fg); font-size: 14px; font-weight: 600; }
+.gui-item-card-sub { margin: 0; color: var(--fg-3); font-size: var(--d-text-xs); }
+.gui-item-card-body { margin: 0; color: var(--fg-2); line-height: 1.55; }
+
+/* Stat */
+.gui-stat { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--gui-raise); }
+.gui-stat-label { color: var(--fg-3); font-size: var(--d-text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.gui-stat-value-row { display: flex; align-items: baseline; gap: 6px; }
+.gui-stat-val { color: var(--fg); font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.gui-stat-unit { color: var(--fg-3); font-size: var(--d-text-xs); font-weight: 500; }
+.gui-stat-diff { font-size: var(--d-text-xs); font-weight: 600; }
+.gui-stat-diff.trend-up { color: var(--gui-ok); }
+.gui-stat-diff.trend-down { color: var(--gui-bad); }
+
+/* Badges: a tinted pill per variant. */
+.gui-badge-wrap { display: flex; gap: 6px; }
+.gui-badge { --tint: var(--fg-3); display: inline-flex; align-items: center; padding: 2px 9px; border: 1px solid color-mix(in oklab, var(--tint) 32%, transparent); border-radius: var(--r-pill); background: color-mix(in oklab, var(--tint) 13%, transparent); color: var(--tint); font-size: var(--d-text-xs); font-weight: 600; }
+.gui-badge.default { --tint: var(--fg-3); border-color: var(--line-soft); background: var(--gui-raise); color: var(--fg-2); }
+.gui-badge.success { --tint: var(--gui-ok); }
+.gui-badge.warning { --tint: var(--gui-warn); }
+.gui-badge.danger { --tint: var(--gui-bad); }
+.gui-badge.info { --tint: var(--gui-info); }
+
+/* Alerts: a tinted panel with a bar of the level's colour. */
+.gui-alert { --tint: var(--gui-info); position: relative; display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 12px 18px; overflow: hidden; border: 1px solid color-mix(in oklab, var(--tint) 28%, var(--line-soft)); border-radius: var(--r-2); background: color-mix(in oklab, var(--tint) 8%, transparent); color: var(--fg); }
+.gui-alert::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--tint); }
+.gui-alert.success { --tint: var(--gui-ok); }
+.gui-alert.warning { --tint: var(--gui-warn); }
+.gui-alert.danger { --tint: var(--gui-bad); }
+.gui-alert-title { font-weight: 600; }
+.gui-alert-msg { margin: 0; color: var(--fg-2); line-height: 1.5; }
+
+/* Progress */
+.gui-progress { display: flex; flex-direction: column; gap: 7px; }
+.gui-progress-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: var(--d-text-xs); }
+.gui-progress-label { color: var(--fg-2); font-weight: 600; }
+.gui-progress-val { color: var(--fg-3); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.gui-progress-bar { width: 100%; height: 8px; overflow: hidden; border-radius: var(--r-pill); background: color-mix(in oklab, var(--line) 70%, transparent); }
+.gui-progress-fill { height: 100%; border-radius: var(--r-pill); background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 70%, var(--gui-info)), var(--accent)); transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Table: a rounded frame, quiet header, row hover from the theme. */
+.gui-table-wrap { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
+.gui-table-title, .gui-kv-title, .gui-timeline-title { margin: 0; color: var(--fg); font-size: 14px; font-weight: 600; }
+.gui-table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: var(--r-2); font-variant-numeric: tabular-nums; }
+.gui-table th, .gui-table td { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); text-align: left; }
+.gui-table th { background: var(--gui-raise); color: var(--fg-3); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.gui-table tbody tr:last-child td { border-bottom: 0; }
+.gui-table tbody tr { transition: background 120ms ease; }
+.gui-table tbody tr:hover td { background: var(--bg-hover); }
+
+/* Key-value */
+.gui-key-value { display: flex; flex-direction: column; gap: 8px; }
+.gui-kv-list { display: flex; flex-direction: column; margin: 0; padding: 2px 14px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--gui-raise); }
+.gui-kv-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.gui-kv-row:last-child { border-bottom: 0; }
+.gui-kv-label { margin: 0; color: var(--fg-3); font-weight: 500; }
+.gui-kv-value { margin: 0; color: var(--fg); font-weight: 500; text-align: right; }
+
+/* Collapsible */
+.gui-collapsible { overflow: hidden; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--gui-raise); }
+.gui-collapsible-sum { display: flex; align-items: center; gap: 8px; padding: 10px 14px; color: var(--fg); font-weight: 600; cursor: pointer; user-select: none; list-style: none; transition: background 120ms ease; }
+.gui-collapsible-sum::-webkit-details-marker { display: none; }
+.gui-collapsible-sum::before { content: ""; width: 6px; height: 6px; border: solid var(--fg-3); border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform 180ms ease; }
+.gui-collapsible[open] > .gui-collapsible-sum::before { transform: rotate(45deg); }
+.gui-collapsible-sum:hover { background: var(--bg-hover); }
+.gui-collapsible-body { padding: 12px 14px; border-top: 1px solid var(--line-soft); color: var(--fg-2); line-height: 1.6; }
+.gui-collapsible-body p, .gui-tab-panel p { margin: 0; }
+
+/* Tabs */
+.gui-tabs { overflow: hidden; border: 1px solid var(--line-soft); border-radius: var(--r-2); }
+.gui-tabs-bar { display: flex; gap: 2px; padding: 0 6px; overflow-x: auto; border-bottom: 1px solid var(--line-soft); background: var(--gui-raise); }
+.gui-tab-btn { padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--fg-3); font-size: var(--d-text-sm); font-weight: 500; white-space: nowrap; cursor: pointer; transition: color 150ms ease, border-color 150ms ease; }
+.gui-tab-btn:hover { color: var(--fg); }
+.gui-tab-btn.is-active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+.gui-tab-panel { padding: 14px; color: var(--fg-2); line-height: 1.6; }
+
+/* Timeline: one rail, a marker per step. */
+.gui-timeline { display: flex; flex-direction: column; gap: 10px; }
+.gui-timeline-list { position: relative; display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 0 0 0 18px; list-style: none; border-left: 2px solid var(--line-soft); }
+.gui-timeline-item { position: relative; display: flex; gap: 12px; }
+.gui-timeline-marker { position: absolute; left: -26px; top: 3px; box-sizing: border-box; width: 14px; height: 14px; border: 3px solid var(--bg-surface); border-radius: 50%; background: var(--line-bright); }
+.gui-timeline-item.done .gui-timeline-marker { background: var(--gui-ok); }
+.gui-timeline-item.current .gui-timeline-marker { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); animation: gui-pulse 1.8s ease-in-out infinite; }
+.gui-timeline-item.failed .gui-timeline-marker { background: var(--gui-bad); }
+.gui-timeline-content { display: flex; flex-direction: column; gap: 2px; }
+.gui-timeline-time { color: var(--fg-4); font-family: var(--font-mono); font-size: 11px; }
+.gui-timeline-heading { color: var(--fg); font-weight: 600; }
+.gui-timeline-desc { margin: 2px 0 0; color: var(--fg-3); font-size: var(--d-text-xs); line-height: 1.45; }
+
+/* Charts (the bar and pie fallbacks) */
+.gui-chart-wrap { width: 100%; }
+.gui-chart-fallback { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--gui-raise); }
+.gui-chart-title { margin: 0; color: var(--fg); font-size: 14px; font-weight: 600; }
+.gui-bar-list { display: flex; flex-direction: column; gap: 8px; }
+.gui-bar-row { display: flex; align-items: center; gap: 10px; font-size: var(--d-text-xs); }
+.gui-bar-label { width: 80px; flex-shrink: 0; overflow: hidden; color: var(--fg-2); text-overflow: ellipsis; white-space: nowrap; }
+.gui-bar-track { flex: 1; height: 10px; overflow: hidden; border-radius: var(--r-pill); background: color-mix(in oklab, var(--line) 60%, transparent); }
+.gui-bar-seg { height: 100%; border-radius: var(--r-pill); }
+.gui-bar-num { width: 60px; color: var(--fg-3); font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.gui-pie-pbar { display: flex; width: 100%; height: 14px; overflow: hidden; border-radius: var(--r-pill); }
+.gui-pie-seg { height: 100%; }
+
+/* Divider */
+.gui-divider { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.gui-divider::before, .gui-divider::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.gui-divider-label { color: var(--fg-4); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

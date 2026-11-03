@@ -239,3 +239,11 @@
   border-radius: 8px;
   transition: box-shadow 80ms ease;
 }
+
+/* Context card: a category with a list (MCP tools, skills, rules) folds open to it. */
+.sp-fold-row { cursor: pointer; border-radius: 6px; }
+.sp-fold-row:hover { background: var(--bg-hover); }
+.sp-fold-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sp-count { margin-left: 6px; color: var(--fg-4); font-size: var(--d-text-xs); }
+.sp-detail { margin: 0 0 4px 22px; padding: 0; list-style: none; color: var(--fg-3); font-size: var(--d-text-xs); line-height: 1.6; }
+.sp-detail li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

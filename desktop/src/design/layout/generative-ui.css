@@ -1,14 +1,34 @@
-/* Data-only forms stay independent of collapsible tool output. */
-.gui-card { margin: 14px 0; padding: 18px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--bg-surface); color: var(--fg); font-family: var(--font-sans); font-size: var(--d-text-sm); overflow-wrap: anywhere; }
-.gui-card.gui-mode-display { border-left-color: var(--teal, var(--accent)); }
+/* Generative UI cards: the shell, header, layouts and Interactive controls.
+   Display components live in generative-ui-display.css. Data-only forms stay
+   independent of collapsible tool output. Colours come from the theme tokens
+   only; the four status tints are local aliases of them. */
+.gui-card {
+  --gui-ok: var(--lime, #7FCB6B); --gui-info: var(--cyan, #5CC8E8); --gui-warn: var(--amber, #E8A33D); --gui-bad: var(--rose, #F0707A);
+  --gui-raise: color-mix(in oklab, var(--bg-elevated) 55%, var(--bg-surface));
+  --gui-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative; margin: 14px 0; padding: 20px 20px 18px; overflow: hidden; overflow-wrap: anywhere;
+  border: 1px solid var(--line-soft); border-radius: var(--r-3); background: var(--bg-surface); color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px -12px rgba(0, 0, 0, 0.22);
+  font-family: var(--font-sans); font-size: var(--d-text-sm); line-height: 1.5;
+}
+/* A hairline of the mode's colour along the top edge. */
+.gui-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 15%, transparent) 70%, transparent); opacity: 0.85; }
+.gui-card.gui-mode-display::before { background: linear-gradient(90deg, var(--gui-info), color-mix(in oklab, var(--gui-info) 15%, transparent) 70%, transparent); }
+.gui-card.gui-failed { border-color: color-mix(in oklab, var(--gui-bad) 45%, var(--line)); color: var(--gui-bad); }
+
 .gui-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.gui-eyebrow { color: var(--accent); font-size: var(--d-text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-.gui-mode-display .gui-eyebrow { color: var(--teal, var(--accent)); }
-.gui-head h3 { margin: 4px 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; }
-.gui-id { margin: 4px 0 18px; color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; }
-.gui-state { padding: 3px 8px; border: 1px solid var(--line); border-radius: 20px; color: var(--fg-3); font-size: var(--d-text-xs); white-space: nowrap; }
-.gui-state.is-submitted { color: var(--accent); border-color: var(--accent); }
-.gui-state.is-terminal { opacity: 0.85; }
+.gui-eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: var(--d-text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.gui-eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in oklab, currentColor 18%, transparent); }
+.gui-mode-display .gui-eyebrow { color: var(--gui-info); }
+.gui-head h3 { margin: 6px 0 0; font-family: var(--font-display); font-size: 17px; font-weight: 650; line-height: 1.3; letter-spacing: -0.005em; }
+.gui-id { margin: 6px 0 16px; color: var(--fg-5); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.02em; user-select: all; }
+.gui-state { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 3px 10px 3px 8px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--gui-raise); color: var(--fg-3); font-size: var(--d-text-xs); font-weight: 500; white-space: nowrap; }
+.gui-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: gui-pulse 1.8s ease-in-out infinite; }
+.gui-state.is-terminal::before { background: var(--fg-4); animation: none; }
+.gui-state.is-submitted { color: var(--gui-ok); border-color: color-mix(in oklab, var(--gui-ok) 40%, var(--line-soft)); background: color-mix(in oklab, var(--gui-ok) 10%, transparent); }
+.gui-state.is-submitted::before { background: var(--gui-ok); }
+.gui-mode-display .gui-state::before { background: var(--gui-info); animation: none; }
+@keyframes gui-pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
 
 /* Layouts */
 .gui-fields { display: flex; flex-direction: column; gap: 18px; margin: 0; padding: 0; border: 0; min-width: 0; }
@@ -20,156 +40,83 @@
 
 /* Interactive fields */
 .gui-field { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.gui-label { font-size: var(--d-text-sm); color: var(--fg-2); font-weight: 500; }
-.gui-field input[type="text"], .gui-field input[type="number"], .gui-field input[type="date"], .gui-field input[type="time"], .gui-field textarea, .gui-field select { box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-input); color: var(--fg); font: inherit; }
-.gui-field textarea { resize: vertical; max-height: 32em; }
-.gui-field input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
-.gui-number-wrap { display: flex; align-items: center; gap: 8px; }
-.gui-input-unit { font-size: var(--d-text-xs); color: var(--fg-3); font-weight: 500; white-space: nowrap; }
-.gui-options { display: flex; flex-direction: column; gap: 8px; }
-.gui-options label { display: flex; align-items: center; gap: 8px; color: var(--fg-2); }
-.gui-opt-desc { display: block; font-size: var(--d-text-xs); color: var(--fg-4); margin-left: 24px; }
+.gui-label { color: var(--fg-2); font-size: var(--d-text-sm); font-weight: 600; letter-spacing: 0.005em; }
+.gui-label [aria-hidden] { color: var(--accent); }
+.gui-field input[type="text"], .gui-field input[type="number"], .gui-field input[type="date"], .gui-field input[type="time"], .gui-field textarea, .gui-field select {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-2);
+  background: var(--bg-input); color: var(--fg); font: inherit; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.06);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+.gui-field input::placeholder, .gui-field textarea::placeholder { color: var(--fg-5); }
+.gui-field input:hover:not(:disabled), .gui-field textarea:hover:not(:disabled), .gui-field select:hover:not(:disabled) { border-color: var(--line-bright); }
+.gui-field input:focus-visible, .gui-field textarea:focus-visible, .gui-field select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.gui-field textarea { resize: vertical; max-height: 32em; line-height: 1.5; }
+.gui-field select { appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-3) 50%), linear-gradient(135deg, var(--fg-3) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+.gui-number-wrap { display: flex; align-items: center; gap: 10px; }
+.gui-input-unit { color: var(--fg-3); font-size: var(--d-text-xs); font-weight: 500; white-space: nowrap; }
 .gui-field .st-tgl { align-self: flex-start; }
-.gui-actions { display: flex; gap: 8px; }
-.gui-card :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.gui-card [aria-invalid="true"] { border-color: var(--rose); }
-.gui-card .st-seg { flex-wrap: wrap; }
+.gui-card .st-seg { flex-wrap: wrap; align-self: flex-start; max-width: 100%; }
+.gui-card .st-seg button { padding: 5px 13px; }
 .gui-card .st-slider { width: 100%; }
 .gui-card .st-slider input { min-width: 0; flex: 1; }
-.gui-result { color: var(--accent); font-family: var(--font-mono); white-space: pre-wrap; }
-.gui-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
-.gui-footer > span { font-size: var(--d-text-xs); color: var(--fg-3); }
-.gui-error, .gui-failed { color: var(--rose); font-size: var(--d-text-xs); }
+
+/* Checkbox rows: a custom box, the description under the label. */
+.gui-options { display: flex; flex-direction: column; gap: 6px; }
+.gui-options label { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; padding: 9px 12px; border: 1px solid var(--line-soft); border-radius: var(--r-2); background: var(--gui-raise); color: var(--fg-2); cursor: pointer; transition: border-color 150ms ease, background 150ms ease; }
+.gui-options label:hover { border-color: var(--line-bright); background: var(--bg-hover); }
+.gui-options label:has(input:checked) { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); background: var(--accent-soft); color: var(--fg); }
+.gui-opt-desc { grid-column: 2; display: block; margin: 1px 0 0; color: var(--fg-4); font-size: var(--d-text-xs); }
+.gui-field input[type="checkbox"] { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 16px; height: 16px; margin: 0; border: 1.5px solid var(--line-bright); border-radius: 5px; background: var(--bg-input); cursor: pointer; transition: background 150ms ease, border-color 150ms ease; }
+.gui-field input[type="checkbox"]:checked { border-color: var(--accent); background: var(--accent); }
+.gui-field input[type="checkbox"]:checked::after { content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+/* Option cards: the radio dot sits in the corner, the chosen card is tinted. */
+.gui-option-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.gui-option-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 13px 14px 13px 40px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--gui-raise); cursor: pointer; user-select: none; transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms var(--gui-ease); }
+.gui-option-card::before { content: ""; position: absolute; left: 14px; top: 15px; width: 14px; height: 14px; box-sizing: border-box; border: 1.5px solid var(--line-bright); border-radius: 50%; background: var(--bg-input); transition: border-color 160ms ease, border-width 160ms var(--gui-ease); }
+.gui-option-card:hover { border-color: var(--line-bright); background: var(--bg-hover); transform: translateY(-1px); }
+.gui-option-card.is-selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 6px 16px -10px var(--accent-glow); }
+.gui-option-card.is-selected::before { border-color: var(--accent); border-width: 4.5px; }
+.gui-option-card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; }
+.gui-option-card-title { color: var(--fg); font-size: 14px; font-weight: 600; }
+.gui-option-card-tags { display: flex; flex: none; gap: 4px; }
+.gui-option-card-tags .gui-badge { white-space: nowrap; }
+.gui-option-card-desc { margin: 0; color: var(--fg-3); font-size: var(--d-text-xs); line-height: 1.45; }
+
+/* States */
+.gui-card :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.gui-field input:focus-visible, .gui-field textarea:focus-visible, .gui-field select:focus-visible { outline: none; }
+.gui-card .gui-field.gui-field [aria-invalid="true"] { border-color: var(--gui-bad); box-shadow: 0 0 0 3px color-mix(in oklab, var(--gui-bad) 16%, transparent); }
+.gui-error, .gui-failed { color: var(--gui-bad); font-size: var(--d-text-xs); }
 .gui-field .gui-error { margin: 0; }
-.gui-card fieldset:disabled { opacity: .65; }
+.gui-card fieldset:disabled { opacity: 0.6; }
 .gui-card:has(.is-terminal) fieldset:disabled { opacity: 1; }
+.gui-card fieldset:disabled input, .gui-card fieldset:disabled select, .gui-card fieldset:disabled textarea, .gui-card fieldset:disabled .gui-option-card, .gui-card fieldset:disabled label { cursor: not-allowed; }
 
-/* ── Display Components Styling ── */
-.gui-text { flex: 1 1 100%; white-space: pre-wrap; }
-.gui-text-label { display: block; font-weight: 600; margin-bottom: 4px; color: var(--fg); }
-.gui-text p { margin: 0; color: var(--fg-2); line-height: 1.6; }
+/* A recorded value reads as a chip, not as code. */
+.gui-result { align-self: flex-start; max-width: 100%; padding: 3px 11px; border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line-soft)); border-radius: var(--r-pill); background: var(--accent-soft); color: var(--fg); font-family: var(--font-sans); font-weight: 500; white-space: pre-wrap; }
+.gui-card:has(.is-terminal) .gui-fields { gap: 14px; }
 
-/* Item Card */
-.gui-item-card { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-surface-elevated, var(--bg-surface)); display: flex; flex-direction: column; gap: 6px; }
-.gui-item-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.gui-item-card-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
-.gui-item-card-sub { margin: 0; font-size: var(--d-text-xs); color: var(--fg-3); }
-.gui-item-card-body { margin: 0; font-size: var(--d-text-sm); color: var(--fg-2); line-height: 1.5; }
-
-/* Stat Component */
-.gui-stat { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-surface-elevated, var(--bg-surface)); display: flex; flex-direction: column; gap: 4px; }
-.gui-stat-label { font-size: var(--d-text-xs); color: var(--fg-3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
-.gui-stat-value-row { display: flex; align-items: baseline; gap: 6px; }
-.gui-stat-val { font-size: 22px; font-weight: 700; color: var(--fg); font-family: var(--font-display); }
-.gui-stat-unit { font-size: var(--d-text-xs); color: var(--fg-3); font-weight: 500; }
-.gui-stat-diff { font-size: var(--d-text-xs); font-weight: 600; }
-.gui-stat-diff.trend-up { color: var(--teal, #10b981); }
-.gui-stat-diff.trend-down { color: var(--rose, #ef4444); }
-
-/* Badges */
-.gui-badge-wrap { display: flex; gap: 6px; }
-.gui-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: var(--d-text-xs); font-weight: 600; border: 1px solid transparent; }
-.gui-badge.default { background: var(--bg-surface-elevated, var(--line)); color: var(--fg-2); }
-.gui-badge.success { background: rgba(16, 185, 129, 0.15); color: var(--teal, #10b981); border-color: rgba(16, 185, 129, 0.3); }
-.gui-badge.warning { background: rgba(245, 158, 11, 0.15); color: var(--amber, #f59e0b); border-color: rgba(245, 158, 11, 0.3); }
-.gui-badge.danger { background: rgba(239, 68, 68, 0.15); color: var(--rose, #ef4444); border-color: rgba(239, 68, 68, 0.3); }
-.gui-badge.info { background: rgba(59, 130, 246, 0.15); color: var(--blue, #3b82f6); border-color: rgba(59, 130, 246, 0.3); }
-
-/* Alerts */
-.gui-alert { padding: 12px 14px; border-radius: 8px; border: 1px solid transparent; display: flex; flex-direction: column; gap: 4px; }
-.gui-alert.info { background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: var(--fg); }
-.gui-alert.success { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.25); color: var(--fg); }
-.gui-alert.warning { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.25); color: var(--fg); }
-.gui-alert.danger { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.25); color: var(--fg); }
-.gui-alert-title { font-weight: 600; font-size: var(--d-text-sm); }
-.gui-alert-msg { margin: 0; font-size: var(--d-text-sm); line-height: 1.5; color: var(--fg-2); }
-
-/* Progress */
-.gui-progress { display: flex; flex-direction: column; gap: 6px; }
-.gui-progress-head { display: flex; justify-content: space-between; align-items: center; font-size: var(--d-text-xs); }
-.gui-progress-label { font-weight: 500; color: var(--fg-2); }
-.gui-progress-val { font-family: var(--font-mono); color: var(--fg-3); }
-.gui-progress-bar { width: 100%; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.gui-progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; border-radius: 4px; }
-
-/* Table */
-.gui-table-wrap { overflow-x: auto; display: flex; flex-direction: column; gap: 8px; }
-.gui-table-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
-.gui-table { width: 100%; border-collapse: collapse; font-size: var(--d-text-sm); }
-.gui-table th, .gui-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.gui-table th { font-weight: 600; color: var(--fg-2); background: var(--bg-surface-elevated, var(--bg-surface)); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
-.gui-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
-
-/* Key-Value */
-.gui-key-value { display: flex; flex-direction: column; gap: 8px; }
-.gui-kv-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
-.gui-kv-list { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.gui-kv-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; border-bottom: 1px dashed var(--line); gap: 12px; }
-.gui-kv-label { margin: 0; font-size: var(--d-text-sm); color: var(--fg-3); font-weight: 500; }
-.gui-kv-value { margin: 0; font-size: var(--d-text-sm); color: var(--fg); font-weight: 500; text-align: right; }
-
-/* Collapsible */
-.gui-collapsible { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg-surface-elevated, var(--bg-surface)); }
-.gui-collapsible-sum { padding: 10px 14px; font-weight: 600; cursor: pointer; user-select: none; color: var(--fg); background: transparent; }
-.gui-collapsible-sum:hover { background: rgba(255, 255, 255, 0.03); }
-.gui-collapsible-body { padding: 12px 14px; border-top: 1px solid var(--line); color: var(--fg-2); font-size: var(--d-text-sm); line-height: 1.6; }
-.gui-collapsible-body p { margin: 0; }
-
-/* Tabs */
-.gui-tabs { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.gui-tabs-bar { display: flex; border-bottom: 1px solid var(--line); background: var(--bg-surface-elevated, var(--bg-surface)); overflow-x: auto; }
-.gui-tab-btn { padding: 9px 16px; border: 0; background: transparent; color: var(--fg-3); font-size: var(--d-text-sm); font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
-.gui-tab-btn:hover { color: var(--fg); }
-.gui-tab-btn.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-.gui-tab-panel { padding: 14px; color: var(--fg-2); font-size: var(--d-text-sm); line-height: 1.6; }
-.gui-tab-panel p { margin: 0; }
-
-/* Timeline */
-.gui-timeline { display: flex; flex-direction: column; gap: 10px; }
-.gui-timeline-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
-.gui-timeline-list { list-style: none; margin: 0; padding: 0 0 0 16px; position: relative; display: flex; flex-direction: column; gap: 16px; border-left: 2px solid var(--line); }
-.gui-timeline-item { position: relative; display: flex; gap: 12px; }
-.gui-timeline-marker { position: absolute; left: -23px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--line); border: 2px solid var(--bg-surface); }
-.gui-timeline-item.done .gui-timeline-marker { background: var(--teal, #10b981); }
-.gui-timeline-item.current .gui-timeline-marker { background: var(--accent); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25); }
-.gui-timeline-item.failed .gui-timeline-marker { background: var(--rose, #ef4444); }
-.gui-timeline-content { display: flex; flex-direction: column; gap: 2px; }
-.gui-timeline-time { font-size: 11px; color: var(--fg-4); font-family: var(--font-mono); }
-.gui-timeline-heading { font-size: var(--d-text-sm); font-weight: 600; color: var(--fg); }
-.gui-timeline-desc { margin: 2px 0 0; font-size: var(--d-text-xs); color: var(--fg-3); line-height: 1.4; }
-
-/* Charts (Fallback) */
-.gui-chart-wrap { width: 100%; }
-.gui-chart-fallback { padding: 14px; border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
-.gui-chart-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--fg); }
-.gui-bar-list { display: flex; flex-direction: column; gap: 8px; }
-.gui-bar-row { display: flex; align-items: center; gap: 10px; font-size: var(--d-text-xs); }
-.gui-bar-label { width: 80px; flex-shrink: 0; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gui-bar-track { flex: 1; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; }
-.gui-bar-seg { height: 100%; border-radius: 6px; }
-.gui-bar-num { width: 60px; text-align: right; color: var(--fg-3); font-family: var(--font-mono); }
-.gui-pie-pbar { display: flex; width: 100%; height: 14px; border-radius: 7px; overflow: hidden; }
-.gui-pie-seg { height: 100%; }
-
-/* Divider */
-.gui-divider { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
-.gui-divider::before, .gui-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.gui-divider-label { font-size: 11px; font-weight: 600; color: var(--fg-4); text-transform: uppercase; letter-spacing: 0.05em; }
-
-/* Option Cards (Interactive) */
-.gui-option-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.gui-option-card { padding: 14px; border: 2px solid var(--line); border-radius: 8px; background: var(--bg-surface-elevated, var(--bg-surface)); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px; user-select: none; }
-.gui-option-card:hover { border-color: var(--accent-light, var(--accent)); transform: translateY(-1px); }
-.gui-option-card.is-selected { border-color: var(--accent); background: rgba(99, 102, 241, 0.06); }
-.gui-option-card.is-recommended { border-color: rgba(16, 185, 129, 0.4); }
-.gui-option-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.gui-option-card-title { font-size: 14px; font-weight: 600; color: var(--fg); }
-.gui-option-card-tags { display: flex; gap: 4px; }
-.gui-option-card-desc { margin: 0; font-size: var(--d-text-xs); color: var(--fg-3); line-height: 1.4; }
+.gui-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.gui-footer > span { color: var(--fg-4); font-size: var(--d-text-xs); }
+.gui-actions { display: flex; gap: 8px; margin-left: auto; }
+.gui-actions .st-btn, .gui-footer > .st-btn { padding: 7px 16px; border-radius: var(--r-2); font-weight: 500; transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 120ms ease; }
+.gui-actions .st-btn:active:not(:disabled), .gui-footer > .st-btn:active:not(:disabled) { transform: translateY(1px); }
+.gui-actions .st-btn.ac, .gui-footer > .st-btn.ac { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px -4px var(--accent-glow); }
+.gui-actions .st-btn.ac:hover:not(:disabled), .gui-footer > .st-btn.ac:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 88%, #fff); }
 
 @media (max-width: 520px) {
-  .gui-card { padding: 14px; }
+  .gui-card { padding: 16px 14px 14px; }
   .gui-row .gui-fields { flex-direction: column; }
   .gui-row .gui-field { flex-basis: auto; }
   .gui-option-cards { grid-template-columns: 1fr; }
+  .gui-footer { flex-direction: column; align-items: stretch; }
+  .gui-actions { margin-left: 0; }
+  .gui-actions .st-btn { flex: 1; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gui-card *, .gui-card *::before, .gui-card *::after { animation: none !important; transition: none !important; }
+  .gui-option-card:hover { transform: none; }
 }

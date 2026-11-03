@@ -2,6 +2,7 @@
    a failed request's failure) + InlinePlan (mini-plan rendered inline in the
    first plan reply). */
 
+const _AB_substantial = text => (window.OMP_WORK_BOX ? window.OMP_WORK_BOX.hasSubstance(text) : !!text?.trim());
 const { Icon: _ChatIcon, MarkdownContent: _ChatMd, AnnotablePlan: _ChatAP, CopyButton: _ChatCopy } = window;
 
 function InlinePlan({ plan }) {
@@ -43,7 +44,7 @@ function InlinePlan({ plan }) {
 // carry an empty text block (a turn that went straight to a tool call).
 const _messageText = (msg) => (msg.blocks ?? [])
   .map((b) => {
-    if (b.type === "text" && b.text?.trim()) return b.text;
+    if (b.type === "text" && _AB_substantial(b.text)) return b.text;
     if (b.type === "image") return b.alt ? `[image: ${b.alt}]` : (b.mimeType ? `[image: ${b.mimeType}]` : "[image]");
     return null;
   })
@@ -129,7 +130,8 @@ function ThoughtDisclosure({ msg, collapsed, onToggleCollapse }) {
 }
 
 // ChatView owns collapse defaults and persistent per-tab manual overrides.
-function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, thoughtCollapsed, onToggleCollapse }) {
+// `hideThought`: the thinking sits in the turn's work box above (chat/work-box.jsx).
+function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, thoughtCollapsed, onToggleCollapse, hideThought = false }) {
   // A failed request has no text of its own; its copy is the provider's error.
   const copyText = msg.streaming ? "" : (_messageText(msg) || msg.failure?.raw || "");
   return (
@@ -145,14 +147,17 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
           <span className="mono" style={{ color: "var(--accent)" }}>{msg.model ?? "–"}</span>
           <span className="chip muted" style={{ color: "var(--fg-3)" }}>{msg.time}</span>
           {msg.retries && <_AB_Retries retries={msg.retries} />}
-          <_ChatCopy className="ass-copy" label="Copy message" text={copyText} />
         </div>
-        <ThoughtDisclosure
-          msg={msg}
-          collapsed={thoughtCollapsed}
-          onToggleCollapse={onToggleCollapse}
-        />
+        {!hideThought && (
+          <ThoughtDisclosure
+            msg={msg}
+            collapsed={thoughtCollapsed}
+            onToggleCollapse={onToggleCollapse}
+          />
+        )}
         {msg.blocks?.map((b, i) => {
+          // A lone "." between tool calls is filler, not shown (app/work-box.js).
+          if (b.type === "text" && !msg.streaming && !_AB_substantial(b.text)) return null;
           if (b.type === "text") {
             // Last message in plan mode: render annotatable blocks (not streaming)
             if (annotable && !msg.streaming) {
@@ -174,9 +179,14 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
           return null;
         })}
         {msg.failure && <_AB_Failure failure={msg.failure} />}
+        {copyText && (
+          <div className="ass-actions">
+            <_ChatCopy className="ass-copy" label="Copy message" text={copyText} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-Object.assign(window, { AssistantBubble, InlinePlan, ThoughtDisclosure });
+Object.assign(window, { AssistantBubble, InlinePlan, ThoughtDisclosure, ThoughtBody });

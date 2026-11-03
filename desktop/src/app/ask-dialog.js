@@ -143,7 +143,107 @@
     return runs;
   }
 
+  /* ── The subagent preferences ask ────────────────────────────────────
+     omp's Auto subagent mode asks which model and thinking level a batch
+     uses: an ask call with exactly two pick-one questions, `model` (every
+     configured model, the current one `recommended`) and `thinking` (omp's
+     levels). The frames carry no tool call id, so it is recognised by those
+     two ids and the level labels. The dialog shows it as one form (a
+     searchable model list, a pill row of levels) but answers through the same
+     draft and `answers()` as the generic dialog, so omp sees the same reply. */
+  const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+  /** `{ model, thinking }` question indexes when `questions` is the subagent
+   *  preferences ask, else null. */
+  function subagentForm(questions) {
+    if (!Array.isArray(questions) || questions.length !== 2) return null;
+    const model = questions.findIndex(q => q.id === "model");
+    const thinking = questions.findIndex(q => q.id === "thinking");
+    if (model < 0 || thinking < 0) return null;
+    const m = questions[model];
+    const t = questions[thinking];
+    if (m.multi || t.multi || m.options.length === 0 || t.options.length === 0) return null;
+    if (!t.options.every(o => THINKING_LEVELS.includes(o.label))) return null;
+    return { model, thinking };
+  }
+
+  /** Model option indexes in display order: the recommended (current) model
+   *  first, then the one picked last time, then the rest as omp sent them. */
+  function modelOrder(q, last) {
+    const all = q.options.map((_, i) => i);
+    const lastIndex = last ? q.options.findIndex(o => o.label === last) : -1;
+    const head = [q.recommended, lastIndex].filter((v, i, a) => Number.isInteger(v) && v >= 0 && a.indexOf(v) === i);
+    return [...head, ...all.filter(i => !head.includes(i))];
+  }
+
+  /** The indexes of `order` whose label or description holds every word of `query`. */
+  function filterModels(q, order, query) {
+    const words = String(query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return order;
+    return order.filter(i => {
+      const o = q.options[i];
+      const hay = `${o.label} ${o.description ?? ""}`.toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }
+
+  /** The form's first draft: the recommended option of each question, else
+   *  what was picked last time (`last` = `{ model, thinking }` labels), else
+   *  the first model and the `medium` level (or the first level). */
+  function subagentDraft(questions, form, last) {
+    const draft = emptyDraft(questions);
+    for (const key of ["model", "thinking"]) {
+      const qi = form[key];
+      const q = questions[qi];
+      const lastIndex = last?.[key] ? q.options.findIndex(o => o.label === last[key]) : -1;
+      const fallback = key === "thinking" ? Math.max(0, q.options.findIndex(o => o.label === "medium")) : 0;
+      const oi = q.recommended ?? (lastIndex >= 0 ? lastIndex : fallback);
+      draft[qi] = { picks: [oi], text: "" };
+    }
+    return draft;
+  }
+
+  /** What to remember for next time: the labels picked (typed models are not). */
+  function subagentMemory(questions, form, draft) {
+    const label = key => {
+      const e = draft[form[key]];
+      return e.text.trim() || e.picks.length === 0 ? null : questions[form[key]].options[e.picks[0]].label;
+    };
+    return { model: label("model"), thinking: label("thinking") };
+  }
+
+  const MEMORY_KEY = "omp.askSubagent.v1";
+
+  /** The model and level picked last time as `{ model, thinking }` labels, or
+   *  null. A preselection only; storage can be missing or blocked. */
+  function readSubagentMemory(storage) {
+    try {
+      const raw = (storage ?? globalThis.localStorage)?.getItem(MEMORY_KEY);
+      const v = raw ? JSON.parse(raw) : null;
+      return v && typeof v === "object" ? { model: typeof v.model === "string" ? v.model : null, thinking: typeof v.thinking === "string" ? v.thinking : null } : null;
+    } catch { return null; }
+  }
+
+  function saveSubagentMemory(memory, storage) {
+    try { (storage ?? globalThis.localStorage)?.setItem(MEMORY_KEY, JSON.stringify(memory)); } catch { /* a preselection only */ }
+  }
+
+  /** The draft with what is typed in the model box applied: a name that is
+   *  (or, alone, matches) one model picks it, anything else is the typed
+   *  answer omp already accepts. `query` null or blank changes nothing. */
+  function applyModelQuery(questions, form, draft, query) {
+    const text = String(query ?? "").trim();
+    if (!text) return draft;
+    const q = questions[form.model];
+    const exact = q.options.findIndex(o => o.label.toLowerCase() === text.toLowerCase());
+    if (exact >= 0) return pick(draft, questions, form.model, exact);
+    const matches = filterModels(q, q.options.map((_, i) => i), text);
+    return matches.length === 1 ? pick(draft, questions, form.model, matches[0]) : type(draft, questions, form.model, text);
+  }
+
   window.OMP_ASK_DIALOG = {
+    readSubagentMemory, saveSubagentMemory, applyModelQuery,
+    subagentForm, modelOrder, filterModels, subagentDraft, subagentMemory, THINKING_LEVELS,
     parseQuestions, emptyDraft, pick, type, unanswered, missing, answersOnClick, answers, timeoutLabel, timeoutNote,
     codeRuns,
   };

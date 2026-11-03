@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The main chat's agent can search and read the Academic library: three read-only host tools (`academic_projects`, `academic_search`, `academic_read`) are registered in every tab, scoped to projects under `NPi/Academic` and never able to write.
+- Interface language: Settings → General → Language (Auto, 简体中文, 繁體中文, English (US), 日本語). Covers the Settings page (titles, descriptions, search), the sidebar and mode switch, window tooltips, the start page and its greetings, the composer basics, SideChat / Academic Copilot, the thinking-and-tools box and the subagent setup form; it never changes the model's reply language. Other text stays English for now (`docs/architecture/i18n.md`).
+- Academic Copilot: in Academic, the side-pane button opens a per-project assistant that runs without omp's own tools and only has three Rust-executed host tools (`research_search`, `research_read`, `research_save`) over the project's local files; originals and raw data are read-only, nothing reaches the network or a shell. PDFs are not readable yet and search is a plain term match (`docs/architecture/academic-space.md`).
+- Academic mode: a third segment (mortarboard icon) beside Chat and Code in the top-left mode switch, with scholarly start-page greetings. It shares Code's project tabs and sidebar for now and starts omp with the Academic mode settings (`app_mode.rs`).
+- Composer attachment menu offers images and folder addresses. Folder picks append a quoted path reference to the originating tab's draft without switching projects or reading directory contents.
+- Pending composer images open the shared lightbox with keyboard navigation, Escape dismissal and focus restoration; removing an image remains a separate action.
+
+### Changed
+
+- The sidebar's account line no longer shows the provider's plan name (for example `· plus`); it is the profile's photo and name only.
+- The Chat | Code | Academic switch is now a picker at the top of the sidebar: the current mode with a chevron, opening a menu of the three with a one-line hint each and a check on the current (arrow keys, Enter, Escape).
+- The Context card breaks the window down further, like Claude's: system tools, MCP tools (per server), skills and rules get their own rows with counts, and the MCP, skills and rules rows fold open to their names.
+- The browser panel and the agent's browser now always run the Chromium bundled with the app (Chrome for Testing `chrome-headless-shell` 156.0.8078.80, fetched by `scripts/fetch-chromium.sh` into `resources/chromium/`, about 205 MB unpacked). The app no longer uses an installed Chrome, Chromium, Edge or Brave.
+- SideChat / Academic Copilot: fixed the page shaking and the missing inner scrollbar (the pane now keeps the stage row's height, so the message list scrolls inside it and the window no longer grows with the conversation; following a stream is once per frame and only at the bottom), and the model menu now has the Effort row to change the thinking level (hidden for a model without thinking).
+- System notifications now go through the OS properly. On macOS they use `UNUserNotificationCenter` (the system asks for permission once; Settings → Session → Notifications shows allowed / blocked / not asked and has a test button; clicking a banner focuses the window and opens its tab) instead of `osascript`, whose banners belonged to Script Editor. Rust decides from every tab's frames, not only the active one: a run that took 8 s or more finished, a question or approval is waiting, or a request failed or the agent died, when the window is not in front or the event is in another tab, one banner per tab and kind per 20 s. The banner shows the project folder and a fixed sentence in zh-CN, zh-TW, en-US or ja-JP, never reply text. Off by default (`docs/architecture/notifications.md`).
+- The folded thinking/tools line is now a capsule (icon, one muted line, a count while running, a chevron that turns when opened, a gentle shimmer while a step runs). A reply that is only punctuation (a lone `.` or `…` some models write between tool calls) is treated as filler: it no longer shows as an empty bubble with a copy button and it joins the work box.
+- Chat folds each turn's thinking and tool calls into one quiet line ("已思考 · 用了 3 个工具"; while running, a spinner with the current step) that opens to the thinking and the usual tool cards, instead of a row per thought and per tool. Failures, approvals, asks and rendered UI stay visible outside it. Interface detail steps 4 (Detailed) and 5 (Full), or Settings → Chat → Folding "Thinking and tools" = rows, bring back the separate rows. Step descriptions in Settings say what each does.
+- SideChat and the Academic Copilot pane redesigned: one-line header with a phase dot, a compact empty state (the Copilot offers three starter prompts), chat-style messages, an auto-growing composer, and a model picker at the composer's bottom left (favorites, Manage models). The pick is the pane's own; Settings → Chat → SideChat stays the default. The close button had no icon (an unknown icon name) and now shows one.
+- Generative UI restyled (Display and Interactive): soft cards with a status dot, radio-dot option cards, custom checkbox rows and select, chip-style recorded values, tinted badges/alerts, framed tables, themed hover/focus/invalid/disabled states in every theme, narrow-width and reduced-motion handling; wire format and behaviour unchanged. Display components moved to `layout/generative-ui-display.css`.
+- omp's Auto subagent model/thinking question now shows as one compact form: a searchable model list (current model first, last pick remembered) and a row of thinking-level pills with a single **Start agents** button, instead of two radio lists plus typing; the reply to omp is unchanged.
+- The Chat | Code | Academic switch moved from the window's top-left to the top of the left sidebar as a labelled segmented control with a sliding active thumb and arrow-key navigation (`design/mode-switch.jsx`).
+- Work folders: new Code projects default to `~/Documents/NPi/Code`, Chat runs in `~/Documents/NPi/Chat` (was `Chats`; nothing is migrated), Academic projects live in `~/Documents/NPi/Academic`. Academic has its own sidebar and start-page projects, and a folder picked there is scaffolded with the standard research folders plus project rules and skills under `.omp/` (`docs/architecture/academic-space.md`).
+- Chat mode's base prompt now makes Interactive UI the default way to ask the user anything (approach, parameters, candidate choice) with one batched form, reserves Display UI for read-only structured information, and demotes the `ask` tool to a fallback; git-branch and verification rules are scoped to code changes instead of every conversation.
+- Completed assistant replies expose a persistent, borderless copy action below the output, preserving the original Markdown and existing success/failure feedback.
+
+### Removed
+
+- Settings → Browser → Chromium (a custom browser path, `browser.json`, `browser_settings` / `browser_set_path` / `browser_pick_path`) and automatic discovery of installed browsers. An old `browser.json` is ignored.
+
 ## [2.0.0.378] - 2026-11-02
 
 Desktop 2.0.0.378 bundles Kernel 2.0.10, the offline managed Python runtime,

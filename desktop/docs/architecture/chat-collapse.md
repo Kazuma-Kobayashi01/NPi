@@ -6,6 +6,30 @@ Code: `app/chat-collapse.js` (`OMP_COLLAPSE`), `app/tool-groups.js`
 Tests: `test-chat-collapse.mjs`, `test-tool-groups.mjs`, `test-stream-delta.mjs`
 and `test-scroll-pin.mjs`.
 
+## One box per turn (default)
+
+`app/work-box.js` (`OMP_WORK_BOX`, regression `test-work-box.mjs`) and
+`design/chat/work-box.jsx` fold the thinking and the tool calls between two
+visible replies into **one** disclosure, like Claude's "Thought · used 3 tools":
+folded it is one quiet line (`已思考 · 用了 3 个工具`); while the turn runs it shows
+a spinner dot with what is happening now (`思考中…` or the running tool's title)
+and the tool count. Opened, it lists the thinking text and the usual tool cards
+unchanged (their own fold state still follows `foldTools`). Only the user opens
+it (`collapseOverrides["work:<first _id>"] === false`); Escape closes it.
+
+A reply that has text stays its own bubble, and its thinking moves into the box
+just above it (`AssistantBubble` `hideThought`). Never inside a box: failed
+tool calls, approvals, asks, rendered UI, retries, goals, jobs, compaction,
+failed replies and the user's messages, which also end a box. A reply with
+neither thinking nor visible content is not drawn. Display-only: the transcript
+and indices are untouched, `data-msg-idx` is the box's first index, and
+Collapse all / Expand all toggles the boxes (`overridesForAll(..., { work })`).
+
+The mode is `foldModes(tweaks).work`: `box` or `rows` (today's separate
+thinking rows and `ToolGroup`s, described below). Settings → Chat → Folding
+"Thinking and tools" sets it; unset it follows the Interface detail step
+(`app/ui-detail.js`): steps 1-3 `box`, steps 4 (Detailed) and 5 (Full) `rows`.
+
 ## Four text levels
 
 The dark chat surface overrides the existing semantic variables only within
@@ -92,3 +116,7 @@ from collapsing underneath a history reader.
 
 No backend protocol, overall layout, image viewer or chart renderer is changed
 by this disclosure layer.
+
+## Filler replies
+
+A text block with no letter, digit, emoji, code fence or list/table marker (a lone `.` or `…` that some models write between tool calls) is filler (`OMP_WORK_BOX.hasSubstance`): `groupWork` does not count it as a visible reply, `AssistantBubble` does not render or copy it once the message is no longer streaming. The transcript itself is unchanged.

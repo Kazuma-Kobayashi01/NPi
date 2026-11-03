@@ -55,6 +55,12 @@
   <script src="mermaid.min.js"></script>
   <script src="app/marked-setup.js"></script>
   <script src="app/format.js"></script>
+  <!-- UI language (docs/architecture/i18n.md): the module, then the dictionaries that register into it.
+       Before everything that renders text; read late (inside functions) by the schema and the components. -->
+  <script src="app/i18n.js"></script>
+  <script src="app/i18n/ui.js"></script>
+  <script src="app/i18n/settings.js"></script>
+  <script src="app/i18n/settings-desc.js"></script>
   <script src="app/tooltip.js"></script>
   <script src="app/ui-detail.js"></script>
   <script src="app/run-phase.js"></script>
@@ -103,6 +109,7 @@
        app-live.jsx destructure window.OMP_COLLAPSE at top level, so this
        must load before them. -->
   <script src="app/tool-groups.js"></script>
+  <script src="app/work-box.js"></script>
   <script src="app/chat-collapse.js"></script>
   <script src="app/generative-ui.js"></script>
 
@@ -275,6 +282,7 @@
   <script src="app/settings-schema.js"></script>
   <script src="app/settings-tab.js"></script>
   <script src="app/computer-use.js"></script>
+  <script src="app/notify.js"></script>
   <script src="app/computer-rpc.js"></script>
 
   <!-- Tweak storage (localStorage `omp-desktop:tweaks`): useTweaks and the
@@ -341,7 +349,9 @@
   <script type="text/babel" src="design/chat/assistant-bubble.jsx"></script>
   <script type="text/babel" src="design/chat/tool-card.jsx"></script>
   <script type="text/babel" src="design/chat/tool-group.jsx"></script>
+  <script type="text/babel" src="design/chat/work-box.jsx"></script>
   <!-- ask-bubble.jsx destructures window.AskDialog at top level. -->
+  <script type="text/babel" src="design/chat/ask-subagent-form.jsx"></script>
   <script type="text/babel" src="design/chat/ask-dialog.jsx"></script>
   <script type="text/babel" src="design/chat/ask-bubble.jsx"></script>
   <!-- chat-view.jsx destructures window.RetryRow, window.GoalRow and
@@ -409,6 +419,8 @@
   <script type="text/babel" src="design/side-chat.jsx"></script>
   <script type="text/babel" src="design/context-menu.jsx"></script>
   <script type="text/babel" src="design/sidebar-account.jsx"></script>
+  <!-- Mode switch atop both sidebars: they render window.ModeSwitch, so it loads first. -->
+  <script type="text/babel" src="design/mode-switch.jsx"></script>
   <script type="text/babel" src="design/chat-sidebar.jsx"></script>
   <script type="text/babel" src="design/chrome.jsx"></script>
   <!-- Project sidebar (#27); reads window.TabRunDot / window.TabLabel
@@ -471,6 +483,7 @@
   <script type="text/babel" src="design/settings/rows-account.jsx"></script>
   <script type="text/babel" src="design/settings/rows-detail.jsx"></script>
   <script type="text/babel" src="design/settings/rows-approvals.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-notifications.jsx"></script>
   <script type="text/babel" src="design/settings/shortcuts-editor.jsx"></script>
   <script type="text/babel" src="design/settings/page.jsx"></script>
 

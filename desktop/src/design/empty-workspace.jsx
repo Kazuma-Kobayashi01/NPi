@@ -9,6 +9,8 @@
    while no tab existed (e.g. a failed "Open with") show underneath.
    ═════════════════════════════════════════════════════════════════════ */
 
+// The UI language (app/i18n.js).
+const _EW_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { MarkdownContent, Icon, ModelMenu } = window;
 const { basename, parentName } = window.OMP_PROJECT_NAV;
 
@@ -52,8 +54,8 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
   const [seed, setSeed] = React.useState(() => Math.random());
   React.useEffect(() => { setSeed(Math.random()); }, [appMode]);
   const title = React.useMemo(
-    () => window.OMP_GREETINGS.greeting({ mode: appMode, name: userName, hour: new Date().getHours(), seed }),
-    [appMode, userName, seed],
+    () => window.OMP_GREETINGS.greeting({ mode: appMode, name: userName, hour: new Date().getHours(), seed, locale: window.OMP_I18N.locale() }),
+    [appMode, userName, seed, window.OMP_I18N.locale()],
   );
   const taRef = React.useRef(null);
   const rootRef = React.useRef(null);
@@ -147,7 +149,7 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
   };
 
   return (
-    <div className="empty-ws" aria-label="no project open" ref={rootRef}>
+    <div className="empty-ws" aria-label={_EW_T("no project open")} ref={rootRef}>
       {wallpaper && <div className="wallpaper" style={{ "--wp": `url("${new URL(wallpaper, document.baseURI).href}")` }} aria-hidden="true" />}
       <div className="welcome">
         <h1 className="welcome-title"><WelcomeMark />{title}</h1>
@@ -158,20 +160,20 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
               {atts.map(a => (
                 <span key={a.id} className="welcome-att">
                   <img src={a.src} alt={a.name || "attached image"} />
-                  <button type="button" aria-label="Remove image" onClick={() => setAtts(l => l.filter(x => x.id !== a.id))}>×</button>
+                  <button type="button" aria-label={_EW_T("Remove image")} onClick={() => setAtts(l => l.filter(x => x.id !== a.id))}>×</button>
                 </span>
               ))}
             </div>
           )}
           <div className="welcome-line">
-            <button type="button" className="welcome-plus" title="Add images" aria-label="Add images"
+            <button type="button" className="welcome-plus" title={_EW_T("Add images")} aria-label={_EW_T("Add images")}
               onMouseDown={e => e.preventDefault()} onClick={() => fileRef.current?.click()}>
               <Icon name="plus" size={16} />
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }}
               onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
             <textarea ref={taRef} className="welcome-ta selectable" rows="1" value={text}
-              placeholder="How can I help you today?"
+              placeholder={_EW_T("How can I help you today?")}
               onChange={e => setText(e.target.value)}
               onKeyDown={onKey}
               onPaste={e => {
@@ -181,7 +183,7 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)} />
             <button type="button" className="welcome-send" disabled={!canSend} onMouseDown={e => e.preventDefault()} onClick={send}
-              title={project ? "Start" : "Choose a folder first"} aria-label="Start">
+              title={_EW_T(project ? "Start" : "Choose a folder first")} aria-label={_EW_T("Start")}>
               <Icon name="arrow" size={13} />
             </button>
           </div>
@@ -191,7 +193,7 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
           {!chat && <div className="welcome-picker">
             <button type="button" className="welcome-pick" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(v => !v)}>
               <Icon name="folder" size={14} />
-              <span>{project ? basename(project) : "Project or folder"}</span>
+              <span>{project ? basename(project) : _EW_T("Project or folder")}</span>
               <Icon name="chev" size={10} />
             </button>
             {menu && (
@@ -205,7 +207,7 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
                 ))}
                 {recents.length > 0 && <div className="welcome-sep" />}
                 <button type="button" role="menuitem" className="welcome-item" onClick={chooseOther}>
-                  <Icon name="plus" size={13} /><span className="welcome-item-name">Open another folder…</span>
+                  <Icon name="plus" size={13} /><span className="welcome-item-name">{_EW_T("Open another folder…")}</span>
                 </button>
               </div>
             )}
@@ -221,7 +223,7 @@ function EmptyWorkspace({ notes, recents = [], onPickFolder, onStart, bridge, ap
               onManage={onManageModels} />
             <div className="welcome-mode">
               <button type="button" className={`mm-btn${modeMenu ? " on" : ""}`} aria-haspopup="menu" aria-expanded={modeMenu}
-                title="Tool approvals" onClick={() => setModeMenu(v => !v)}>
+                title={_EW_T("Tool approvals")} onClick={() => setModeMenu(v => !v)}>
                 <span className={`mm-btn-name${mode === "yolo" ? " warn" : ""}`}>{_ewCap(window.OMP_APPROVAL_MODE.labelOf(mode))}</span>
               </button>
               {modeMenu && (

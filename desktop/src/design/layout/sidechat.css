@@ -1,0 +1,127 @@
+/* SideChat / Academic Copilot pane (design/side-chat.jsx). Calm header on one
+   line, messages in the main chat's tokens, one rounded composer whose footer
+   holds the model picker (left), phase and send. */
+/* The pane is a grid item of `.stage` (an `auto` row). Without `min-height: 0` its automatic minimum
+   is its content, so the row, the stage and the window's scroll height grow with every message,
+   the message list never gets a bounded height (no inner scrollbar) and the hidden `.window` can be
+   scrolled by the caret or a focus: the whole app shifts. `min-height: 0` + `contain: size` keep the
+   pane at the row's height whatever it holds. `overflow-x: clip` keeps the model menu inside. */
+.sidechat-pane {
+  width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: 100%;
+  contain: size layout;
+  display: flex; flex-direction: column;
+  background: var(--bg-window); border-left: 1px solid var(--line);
+  position: relative; overflow-x: clip;
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+.sc-head {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 10px 10px 10px 14px; min-height: 28px;
+  border-bottom: 1px solid var(--line); background: var(--bg-elevated);
+}
+.sc-icon { display: inline-flex; color: var(--accent); }
+.sc-titles { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.sc-title { font-weight: 600; font-size: var(--d-text-sm); color: var(--fg); white-space: nowrap; }
+.sc-sub {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--d-text-xs); color: var(--fg-4);
+}
+.sc-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--fg-5, var(--fg-4)); }
+.sc-dot.ok { background: var(--lime, #7ac27a); }
+.sc-dot.bad { background: var(--rose, #d85b62); }
+.sc-dot.busy { background: var(--amber); animation: pulseDot 1.4s ease-in-out infinite; }
+.sc-ibtn {
+  appearance: none; border: 0; background: transparent; cursor: pointer; flex: none;
+  width: 26px; height: 26px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--fg-3);
+}
+.sc-ibtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.sc-ibtn:disabled { opacity: 0.35; cursor: default; }
+.sc-ibtn:focus-visible, .sc-send:focus-visible, .sc-starter:focus-visible, .sc-jump:focus-visible, .sc-retry:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+
+/* ── Messages ─────────────────────────────────────────────────────── */
+.sc-body-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.sc-body {
+  flex: 1; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  overflow-anchor: none; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--line-bright) transparent;
+  padding: 16px 14px; display: flex; flex-direction: column; gap: 14px;
+  font-size: var(--d-text-sm); color: var(--fg-2);
+}
+.sc-msg { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.sc-msg.assistant { color: var(--fg); }
+.sc-msg.user { align-self: flex-end; max-width: 88%; }
+.sc-user-text {
+  padding: 8px 12px; border-radius: 12px 12px 4px 12px;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 18%, var(--bg-elevated)), var(--bg-elevated));
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--line-bright));
+  color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.sc-thinking { display: inline-flex; align-items: center; gap: 8px; color: var(--fg-3); }
+.sc-error { color: var(--rose, #d85b62); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sc-retry {
+  align-self: flex-start; appearance: none; cursor: pointer; padding: 5px 12px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--line-bright); color: var(--fg-2); font: inherit;
+}
+.sc-retry:hover { background: var(--bg-hover); color: var(--fg); }
+.sc-jump {
+  position: absolute; right: 14px; bottom: 10px; width: 28px; height: 28px; border-radius: 50%;
+  appearance: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-elevated); border: 1px solid var(--line-bright); color: var(--fg-2); box-shadow: var(--shadow-pop);
+}
+.sc-jump:hover { color: var(--fg); background: var(--bg-hover); }
+
+/* ── Empty state ──────────────────────────────────────────────────── */
+.sc-empty { margin: auto 0; padding: 0 2px; display: flex; flex-direction: column; gap: 8px; }
+.sc-empty-title { font-size: var(--d-text); font-weight: 600; color: var(--fg); }
+.sc-empty-text { margin: 0; color: var(--fg-3); line-height: 1.55; text-wrap: pretty; }
+.sc-starters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sc-starter {
+  appearance: none; cursor: pointer; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: var(--d-text-xs);
+  background: transparent; color: var(--fg-2); border: 1px solid var(--line-bright);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.sc-starter:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); border-color: color-mix(in oklab, var(--accent) 40%, var(--line-bright)); }
+.sc-starter:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Composer ─────────────────────────────────────────────────────── */
+.sc-composer { flex: none; padding: 8px 12px 12px; }
+.sc-box {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 6px 12px;
+  background: var(--bg-input, var(--bg-elevated)); border: 1px solid var(--line); border-radius: 14px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.sc-box:focus-within { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent); }
+.sc-input {
+  width: 100%; min-height: 22px; resize: none; overflow-y: hidden; padding: 0;
+  background: transparent; border: 0; outline: none; font: inherit; font-size: var(--d-text-sm);
+  line-height: 1.5; color: var(--fg);
+}
+.sc-input:focus, .sc-input:focus-visible { outline: none; box-shadow: none; }
+.sc-input::placeholder { color: var(--fg-4); }
+.sc-input:disabled { opacity: 0.6; }
+.sc-foot { display: flex; align-items: center; gap: 8px; min-height: 28px; margin-left: -6px; }
+.sc-foot .mm { min-width: 0; flex: 0 1 auto; }
+.sc-foot .mm-btn { max-width: 100%; }
+.sc-foot .mm-btn-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-grow { flex: 1; }
+.sc-status { flex: none; font-size: var(--d-text-xs); color: var(--fg-4); white-space: nowrap; }
+.sc-send {
+  flex: none; appearance: none; cursor: pointer; width: 26px; height: 26px; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--on-accent, #fff); transition: opacity 120ms ease, transform 120ms ease;
+}
+.sc-send:hover:not(:disabled) { transform: translateY(-1px); }
+.sc-send:disabled { background: var(--line); color: var(--fg-4); cursor: default; }
+.sc-send.stop { background: var(--bg-active, var(--bg-hover)); color: var(--fg); border: 1px solid var(--line-bright); }
+
+/* The model menu in a narrow pane: open from the left edge of its button, never wider than the pane. */
+.sidechat-pane .mm-model-pop { left: 0; right: auto; width: min(340px, calc(100vw - 24px)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-dot.busy { animation: none; }
+  .sc-starter, .sc-send, .sc-box { transition: none; }
+  .sc-send:hover:not(:disabled) { transform: none; }
+}

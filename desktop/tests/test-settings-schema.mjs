@@ -51,7 +51,7 @@ check("every tweak row names a TWEAK_DEFAULTS key whose default is valid", () =>
     assert.ok(r.label && r.desc, r.id);
     if (r.kind !== "tweak") continue;
     assert.ok(r.key in D, r.key);
-    if (r.fold) continue;
+    if (r.fold || r.workMode) continue;
     assert.equal(S.clamp(r, D[r.key]), D[r.key], `default of ${r.key} survives clamp`);
   }
 });

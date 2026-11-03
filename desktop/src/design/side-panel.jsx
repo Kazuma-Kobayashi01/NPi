@@ -64,7 +64,31 @@ function EnvironmentCard({ project, profileLabel }) {
   );
 }
 
-const _SP2_COLORS = { messages: "var(--accent)", compacted: "var(--cyan)", system: "var(--lilac)", tools: "var(--amber)", free: "var(--line-bright)" };
+const _SP2_COLORS = { messages: "var(--accent)", compacted: "var(--cyan)", system: "var(--lilac)", tools: "var(--amber)", mcp: "var(--rose)", skills: "var(--lime)", rules: "var(--fg-3)", free: "var(--line-bright)" };
+
+// One row of the context table; a category with a detail list folds open to it.
+function _SP2_CtxRow({ p, total, fmt }) {
+  const [open, setOpen] = React.useState(false);
+  const pct = ((p.tokens / total) * 100).toFixed(1);
+  const more = p.detail?.length > 0;
+  return (
+    <>
+      <div className={`sp-trow${more ? " sp-fold-row" : ""}`}
+        role={more ? "button" : undefined} tabIndex={more ? 0 : undefined} aria-expanded={more ? open : undefined}
+        onClick={more ? () => setOpen(v => !v) : undefined}
+        onKeyDown={more ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(v => !v); } } : undefined}>
+        <span className="sp-swatch" style={{ background: _SP2_COLORS[p.key] }} />
+        <span className="sp-label">{p.label}{p.count > 0 && <span className="sp-count">{p.count}</span>}</span>
+        <span className="sp-num">{fmt(p.tokens)}</span>
+        <span className="sp-num sp-dim">{pct}%</span>
+      </div>
+      {more && open && (
+        <ul className="sp-detail">{p.detail.slice(0, 60).map((d, i) => <li key={i}>{d}</li>)}
+          {p.detail.length > 60 && <li className="sp-dim">+{p.detail.length - 60}</li>}</ul>
+      )}
+    </>
+  );
+}
 
 function ContextCard({ breakdown, onCompact, compacting, disabled }) {
   const fmt = window.formatTokens;
@@ -84,14 +108,7 @@ function ContextCard({ breakdown, onCompact, compacting, disabled }) {
         ))}
       </div>
       <div className="sp-table">
-        {parts.map(p => (
-          <div key={p.key} className="sp-trow">
-            <span className="sp-swatch" style={{ background: _SP2_COLORS[p.key] }} />
-            <span className="sp-label">{p.label}</span>
-            <span className="sp-num">{fmt(p.tokens)}</span>
-            <span className="sp-num sp-dim">{((p.tokens / total) * 100).toFixed(1)}%</span>
-          </div>
-        ))}
+        {parts.map(p => <_SP2_CtxRow key={p.key} p={p} total={total} fmt={fmt} />)}
       </div>
       <div className="sp-note">Parts are text estimates reconciled to the reported total. Native payloads and images are not separately sized.</div>
       {onCompact && (

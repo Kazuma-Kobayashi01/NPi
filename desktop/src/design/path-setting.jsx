@@ -1,6 +1,6 @@
 /* ═════════════════════════════════════════════════════════════════════
    design/path-setting.jsx — a Rust-owned program path setting in Settings
-   (Terminal's shell, Browser's Chromium): `usePathSetting` reads and saves
+   (Terminal's shell): `usePathSetting` reads and saves
    it, `PathPicker` is the row's control: a button naming the value and its
    drop-down menu (rows from app/path-setting.js `menu`, then "other…",
    Rust's file dialog). Settings → Agent's startup profile reuses the

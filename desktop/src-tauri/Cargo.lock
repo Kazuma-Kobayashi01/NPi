@@ -3903,6 +3903,8 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9df9128cbbfef73cda168416ccf7f837b62737d748333bfe9ab71c245d76613e"
 dependencies = [
+ "bitflags 2.13.2",
+ "block2",
  "objc2",
  "objc2-foundation",
 ]
@@ -3923,13 +3925,17 @@ dependencies = [
 
 [[package]]
 name = "omp-desktop"
-version = "2.0.0-378"
+version = "3.0.0-52"
 dependencies = [
  "base64 0.22.1",
+ "block2",
  "flate2",
  "gix",
  "libc",
  "notify",
+ "objc2",
+ "objc2-foundation",
+ "objc2-user-notifications",
  "open",
  "png 0.18.1",
  "portable-pty",

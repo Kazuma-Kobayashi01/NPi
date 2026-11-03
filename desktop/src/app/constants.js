@@ -15,8 +15,8 @@
   // `sidebarWidth` / `splitWidth` / `railWidth` / `treeWidth`: px of those
   // columns, 0 = the default (OMP_LAYOUT_WIDTHS.fit).
   // `browserLocalhostInPanel`: a plain click on a localhost chat link opens
-  // the panel instead of the system browser. (The Chromium path is a Rust
-  // setting, browser.json — never a tweak.)
+  // the panel instead of the system browser. (The browser is the Chromium
+  // bundled with the app, not a setting.)
   // Settings page (#37): `defaultSide` is the side column a new tab starts
   // with; `followOutput` pins the transcript to the newest message;
   // `terminalScrollback` is xterm's scrollback in lines; `submitKey` is
@@ -30,7 +30,12 @@
     "density": "cozy",
     "layout": "rail",
     "appMode": "code",
+    "language": "auto",
     "uiDetail": 3,
+    "notifications": false,
+    "notifyDone": true,
+    "notifyAsk": true,
+    "notifyFailed": true,
     "chatWidth": "narrow",
     "accountName": "",
     "accountCall": "",
@@ -48,6 +53,7 @@
     "showChanges": false,
     "fontSize":  100,
     "promptHistoryLimit": 100,
+    "foldWork": null,
     "foldThinking": null,
     "foldTools": null,
     "collapseAfter": 5,

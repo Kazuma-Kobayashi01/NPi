@@ -10,6 +10,8 @@
    ═════════════════════════════════════════════════════════════════════ */
 
 const { Icon: _ST_Icon } = window;
+// The UI language (app/i18n.js): schema text and chrome strings go through it at render.
+const _ST_T = (key, vars) => window.OMP_I18N.t(key, vars);
 
 const _ST_escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -42,16 +44,16 @@ function SettingsRow({ label, desc, modified, resettable, onReset, stack, aside,
   const head = (
     <div className="st-rt">
       <div className="st-rl">
-        {typeof label === "string" ? <SettingsMark text={label} query={query} /> : label}
-        {modified && <span className="st-moddot" title="Changed from default" />}
+        {typeof label === "string" ? <SettingsMark text={_ST_T(label)} query={query} /> : label}
+        {modified && <span className="st-moddot" title={_ST_T("Changed from default")} />}
         {(modified || resettable) && onReset && (
-          <button type="button" className="st-reset" onClick={reset} title="Reset to default">↺ reset</button>
+          <button type="button" className="st-reset" onClick={reset} title={_ST_T("Reset to default")}>{_ST_T("↺ reset")}</button>
         )}
       </div>
       {desc != null && desc !== "" && (
         <div className="st-rd">
           {crumb && <span className="st-crumb">{crumb} · </span>}
-          {typeof desc === "string" ? <SettingsDesc text={desc} query={query} /> : desc}
+          {typeof desc === "string" ? <SettingsDesc text={_ST_T(desc)} query={query} /> : desc}
         </div>
       )}
     </div>
@@ -79,7 +81,7 @@ function SettingsSeg({ value, options, onChange, label }) {
       {options.map(o => (
         <button type="button" key={String(o.value)} role="radio" aria-checked={o.value === value}
           onClick={() => onChange(o.value)}>
-          {o.label}
+          {_ST_T(String(o.label))}
         </button>
       ))}
     </div>
@@ -159,7 +161,7 @@ function AccentSwatches({ value, themeAccent, colors, onChange }) {
  *  `searching` (sections without a match dim). */
 function SettingsStrip({ sections, active, counts, searching, onSelect }) {
   return (
-    <div className="st-tabs" role="tablist" aria-label="Settings sections">
+    <div className="st-tabs" role="tablist" aria-label={_ST_T("Settings sections")}>
       {sections.map(s => {
         const n = counts[s.id] ?? 0;
         const selected = !searching && active === s.id;
@@ -167,12 +169,12 @@ function SettingsStrip({ sections, active, counts, searching, onSelect }) {
           <React.Fragment key={s.id}>
             {s.sep && <span className="st-sep" />}
             <button type="button" role="tab" aria-selected={selected} tabIndex={selected || (searching && s === sections[0]) ? 0 : -1}
-              className={`st-tab${searching && !n ? " dim" : ""}`} title={s.title} onClick={() => onSelect(s.id)}>
+              className={`st-tab${searching && !n ? " dim" : ""}`} title={_ST_T(s.title)} onClick={() => onSelect(s.id)}>
               <_ST_Icon name={s.icon} size={16} />
-              <span className="st-tab-lbl">{s.title}</span>
+              <span className="st-tab-lbl">{_ST_T(s.title)}</span>
               {n > 0 && (
                 <span className={`st-badge${searching ? "" : " mod"}`}
-                  title={searching ? `${n} matching` : `${n} changed from default`}>{n}</span>
+                  title={searching ? _ST_T("{n} matching", { n }) : _ST_T("{n} changed from default", { n })}>{n}</span>
               )}
             </button>
           </React.Fragment>

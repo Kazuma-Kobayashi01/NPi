@@ -24,8 +24,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// How long a browser whose pipe failed at start gets to show it exited.
 const EXIT_GRACE: Duration = Duration::from_secs(1);
 
-/// Most binaries one launch tries: a broken install falls back to the next
-/// browser, but a machine where none starts must not wait on all of them.
+/// Most binaries one launch tries (the bundled browser is the only candidate
+/// today; the bound stays for a launcher that offers more).
 const MAX_ATTEMPTS: usize = 3;
 
 /// A headless Chromium owned by the app, with its own throwaway profile.
@@ -209,9 +209,10 @@ fn command(binary: &Path, profile: &Path, width: u32, height: u32) -> Command {
     let mut user_data_dir = OsString::from("--user-data-dir=");
     user_data_dir.push(profile);
     let mut cmd = Command::new(binary);
-    cmd.arg("--headless=new")
+    // chrome-headless-shell is headless by construction: it takes no
+    // `--headless` flag.
+    cmd.arg(user_data_dir)
         // The CDP pipe itself (`pipe.rs`) is added by `attach`: no port.
-        .arg(user_data_dir)
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
         .arg("--disable-background-networking")

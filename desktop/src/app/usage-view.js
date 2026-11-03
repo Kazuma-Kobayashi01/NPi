@@ -49,8 +49,26 @@
     if (!cu || !(cu.contextWindow > 0)) return null;
     const total = cu.contextWindow;
     const used = Math.max(0, Math.min(cu.tokens ?? 0, total));
-    let system = estimateTokens((rpcState.systemPrompt ?? []).join("\n"));
-    let tools = estimateTokens(JSON.stringify(rpcState.dumpTools ?? []));
+    // The prompt's own sections: skills and rules are cut out of "System prompt".
+    const promptText = (rpcState.systemPrompt ?? []).join("\n");
+    const take = re => promptText.match(re)?.[0] ?? "";
+    const skillsText = take(/<skills>[\s\S]*?<\/skills>/);
+    const rulesText = `${take(/<generic-rules>[\s\S]*?<\/generic-rules>/)}\n${take(/<domain-rules>[\s\S]*?<\/domain-rules>/)}`.trim();
+    const names = text => [...text.matchAll(/^- ([^:\n(]+)/gm)].map(m => m[1].trim());
+    let skills = estimateTokens(skillsText);
+    let rules = estimateTokens(rulesText);
+    let system = Math.max(0, estimateTokens(promptText) - skills - rules);
+    // omp names an MCP server's tool `mcp__<server>_<tool>`.
+    const allTools = rpcState.dumpTools ?? [];
+    const isMcp = t => typeof t?.name === "string" && t.name.startsWith("mcp__");
+    const mcpList = allTools.filter(isMcp);
+    const servers = new Map();
+    for (const t of mcpList) {
+      const server = t.name.slice(5).split("_")[0] || "mcp";
+      servers.set(server, (servers.get(server) ?? 0) + 1);
+    }
+    let tools = estimateTokens(JSON.stringify(allTools.filter(t => !isMcp(t))));
+    let mcp = mcpList.length ? estimateTokens(JSON.stringify(mcpList)) : 0;
     let summary = 0, current = 0, hasSummary = false;
     for (const message of contextMessages ?? []) {
       if (message.role === "compactionSummary") {
@@ -63,19 +81,25 @@
     // Fixed prompt estimates must not consume the whole budget before known
     // messages are considered. Scale all text estimates down together, then
     // leave unclassified provider overhead in the residual Messages category.
-    const estimated = system + tools + summary + current;
+    const estimated = system + tools + mcp + skills + rules + summary + current;
     const scale = estimated > used ? used / estimated : 1;
     system = Math.floor(system * scale);
     tools = Math.floor(tools * scale);
+    mcp = Math.floor(mcp * scale);
+    skills = Math.floor(skills * scale);
+    rules = Math.floor(rules * scale);
     summary = Math.floor(summary * scale);
-    const messages = used - system - tools - summary;
+    const messages = used - system - tools - mcp - skills - rules - summary;
     return {
       total, used, pct: (used / total) * 100,
       parts: [
         { key: "messages", label: "Messages", tokens: messages },
         ...(hasSummary ? [{ key: "compacted", label: "Previous compaction", tokens: summary }] : []),
         { key: "system", label: "System prompt", tokens: system },
-        { key: "tools", label: "Tools", tokens: tools },
+        { key: "tools", label: "Tools", tokens: tools, count: allTools.length - mcpList.length },
+        ...(mcpList.length ? [{ key: "mcp", label: "MCP tools", tokens: mcp, count: mcpList.length, detail: [...servers].map(([n, c]) => `${n} · ${c}`) }] : []),
+        ...(skillsText ? [{ key: "skills", label: "Skills", tokens: skills, count: names(skillsText).length, detail: names(skillsText) }] : []),
+        ...(rulesText ? [{ key: "rules", label: "Rules", tokens: rules, count: names(rulesText).length, detail: names(rulesText) }] : []),
         { key: "free", label: "Free space", tokens: total - used },
       ],
     };

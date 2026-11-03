@@ -6,7 +6,7 @@
    minimap-hover cross-highlight (mm-hot) flows through here via the
    `hoveredMsgIdx` prop. */
 
-const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, RetryRow: _CV_RetryRow, GoalRow: _CV_GoalRow, ApprovalRow: _CV_ApprovalRow, Icon: _CV_Icon, TOOL_META: _CV_TOOL_META, ToolGroup: _CV_ToolGroup, WorkflowPipeline: _CV_WorkflowPipeline } = window;
+const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, RetryRow: _CV_RetryRow, GoalRow: _CV_GoalRow, ApprovalRow: _CV_ApprovalRow, Icon: _CV_Icon, TOOL_META: _CV_TOOL_META, ToolGroup: _CV_ToolGroup, WorkBox: _CV_WorkBox, WorkflowPipeline: _CV_WorkflowPipeline } = window;
 const { nextPinned: _CV_nextPinned, shouldRepin: _CV_shouldRepin, afterOutput: _CV_afterOutput } = window.OMP_SCROLL_PIN;
 const { collapseStates: _CV_collapseStates, PREVIEW_LINES: _CV_PREVIEW_LINES } = window.OMP_COLLAPSE;
 // Lines a collapsed block keeps in view, for chat.css; one object, so a
@@ -23,6 +23,7 @@ const _CV_AssistantBubble_M = React.memo(_CV_AssistantBubble);
 const _CV_AskBubble_M       = React.memo(_CV_AskBubble);
 
 const _CV_ToolGroup_M      = React.memo(_CV_ToolGroup);
+const _CV_WorkBox_M        = React.memo(_CV_WorkBox);
 
 const CompactRow = React.memo(function CompactRow({ msg }) {
   const [open, setOpen] = React.useState(false);
@@ -146,7 +147,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
       return;
     }
     const containerRect = el.getBoundingClientRect();
-    const rows = el.querySelectorAll(".chat-pad > .row, .chat-pad > .tool-group");
+    const rows = el.querySelectorAll(".chat-pad > .row, .chat-pad > .tool-group, .chat-pad > .work-box");
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i].getBoundingClientRect();
       if (r.bottom > containerRect.top) {
@@ -265,12 +266,16 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
     horizonId: collapseHorizon, hidden: window.OMP_TURN_STATUS.isHidden,
   }), [messages, foldModes.thinking, foldModes.tool, collapseAfter, collapseOverrides, collapseHorizon]);
 
+  // One folded box per run of thinking and tool calls, or each as its own row (foldModes.work).
   const rows = React.useMemo(() => {
+    if (foldModes.work === "box" && window.OMP_WORK_BOX) {
+      return window.OMP_WORK_BOX.groupWork(messages, { hidden: window.OMP_TURN_STATUS.isHidden });
+    }
     if (window.OMP_TOOL_GROUPS?.groupMessages) {
       return window.OMP_TOOL_GROUPS.groupMessages(messages, { hidden: window.OMP_TURN_STATUS.isHidden });
     }
     return messages.map((m, i) => ({ type: "message", msg: m, idx: i }));
-  }, [messages]);
+  }, [messages, foldModes.work]);
 
   return (
     <div className={`chat-wrap${wallpaper ? " has-wallpaper" : ""}`}>
@@ -286,6 +291,22 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
             />
           )}
           {rows.map((row) => {
+            if (row.type === "work") {
+              return (
+                <_CV_WorkBox_M
+                  key={row.key}
+                  group={row}
+                  hoveredMsgIdx={hoveredMsgIdx}
+                  collapseOverrides={collapseOverrides}
+                  collapsedStates={collapsed}
+                  onToggleCollapse={handleToggleCollapse}
+                  onInspectSubagent={onInspectSubagent}
+                  onOpenFile={onOpenFile}
+                  onPreviewFile={onPreviewFile}
+                  projectRoot={projectRoot}
+                />
+              );
+            }
             if (row.type === "tool_group") {
               return (
                 <_CV_ToolGroup_M
@@ -317,7 +338,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
               onOpenFile={onOpenFile} onPreviewFile={onPreviewFile} projectRoot={projectRoot} collapsed={collapsed[m._id]} onToggleCollapse={handleToggleCollapse} />;
             if (m.kind === "ask")     return <_CV_AskBubble_M     key={m._id ?? i} idx={i} highlighted={hl} msg={m} onAnswer={onAskAnswer} onAnswerDialog={onAskDialogAnswer} onConfirm={onConfirmAsk} onCancelAsk={onCancelAsk} onGrant={onGrantApproval} hasProjectPath={hasProjectPath} submitKey={submitKey} />;
             return <_CV_AssistantBubble_M key={m._id ?? i} idx={i} highlighted={hl} msg={m}
-              annotable={i === lastAsstIdx}
+              annotable={i === lastAsstIdx} hideThought={!!row.thoughtInBox}
               annotations={annotations}
               onAnnotate={onAnnotate}
               thoughtCollapsed={collapsed[m._id]} onToggleCollapse={handleToggleCollapse} />;

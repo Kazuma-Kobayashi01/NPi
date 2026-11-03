@@ -3,7 +3,8 @@
    checkbox rows, and each question has a free-text box. A lone pick-one
    question answers on click; anything else sends on Submit, once every
    pick-one question has an option or typed text. Settled, the card
-   collapses to what was sent. Answer rules and the reply's shape live in
+   collapses to what was sent. omp's subagent model/thinking ask is shown as
+   one form instead (chat/ask-subagent-form.jsx). Answer rules and the reply's shape live in
    app/ask-dialog.js; AskBubble renders this for `method: "ask"`. */
 
 const { MarkdownContent: _AD_Markdown, Icon: _AD_Icon } = window;
@@ -113,11 +114,17 @@ function AskSummary({ questions, answers }) {
 function AskDialog({ msg, onSubmit, onCancel }) {
   const questions = msg.questions;
   const done = msg.answered || msg.cancelled;
-  const [draft, setDraft] = React.useState(() => _AD_drafts.get(msg.id) ?? _AD.emptyDraft(questions));
+  const form = _AD.subagentForm(questions);   // omp's subagent model/thinking ask: one compact form
+  const [draft, setDraft] = React.useState(() => _AD_drafts.get(msg.id)
+    ?? (form ? _AD.subagentDraft(questions, form, _AD.readSubagentMemory()) : _AD.emptyDraft(questions)));
   React.useEffect(() => { if (done) _AD_drafts.delete(msg.id); }, [done, msg.id]);
   if (done) return <AskSummary questions={questions} answers={msg.answers} />;
 
   const update = (next) => { _AD_saveDraft(msg.id, next); setDraft(next); };
+  if (form) {
+    const sendForm = (d) => { _AD.saveSubagentMemory(_AD.subagentMemory(questions, form, d)); onSubmit(_AD.answers(questions, d)); };
+    return <AskSubagentForm questions={questions} form={form} draft={draft} onDraft={update} onSend={sendForm} onCancel={onCancel} />;
+  }
   const onClick = _AD.answersOnClick(questions);
   // A click sends a lone pick-one question at once, so its draft only ever
   // holds typed text: nothing missing means something was typed.

@@ -1,7 +1,7 @@
 // app/path-setting.js — the menu behind a Rust-owned program path setting
-// (Settings → Terminal's shell, Settings → Browser's Chromium; the button and
-// menu are design/path-setting.jsx). Pure: the feature modules map their
-// Rust settings onto `menu` (OMP_TERMINAL.shellMenu, OMP_BROWSER.pathMenu).
+// (Settings → Terminal's shell; the button and menu are
+// design/path-setting.jsx). Pure: the feature modules map their Rust settings
+// onto `menu` (OMP_TERMINAL.shellMenu).
 //   programName(path, fallback)   `/bin/zsh` → `zsh`, `C:\…\msedge.exe` → `msedge`
 //   menu({ stored, name, fallback, installed })   → { label, rows }
 // Paths match through OMP_PROJECT_NAV.normPath: Windows drive/UNC paths

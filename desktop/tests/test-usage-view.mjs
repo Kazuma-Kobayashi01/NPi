@@ -22,6 +22,22 @@ check("tokens are estimated at 4 Latin characters, or 1 CJK character, each", ()
   assert.equal(U.estimateTokens(undefined), 0);
 });
 
+check("skills, rules and MCP tools get their own rows, the rest of the prompt stays System prompt", () => {
+  const prompt = "base ".repeat(200) + "<skills>\n- pdf: read pdfs\n- docx: word\n</skills>" + "<generic-rules>\n- keep it short\n</generic-rules>";
+  const b = plain(U.contextBreakdown({
+    contextUsage: { tokens: 5000, contextWindow: 10000 }, systemPrompt: [prompt],
+    dumpTools: [{ name: "read", description: "r" }, { name: "mcp__figma_get", description: "g" }, { name: "mcp__figma_set", description: "s" }, { name: "mcp__db_q", description: "q" }],
+  }));
+  const by = Object.fromEntries(b.parts.map(p => [p.key, p]));
+  assert.deepEqual(by.skills.detail, ["pdf", "docx"]);
+  assert.equal(by.rules.count, 1);
+  assert.equal(by.tools.count, 1);
+  assert.equal(by.mcp.count, 3);
+  assert.deepEqual(by.mcp.detail, ["figma · 2", "db · 1"]);
+  assert.equal(b.parts.reduce((n, p) => n + p.tokens, 0), 10000);
+  const none = Object.fromEntries(plain(U.contextBreakdown({ contextUsage: { tokens: 50, contextWindow: 1000 }, systemPrompt: ["x"], dumpTools: [] })).parts.map(p => [p.key, p]));
+  assert.ok(!none.mcp && !none.skills && !none.rules);
+});
 check("the context splits into messages, system prompt, tools and free space, summing to the window", () => {
   const b = plain(U.contextBreakdown({
     contextUsage: { tokens: 1000, contextWindow: 10000 },

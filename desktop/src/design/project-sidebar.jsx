@@ -7,6 +7,8 @@
    inside them are real buttons, so every action is keyboard-reachable.
    ═════════════════════════════════════════════════════════════════════ */
 
+// The UI language (app/i18n.js).
+const _PSB_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon, TabRunDot, RenameField } = window;
 const { groupTabs, groupRunState, groupTarget, membersNewestFirst, basename, parentName } = window.OMP_PROJECT_NAV;
 
@@ -17,17 +19,17 @@ function sidebarHint(actionId, fallback) {
 
 function ProjectSidebar({
   tabs, activeId, recents, profileLabel, saved = [], historyProfile, onResume,
-  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab,
+  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode,
 }) {
   const ctx = window.useContextMenu();
   const tabMenu = t => [
-    ...(t.path ? [{ label: "Open in Finder", onClick: () => onReveal(t.path) }, "-"] : []),
-    { label: "Mark as unread", key: "U", onClick: () => onMarkUnread(t.id) },
-    { label: "Rename", key: "R", onClick: () => startRename(t.id) },
+    ...(t.path ? [{ label: _PSB_T("Open in Finder"), onClick: () => onReveal(t.path) }, "-"] : []),
+    { label: _PSB_T("Mark as unread"), key: "U", onClick: () => onMarkUnread(t.id) },
+    { label: _PSB_T("Rename"), key: "R", onClick: () => startRename(t.id) },
     "-",
-    { label: "Close", onClick: () => onCloseTab(t.id) },
-    { label: "Archive", key: "A", onClick: () => onArchiveTab(t) },
-    { label: "Delete", key: "D", danger: true, confirm: "Delete permanently?", onClick: () => onDeleteTab(t) },
+    { label: _PSB_T("Close"), onClick: () => onCloseTab(t.id) },
+    { label: _PSB_T("Archive"), key: "A", onClick: () => onArchiveTab(t) },
+    { label: _PSB_T("Delete"), key: "D", danger: true, confirm: _PSB_T("Delete permanently?"), onClick: () => onDeleteTab(t) },
   ];
   // Group keys the user folded. Not persisted: tab ids (and so pathless
   // groups' keys) don't survive a restart anyway.
@@ -43,7 +45,7 @@ function ProjectSidebar({
       onClose={() => setRenaming(null)} />
   );
   const renameButton = t => (
-    <button className="psb-act" title="Rename conversation" onClick={() => startRename(t.id)}>
+    <button className="psb-act" title={_PSB_T("Rename conversation")} onClick={() => startRename(t.id)}>
       <Icon name="edit" size={10} />
     </button>
   );
@@ -66,19 +68,20 @@ function ProjectSidebar({
   const reorder = window.useDragReorder(onReorder);
 
   return (
-    <aside className="project-sidebar" aria-label="projects">
+    <aside className="project-sidebar" aria-label={_PSB_T("projects")}>
+      <window.ModeSwitch mode={mode} onMode={onMode} />
       <nav className="psb-nav">
         <button className="psb-navitem" onClick={onOpenFolder}>
-          <Icon name="plus" size={15} /><span>New</span>
+          <Icon name="plus" size={15} /><span>{_PSB_T("New")}</span>
         </button>
         <button className="psb-navitem" onClick={onHistory}>
-          <Icon name="clock" size={15} /><span>History</span>
+          <Icon name="clock" size={15} /><span>{_PSB_T("History")}</span>
         </button>
       </nav>
 
       <div className="psb-scroll" onPointerDown={reorder.onPointerDown}>
-        <div className="psb-section">Open</div>
-        {groups.length === 0 && <div className="psb-empty">no open tabs</div>}
+        <div className="psb-section">{_PSB_T("Open")}</div>
+        {groups.length === 0 && <div className="psb-empty">{_PSB_T("no open tabs")}</div>}
         {groups.map(group => {
           const history = savedForProject(group.path, group.profile);
           const expanded = !collapsed[group.key];
@@ -92,11 +95,11 @@ function ProjectSidebar({
               className={`psb-group${reorder.dropClass("projects", group.key)}`}>
               <div className={`psb-row psb-project ${containsActive && !expanded ? "active" : ""}`}
                 onContextMenu={e => ctx.open(e, [
-                  ...(group.path ? [{ label: "Open in Finder", onClick: () => onReveal(group.path) }, "-"] : []),
-                  { label: "Close", onClick: () => onCloseProject(group.tabs) },
+                  ...(group.path ? [{ label: _PSB_T("Open in Finder"), onClick: () => onReveal(group.path) }, "-"] : []),
+                  { label: _PSB_T("Close"), onClick: () => onCloseProject(group.tabs) },
                 ])}>
                   <button className={`psb-chev ${expanded ? "open" : ""}`}
-                    title={expanded ? "collapse" : "expand"} aria-expanded={expanded}
+                    title={_PSB_T(expanded ? "collapse" : "expand")} aria-expanded={expanded}
                     onClick={e => { e.stopPropagation(); toggle(group.key); }}>
                     <Icon name="chevR" size={10} />
                   </button>
@@ -105,15 +108,15 @@ function ProjectSidebar({
                     {folderIcon}
                     <span className="psb-name">{group.name}</span>
                     {profile && (
-                      <span className="chip muted tab-profile" title={`profile: ${profile}`}>{profile}</span>
+                      <span className="chip muted tab-profile" title={_PSB_T("profile: {name}", { name: profile })}>{profile}</span>
                     )}
-                    {group.tabs.some(x => unread?.has(x.id)) && <span className="psb-unread" title="Unread" />}
+                    {group.tabs.some(x => unread?.has(x.id)) && <span className="psb-unread" title={_PSB_T("Unread")} />}
                     <TabRunDot state={groupRunState(group.tabs)} />
                     <span className="tab-count psb-count">{group.tabs.length + history.length}</span>
                   </button>
                 <span className="psb-actions">
                   {group.path && (
-                    <button className="psb-act" title="New conversation here"
+                    <button className="psb-act" title={_PSB_T("New conversation here")}
                       onClick={() => onNewInProject(group.path, group.profile)}>
                       <Icon name="plus" size={10} />
                     </button>
@@ -135,7 +138,7 @@ function ProjectSidebar({
                   )}
                   <span className="psb-actions">
                     {renaming !== t.id && renameButton(t)}
-                    <button className="psb-act" title="Close tab" onClick={() => onCloseTab(t.id)}>
+                    <button className="psb-act" title={_PSB_T("Close tab")} onClick={() => onCloseTab(t.id)}>
                       <Icon name="close" size={9} />
                     </button>
                   </span>
@@ -146,8 +149,8 @@ function ProjectSidebar({
           );
         })}
 
-        <div className="psb-section">Recent</div>
-        {recents.length === 0 && <div className="psb-empty">no recent projects</div>}
+        <div className="psb-section">{_PSB_T("Recent")}</div>
+        {recents.length === 0 && <div className="psb-empty">{_PSB_T("no recent projects")}</div>}
         {recents.map(r => {
           const key = window.OMP_PROJECT_NAV.groupKey({ path: r.path, profile: historyProfile });
           const expanded = !collapsed[key];
@@ -156,7 +159,7 @@ function ProjectSidebar({
             <div key={key} className="psb-group">
               <div className="psb-row psb-recent">
                 <button className={`psb-chev ${expanded ? "open" : ""}`}
-                  title={expanded ? "collapse" : "expand"} aria-expanded={expanded}
+                  title={_PSB_T(expanded ? "collapse" : "expand")} aria-expanded={expanded}
                   onClick={() => toggle(key)}>
                   <Icon name="chevR" size={10} />
                 </button>
@@ -169,16 +172,16 @@ function ProjectSidebar({
                   <span className="tab-count psb-count">{history.length}</span>
                 </button>
                 <span className="psb-actions">
-                  <button className="psb-act" title="New conversation here" onClick={() => onOpenRecent(r.path)}>
+                  <button className="psb-act" title={_PSB_T("New conversation here")} onClick={() => onOpenRecent(r.path)}>
                     <Icon name="plus" size={10} />
                   </button>
-                  <button className="psb-act" title="Remove from recent" onClick={() => onForgetRecent(r.path)}>
+                  <button className="psb-act" title={_PSB_T("Remove from recent")} onClick={() => onForgetRecent(r.path)}>
                     <Icon name="close" size={9} />
                   </button>
                 </span>
               </div>
               {expanded && history.map(savedRow)}
-              {expanded && history.length === 0 && <div className="psb-empty">No saved conversations</div>}
+              {expanded && history.length === 0 && <div className="psb-empty">{_PSB_T("No saved conversations")}</div>}
             </div>
           );
         })}

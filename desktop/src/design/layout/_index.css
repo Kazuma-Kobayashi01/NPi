@@ -5,8 +5,11 @@
 @import "./stage.css";
 @import "./sidebar.css";
 @import "./chat.css";
+@import "./work-box.css";
 @import "./ask.css";
+@import "./ask-form.css";
 @import "./generative-ui.css";
+@import "./generative-ui-display.css";
 @import "./composer.css";
 @import "./goal.css";
 @import "./rail.css";
@@ -20,6 +23,7 @@
 @import "./settings-computer-use.css";
 @import "./settings-conversations.css";
 @import "./panels.css";
+@import "./sidechat.css";
 @import "./git.css";
 @import "./subagents.css";
 @import "./tree.css";

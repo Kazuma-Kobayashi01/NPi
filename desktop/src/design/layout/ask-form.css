@@ -1,0 +1,67 @@
+/* Subagent preferences ask as one form (chat/ask-subagent-form.jsx): a
+   searchable model list and a row of thinking-level pills. Shares the
+   `.ask-dialog` card, `.ask-dialog-foot`, `.ask-opt` and `.ask-submit`. */
+.ask-sub-body { padding: 14px 16px 16px; display: flex; flex-direction: column; }
+.ask-sub-title { font-family: var(--font-serif, inherit); font-size: var(--d-text-md, 15px); color: var(--fg); }
+.ask-sub-sub { color: var(--fg-3); font-size: var(--d-text-xs); margin: 2px 0 12px; }
+.ask-sub-label {
+  font-size: var(--d-text-xs); color: var(--fg-3); letter-spacing: 0.04em;
+  text-transform: uppercase; margin: 10px 0 6px;
+}
+.ask-sub-label:first-of-type { margin-top: 0; }
+
+.ask-sub-field { position: relative; }
+.ask-sub-input {
+  width: 100%; box-sizing: border-box; padding: 8px 32px 8px 11px;
+  background: var(--bg-input, var(--bg-elevated)); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--r-2);
+  font-family: var(--font-mono, monospace); font-size: var(--d-text-sm);
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.ask-sub-input::placeholder { color: var(--fg-4); font-family: var(--font-sans); }
+.ask-sub-input:focus {
+  outline: none; border-color: color-mix(in oklab, var(--amber) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--amber) 14%, transparent);
+}
+.ask-sub-caret {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border: 0; background: transparent; color: var(--fg-3); border-radius: var(--r-1, 6px); cursor: pointer;
+}
+.ask-sub-caret:hover { color: var(--fg); background: var(--bg-hover); }
+
+/* The list opens inline (the card clips overflow), capped and scrollable. */
+.ask-sub-list {
+  list-style: none; margin: 6px 0 0; padding: 4px; max-height: 196px; overflow-y: auto;
+  background: var(--bg-elevated); border: 1px solid var(--line); border-radius: var(--r-2);
+}
+.ask-sub-opt, .ask-sub-none {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px;
+  padding: 6px 9px; border-radius: 6px; cursor: pointer; color: var(--fg-2); font-size: var(--d-text-sm);
+}
+.ask-sub-opt-label { font-family: var(--font-mono, monospace); color: var(--fg); overflow-wrap: anywhere; }
+.ask-sub-opt-desc { color: var(--fg-3); font-size: var(--d-text-xs); }
+.ask-sub-opt .chip { font-size: 10px; padding: 0 6px; }
+.ask-sub-opt.active { background: var(--bg-hover); }
+.ask-sub-opt.selected .ask-sub-opt-label { color: var(--accent); }
+.ask-sub-opt.custom { color: var(--amber); }
+.ask-sub-none { cursor: default; color: var(--fg-4); font-style: italic; }
+
+.ask-sub-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-sub-pill {
+  appearance: none; cursor: pointer; padding: 5px 13px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: transparent; color: var(--fg-2);
+  font-family: var(--font-sans); font-size: var(--d-text-sm);
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+.ask-sub-pill:hover { border-color: color-mix(in oklab, var(--amber) 55%, var(--line)); color: var(--fg); }
+.ask-sub-pill.on {
+  background: color-mix(in oklab, var(--amber) 14%, transparent);
+  border-color: color-mix(in oklab, var(--amber) 55%, var(--line)); color: var(--amber);
+}
+.ask-sub-pill:focus-visible { outline: 2px solid color-mix(in oklab, var(--amber) 60%, transparent); outline-offset: 1px; }
+.ask-sub .ask-submit { font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ask-sub-input, .ask-sub-pill { transition: none; }
+}

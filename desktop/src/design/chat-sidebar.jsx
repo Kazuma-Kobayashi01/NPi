@@ -6,6 +6,8 @@
    chat that is open is not listed twice (matched by session file).
    ═════════════════════════════════════════════════════════════════════ */
 
+// The UI language (app/i18n.js).
+const _CS_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon: _CS_Icon, TabRunDot: _CS_Dot } = window;
 
 const _csDay = (d) => {
@@ -38,7 +40,7 @@ function groupChats(tabs, saved, pinned = [], archived = []) {
     ...collapsedSaved.filter(s => !isArchived(s))
       .map(s => ({
         key: `saved:${s.path}`,
-        title: s.title || "Untitled",
+        title: s.title || _CS_T("Untitled"),
         saved: s,
         at: s._familyMaxAt || Date.parse(s.updated_at || s.timestamp) || 0,
       }))
@@ -64,7 +66,7 @@ function groupChats(tabs, saved, pinned = [], archived = []) {
   return groups;
 }
 
-function ChatSidebar({ tabs, saved, activeId, pinned = [], archived = [], unread, onSelectTab, onCloseTab, onResume, onNew, onHide, footer, onRename, onPin, onArchive, onDelete, onMarkUnread }) {
+function ChatSidebar({ tabs, saved, activeId, pinned = [], archived = [], unread, onSelectTab, onCloseTab, onResume, onNew, onHide, footer, onRename, onPin, onArchive, onDelete, onMarkUnread, mode, onMode }) {
   const [folded, setFolded] = React.useState({});
   const [renaming, setRenaming] = React.useState(null);
   const ctx = window.useContextMenu();
@@ -75,29 +77,30 @@ function ChatSidebar({ tabs, saved, activeId, pinned = [], archived = [], unread
       || (r.saved?._familyMembers && r.saved._familyMembers.some(f => pinned.includes(f)))
     );
     return [
-      ...(r.file ? [{ label: isPinned ? "Unpin" : "Pin", key: "P", onClick: () => onPin(r.file) }] : []),
-      ...(r.tab ? [{ label: "Mark as unread", key: "U", onClick: () => onMarkUnread(r.tab.id) }, { label: "Rename", key: "R", onClick: () => { onSelectTab(r.tab.id); setRenaming(r.tab.id); } }] : []),
+      ...(r.file ? [{ label: _CS_T(isPinned ? "Unpin" : "Pin"), key: "P", onClick: () => onPin(r.file) }] : []),
+      ...(r.tab ? [{ label: _CS_T("Mark as unread"), key: "U", onClick: () => onMarkUnread(r.tab.id) }, { label: _CS_T("Rename"), key: "R", onClick: () => { onSelectTab(r.tab.id); setRenaming(r.tab.id); } }] : []),
       "-",
-      { label: "Archive", key: "A", onClick: () => onArchive(r) },
-      { label: "Delete conversation", key: "D", danger: true,
-        confirm: `Delete conversation and all branches (${r.familyFiles.length} files)?`,
+      { label: _CS_T("Archive"), key: "A", onClick: () => onArchive(r) },
+      { label: _CS_T("Delete conversation"), key: "D", danger: true,
+        confirm: _CS_T("Delete conversation and all branches ({n} files)?", { n: r.familyFiles.length }),
         onClick: () => onDelete(r) },
     ];
   };
   return (
-    <aside className="project-sidebar chat-sidebar" aria-label="chats">
+    <aside className="project-sidebar chat-sidebar" aria-label={_CS_T("chats")}>
+      <window.ModeSwitch mode={mode} onMode={onMode} />
       <nav className="psb-nav">
         <button className="psb-navitem" onClick={onNew}>
-          <_CS_Icon name="plus" size={15} /><span>New chat</span>
+          <_CS_Icon name="plus" size={15} /><span>{_CS_T("New chat")}</span>
         </button>
       </nav>
       <div className="psb-scroll">
-        {groups.length === 0 && <div className="psb-empty">No chats yet</div>}
+        {groups.length === 0 && <div className="psb-empty">{_CS_T("No chats yet")}</div>}
         {groups.map(g => (
           <div key={g.label} className="chs-group">
             <button type="button" className="chs-day" aria-expanded={!folded[g.label]}
               onClick={() => setFolded(f => ({ ...f, [g.label]: !f[g.label] }))}>
-              <span>{g.label}</span>
+              <span>{_CS_T(g.label)}</span>
               <svg width="9" height="9" viewBox="0 0 10 10" className={folded[g.label] ? "" : "open"} aria-hidden="true">
                 <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -113,13 +116,13 @@ function ChatSidebar({ tabs, saved, activeId, pinned = [], archived = [], unread
                   <button className="psb-main" title={r.title}
                     onClick={() => (r.tab ? onSelectTab(r.tab.id) : onResume(r.saved))}>
                     <span className="psb-name">{r.title}</span>
-                    {r.tab && unread?.has(r.tab.id) && <span className="psb-unread" title="Unread" />}
+                    {r.tab && unread?.has(r.tab.id) && <span className="psb-unread" title={_CS_T("Unread")} />}
                     {r.tab && <_CS_Dot state={r.tab.runState} />}
                   </button>
                 )}
                 {r.tab && (
                   <span className="psb-actions">
-                    <button className="psb-act" title="Close chat" onClick={() => onCloseTab(r.tab.id)}>
+                    <button className="psb-act" title={_CS_T("Close chat")} onClick={() => onCloseTab(r.tab.id)}>
                       <_CS_Icon name="close" size={9} />
                     </button>
                   </span>

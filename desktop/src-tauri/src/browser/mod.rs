@@ -3,9 +3,8 @@
 //! One [`BrowserManager`] entry per tab: a loopback placeholder port (the
 //! `cdpUrl` omp is given through a settings overlay file, see
 //! [`BrowserManager::allocate`]) in front of a lazily launched Chromium with
-//! its own throwaway profile. Which browser runs is Rust's to decide: the
-//! user's `browser.json` setting ([`SettingsStore`]) or automatic discovery,
-//! read at launch time. A tab's browser survives its omp process being
+//! its own throwaway profile. Which browser runs is not a choice: the
+//! Chromium bundled with the app ([`BundledChromium`]). A tab's browser survives its omp process being
 //! respawned (profile switch, approval-mode restart); only closing the tab
 //! ([`BrowserManager::release_many`]) or leaving the app ends it.
 
@@ -30,7 +29,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use crate::private_fs::private_dirs;
 use broker::Broker;
 use process::{prepare_instance_dir, prune_dead, remove_dir_retrying, write_overlay, Chromium};
-pub use process::{BrowserSettings, SettingsStore};
+pub use process::BundledChromium;
 use proxy::Proxy;
 
 /// Initial window of every launched Chromium; the panel resizes it later.
@@ -70,8 +69,8 @@ struct Slot {
     /// `<instance dir>/profiles`; each launch attempt gets `<session_id>-<n>`
     /// in there.
     profiles: PathBuf,
-    /// Which browser to run, read at every launch.
-    settings: Arc<SettingsStore>,
+    /// The browser to run (the bundled one), checked at every launch.
+    browser: Arc<BundledChromium>,
     launches: AtomicU32,
     closed: AtomicBool,
     chromium: Mutex<Option<Chromium>>,
@@ -92,7 +91,7 @@ impl Slot {
         if let Some(dead) = slot.take() {
             dead.stop(); // reaps it and removes its profile
         }
-        let binaries = self.settings.launch_candidates()?;
+        let binaries = self.browser.launch_candidates()?;
         private_dirs(true)
             .create(&self.profiles)
             .map_err(|e| format!("browser profile dir: {e}"))?;
@@ -175,12 +174,12 @@ impl State {
 struct Instance {
     /// `<root>/<pid>`, private to this process: `profiles/` and the overlays.
     dir: PathBuf,
-    settings: Arc<SettingsStore>,
+    browser: Arc<BundledChromium>,
 }
 
 /// Per-session browsers, managed as Tauri state.
 pub struct BrowserManager {
-    /// The working directory and the browser setting, or why there is none;
+    /// The working directory and the bundled browser, or why there is none;
     /// then [`allocate`](Self::allocate) always fails.
     instance: Result<Instance, String>,
     state: Mutex<State>,
@@ -192,11 +191,11 @@ impl BrowserManager {
     /// (see [`prune_stale_instances`](Self::prune_stale_instances) for the
     /// others). Fails when `root` is a symlink or the directory cannot be
     /// created.
-    pub fn new(root: &Path, settings: Arc<SettingsStore>) -> Result<Self, String> {
+    pub fn new(root: &Path, browser: Arc<BundledChromium>) -> Result<Self, String> {
         let dir = prepare_instance_dir(root)
             .map_err(|e| format!("browser dir {}: {e}", root.display()))?;
         Ok(Self {
-            instance: Ok(Instance { dir, settings }),
+            instance: Ok(Instance { dir, browser }),
             state: Mutex::new(State::default()),
         })
     }
@@ -245,7 +244,7 @@ impl BrowserManager {
         let slot = Arc::new(Slot {
             session_id: session_id.to_owned(),
             profiles: instance.dir.join("profiles"),
-            settings: Arc::clone(&instance.settings),
+            browser: Arc::clone(&instance.browser),
             launches: AtomicU32::new(0),
             closed: AtomicBool::new(false),
             chromium: Mutex::new(None),

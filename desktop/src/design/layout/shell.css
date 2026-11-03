@@ -441,18 +441,6 @@ html.is-fullscreen.tauri-native .chrome-left,
 .chrome-left .chrome-arrow { min-width: 24px; padding: 0; }
 .chrome-arrow:disabled { opacity: 0.3; cursor: default; }
 .chrome-arrow:disabled:hover { background: transparent; color: var(--fg-3); }
-.chrome-seg {
-  display: inline-flex; gap: 2px; padding: 3px; margin-left: 6px; flex: none;
-  border-radius: 10px; background: color-mix(in oklab, var(--bg-hover) 70%, transparent);
-}
-.chrome-seg button {
-  appearance: none; width: 28px; height: 26px; padding: 0; border: 0; border-radius: 8px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; color: var(--fg-3); cursor: pointer;
-}
-.chrome-seg button:hover { color: var(--fg); }
-.chrome-seg button.on { background: var(--bg-active); color: var(--fg); }
-.chrome-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* ── A hairline around the window ──
    The window is transparent (for the sidebar material), so without this its
@@ -752,7 +740,6 @@ html.tauri-native .window {
 }
 .psb-account:hover { background: var(--bg-hover); }
 .psb-account-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.psb-account-plan { color: var(--fg-3); white-space: nowrap; }
 .psb-account-chev { margin-left: auto; color: var(--fg-3); flex: none; }
 .acct-avatar { border-radius: 50%; object-fit: cover; flex: none; display: inline-block; }
 .acct-initial { display: inline-flex; align-items: center; justify-content: center; background: var(--bg-active); color: var(--fg-2); font-weight: 600; }
@@ -797,7 +784,7 @@ html.detail-2 .composer-foot .goal-pill, html.detail-2 .composer-foot .composer-
 .project-sidebar { -webkit-user-select: none; user-select: none; }
 .project-sidebar .psb-name, .project-sidebar .psb-navitem, .project-sidebar .psb-main, .project-sidebar .psb-account-name { font-size: calc(var(--d-text) - 2px); }
 .project-sidebar .psb-parent, .project-sidebar .psb-empty, .project-sidebar .psb-section, .project-sidebar .chs-day,
-.project-sidebar .psb-account-plan, .project-sidebar .tab-count, .project-sidebar .tab-profile { font-size: calc(var(--d-text-sm) - 2px); }
+.project-sidebar .tab-count, .project-sidebar .tab-profile { font-size: calc(var(--d-text-sm) - 2px); }
 
 /* ── Type pass: titles and card heads a step smaller ── */
 .chrome-name { font-size: calc(var(--d-text) - 2px); font-weight: 400; }

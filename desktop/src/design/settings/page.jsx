@@ -20,6 +20,7 @@ const {
   SettingsSlider: _SP_Slider, ThemeCards: _SP_ThemeCards, AccentSwatches: _SP_Swatches, SettingsStrip: _SP_Strip,
 } = window;
 
+const _SP_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const _SP_IS_MAC = window.OMP_KEYMAP?.detectMac?.() ?? false;
 const _SP_FIELD = "input, textarea, select, [contenteditable='true'], [role='slider']";
 
@@ -36,7 +37,7 @@ function _SP_TweakRow({ row, ctx, query }) {
     case "toggle":
       return <_SP_Row {...frame}><_SP_Toggle value={v} onChange={set} label={row.label} /></_SP_Row>;
     case "seg":
-      return <_SP_Row {...frame}><_SP_Seg value={v} options={row.options} onChange={set} label={row.label} /></_SP_Row>;
+      return <_SP_Row {...frame} stack={!!row.stack}><_SP_Seg value={v} options={row.options} onChange={set} label={row.label} /></_SP_Row>;
     case "slider":
       return (
         <_SP_Row {...frame}>
@@ -73,12 +74,12 @@ function _SP_AnyRow({ row, ctx, query }) {
   return <Comp row={row} ctx={ctx} query={query} modified={modified} onReset={onReset} />;
 }
 
-function _SP_Group({ name, src, rows, ctx, query }) {
+function _SP_Group({ name, src, rows, ctx, query, translated }) {
   return (
     <>
       <div className="st-grp-name">
-        {name}
-        {src && <span className="st-src" title="Saved by the app in this file, not in the window's local storage">{src}</span>}
+        {translated ? name : _SP_T(name)}
+        {src && <span className="st-src" title={_SP_T("Saved by the app in this file, not in the window's local storage")}>{src}</span>}
       </div>
       <div className="st-grp">
         {rows.map(r => <_SP_AnyRow key={r.id} row={r} ctx={ctx} query={query} />)}
@@ -173,15 +174,15 @@ function SettingsPage({ ctx }) {
               <_SP_Icon name="search" size={22} />
             </div>
             <div className="st-head-text">
-              <div className="st-kicker">search · {hits.total} setting{hits.total === 1 ? "" : "s"}</div>
+              <div className="st-kicker">{_SP_T(hits.total === 1 ? "search · {n} setting" : "search · {n} settings", { n: hits.total })}</div>
               <div className="st-h1">“{q}”</div>
-              <p className="st-blurb">Settings matching your query across all sections.</p>
+              <p className="st-blurb">{_SP_T("Settings matching your query across all sections.")}</p>
             </div>
           </div>
         </div>
-        {hits.groups.length === 0 && <div className="st-empty">No setting matches “{q}”.</div>}
+        {hits.groups.length === 0 && <div className="st-empty">{_SP_T("No setting matches “{q}”.", { q })}</div>}
         {hits.groups.map(g => (
-          <_SP_Group key={`${g.sectionId}/${g.groupName}`} name={`${g.sectionTitle} › ${g.groupName}`}
+          <_SP_Group key={`${g.sectionId}/${g.groupName}`} translated name={`${_SP_T(g.sectionTitle)} › ${_SP_T(g.groupName)}`}
             src={g.src} rows={g.rows} ctx={ctx} query={q} />
         ))}
       </>
@@ -197,9 +198,9 @@ function SettingsPage({ ctx }) {
               </div>
             )}
             <div className="st-head-text">
-              <div className="st-kicker">{String(idx + 1).padStart(2, "0")} · {section.title}</div>
-              <div className="st-h1">{section.title}</div>
-              {section.blurb && <p className="st-blurb">{section.blurb}</p>}
+              <div className="st-kicker">{String(idx + 1).padStart(2, "0")} · {_SP_T(section.title)}</div>
+              <div className="st-h1">{_SP_T(section.title)}</div>
+              {section.blurb && <p className="st-blurb">{_SP_T(section.blurb)}</p>}
             </div>
           </div>
         </div>
@@ -212,13 +213,13 @@ function SettingsPage({ ctx }) {
   }
 
   return (
-    <div className="settings" role="region" aria-label="Settings" ref={rootRef}>
+    <div className="settings" role="region" aria-label={_SP_T("Settings")} ref={rootRef}>
       <div className="st-layout">
-        <nav className="st-nav" aria-label="Settings sections">
+        <nav className="st-nav" aria-label={_SP_T("Settings sections")}>
           <label className="st-search">
             <_SP_Icon name="search" size={14} />
-            <input ref={searchRef} type="text" placeholder="Search" value={query} autoComplete="off"
-              spellCheck={false} aria-label="Search settings" onChange={e => setQuery(e.target.value)} />
+            <input ref={searchRef} type="text" placeholder={_SP_T("Search")} value={query} autoComplete="off"
+              spellCheck={false} aria-label={_SP_T("Search settings")} onChange={e => setQuery(e.target.value)} />
             <span className="st-kbd">{_SP_IS_MAC ? "⌘F" : "Ctrl+F"}</span>
           </label>
           <_SP_Strip sections={sections} active={section.id} counts={counts} searching={!!q} onSelect={select} />
@@ -229,10 +230,10 @@ function SettingsPage({ ctx }) {
           </div>
           <div className="st-foot">
             <div className="st-inner">
-              <span>Changes apply at once</span>
+              <span>{_SP_T("Changes apply at once")}</span>
               <span className="st-sp" />
               <button type="button" disabled={!canReset} onClick={() => ctx.setTweak(resetEdits)}>
-                Reset {q ? "matches" : section.title.toLowerCase()} to defaults
+                {q ? _SP_T("Reset matches to defaults") : _SP_T("Reset {name} to defaults", { name: _SP_T(section.title).toLowerCase() })}
               </button>
             </div>
           </div>

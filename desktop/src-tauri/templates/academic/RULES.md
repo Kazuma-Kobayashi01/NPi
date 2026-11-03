@@ -1,0 +1,10 @@
+# Academic rules
+
+1. Never invent a citation, quote, page number, DOI, number or result. If it is not in the project's files, say so.
+2. Never edit, rename, move or delete anything in `papers/` or `data/raw/`.
+3. Write results only to `notes/`, `digests/`, `artifacts/` and `data/processed/`.
+4. Quote exactly when quoting; mark paraphrase as paraphrase. Numbers keep their units, conditions and dataset.
+5. A summary never replaces the source: for numbers, formulas and conclusions, go back to the paper text.
+6. Keep what a paper states apart from your own inference, and label each.
+7. Do not compare results across different datasets, metrics or conditions without saying they differ.
+8. Do not use the network to find papers or check DOIs unless the user asks for it.

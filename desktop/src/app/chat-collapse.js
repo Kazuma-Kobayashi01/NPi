@@ -5,6 +5,8 @@
 // - "open": never collapses on its own.
 // - "folded": completed tools start collapsed; running calls and failures
 //   stay open. Thinking follows its actual lifecycle unless kept open.
+// A third choice, `work` ("box" | "rows"), decides whether a turn's thinking
+// and tool calls share one folded box (app/work-box.js) or stay separate rows.
 // The user's own toggle on a block always wins and is kept per tab, keyed by
 // the message's `_id` (live.js assigns it, and the get_messages merge
 // carries it over, app/transcript-merge.js).
@@ -28,6 +30,9 @@
 
   /** Per-kind modes, in the order Settings lists them. */
   const MODES = Object.freeze(["auto", "open", "folded"]);
+  /** How a turn's thinking and tool calls show: one folded box per run
+   *  (app/work-box.js) or each as its own row. */
+  const WORK_MODES = Object.freeze(["box", "rows"]);
 
   /** A tab with no toggles yet. Shared, so a render without one compares equal. */
   const NO_OVERRIDES = Object.freeze({});
@@ -39,7 +44,8 @@
     const preset = window.OMP_UI_DETAIL?.levelOf(tweaks?.uiDetail).patch;
     const fallback = key => typeof tweaks?.autoCollapse === "boolean" ? legacy : (preset?.[key] ?? legacy);
     const mode = (key) => MODES.includes(tweaks?.[key]) ? tweaks[key] : fallback(key);
-    return { thinking: mode("foldThinking"), tool: mode("foldTools") };
+    const work = WORK_MODES.includes(tweaks?.foldWork) ? tweaks.foldWork : (preset?.foldWork ?? "box");
+    return { thinking: mode("foldThinking"), tool: mode("foldTools"), work };
   }
 
   /** Coerces the tweak into [MIN_AFTER, MAX_AFTER]; anything non-numeric
@@ -150,19 +156,21 @@
    *  toggle: it is on screen when the command runs, so it must not fall back
    *  to the modes once it grows. A block that arrives later has none, so it
    *  follows the modes again. */
-  function overridesForAll(messages, collapsed, { hidden = () => false } = {}) {
+  function overridesForAll(messages, collapsed, { hidden = () => false, work = "rows" } = {}) {
     const out = {};
     for (const m of messages) {
       if (m._id == null || hidden(m)) continue;
       if (m.kind !== "tool" && (m.kind !== "assistant" || (!m.thought && !m.streaming))) continue;
       out[m._id] = collapsed;
     }
-    Object.assign(out, window.OMP_TOOL_GROUPS.groupOverrides(messages, collapsed, { hidden }));
+    Object.assign(out, work === "box"
+      ? window.OMP_WORK_BOX.groupOverrides(messages, collapsed, { hidden })
+      : window.OMP_TOOL_GROUPS.groupOverrides(messages, collapsed, { hidden }));
     return out;
   }
 
   window.OMP_COLLAPSE = {
-    PREVIEW_LINES, SHORT_LINES, DEFAULT_AFTER, MIN_AFTER, MAX_AFTER, MODES, NO_OVERRIDES,
+    PREVIEW_LINES, SHORT_LINES, DEFAULT_AFTER, MIN_AFTER, MAX_AFTER, MODES, WORK_MODES, NO_OVERRIDES,
     foldModes, clampAfter, bodyLines, thinkingActive, collapseStates, overridesForAll,
   };
 })();

@@ -215,8 +215,8 @@ check("Standard folds tool calls and Full expands them; explicit choices still w
     const preset = win.OMP_UI_DETAIL.levelOf(uiDetail);
     assert.deepEqual(C.collapseStates(messages, C.foldModes({ uiDetail, ...preset.patch })), { 1: folded, 2: folded, 3: folded });
   }
-  assert.deepEqual(C.foldModes({ uiDetail: 3, foldTools: "open" }), { thinking: "folded", tool: "open" });
-  assert.deepEqual(C.foldModes({ uiDetail: 5, foldTools: "folded" }), { thinking: "open", tool: "folded" });
+  assert.deepEqual(C.foldModes({ uiDetail: 3, foldTools: "open" }), { thinking: "folded", tool: "open", work: "box" });
+  assert.deepEqual(C.foldModes({ uiDetail: 5, foldTools: "folded" }), { thinking: "open", tool: "folded", work: "rows" });
 });
 
 check("Collapse all includes short tools, skips hidden ones; later blocks follow the modes", () => {
