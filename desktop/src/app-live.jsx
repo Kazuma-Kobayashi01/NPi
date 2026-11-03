@@ -20,7 +20,7 @@
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, SubagentPane, ProjectSidebar, EmptyWorkspace, SideChat,
   ChromeToolbar, AmbientRail, ConversationTree, PlanKanban, HistoryModal, GitBrowser, FilePreview, ApprovalRulesPanel, UsageStatsPanel, PromptHistoryModal, useTweaks,
-  SettingsPage, ConfirmCloseDialog,
+  SettingsPage, SettingsWindow, ConfirmCloseDialog, LibrarianWindow,
   useWidgets, WidgetCard, WidgetErrorCard, WidgetApprovalCard, WidgetBoundary,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, DEFAULT_PROFILE_ID,
   INTENT_FRAMING, APPROVAL_PROMPT,
@@ -65,6 +65,7 @@ function App() {
   // section}`. Not an omp tab: the active omp tab stays `activeSessionId`
   // underneath while the page covers the stage.
   const [stab, setStab] = React.useState(window.OMP_SETTINGS_TAB.initial);
+  const [librarianOpen, setLibrarianOpen] = React.useState(false);
   // The start page shown over open tabs (the top bar's back button); the
   // forward button returns to the conversation.
   const [home, setHome] = React.useState(false);
@@ -1050,6 +1051,7 @@ function App() {
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
     // Academic keeps the top bar to the research tools; these two move in here.
     ...(appModeName === "academic" ? [
+      ...(copilotProject ? [{ label: window.OMP_I18N.t("Librarian"), icon: "tag", onClick: () => setLibrarianOpen(true) }] : []),
       { label: window.OMP_I18N.t("Terminal"), icon: "terminal", hint: keyHint("desktop.terminal.toggle"), on: _TERM_entryOf(terminal.state, planKey).open, onClick: () => terminal.toggle(planKey) },
       { label: window.OMP_I18N.t("Subagents"), icon: "agent", on: showSplit, onClick: subagentUi.togglePane },
     ] : []),
@@ -1351,18 +1353,10 @@ function App() {
         </div>
       </div>
 
-      {settingsCtx && (
-        <div className="st-overlay" onMouseDown={e => { if (e.target === e.currentTarget) closeSettings(); }}>
-          <div className="st-modal" role="dialog" aria-label={window.OMP_I18N.t("Settings")}>
-            <div className="st-modal-head">
-              <span>{window.OMP_I18N.t("Settings")}</span>
-              <button type="button" className="btn icon ghost" onClick={closeSettings} aria-label={window.OMP_I18N.t("Close settings")} title={window.OMP_I18N.t("Close (Esc)")}>×</button>
-            </div>
-            <div className="st-modal-body">
-              <SettingsPage ctx={settingsCtx} />
-            </div>
-          </div>
-        </div>
+      {settingsCtx && <SettingsWindow ctx={settingsCtx} onClose={closeSettings} />}
+
+      {librarianOpen && copilotProject && (
+        <LibrarianWindow bridge={bridge} project={window.OMP_PROJECT_NAV.basename(copilotProject)} onClose={() => setLibrarianOpen(false)} />
       )}
 
       <CommandBridge

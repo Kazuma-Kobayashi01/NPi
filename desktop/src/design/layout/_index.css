@@ -18,12 +18,14 @@
 @import "./overlays.css";
 @import "./lightbox.css";
 @import "./file-preview.css";
+@import "./window-chrome.css";
 @import "./settings.css";
 @import "./settings-rows.css";
 @import "./settings-computer-use.css";
 @import "./settings-conversations.css";
 @import "./panels.css";
 @import "./sidechat.css";
+@import "./librarian.css";
 @import "./git.css";
 @import "./subagents.css";
 @import "./tree.css";

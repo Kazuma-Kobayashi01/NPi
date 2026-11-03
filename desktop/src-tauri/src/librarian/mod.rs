@@ -8,9 +8,11 @@ mod bibtex;
 mod citekey;
 pub mod commands;
 mod csl;
+mod organize;
 mod ris;
 mod store;
 mod transfer;
 
+pub use organize::Group;
 pub use store::{Entry, Library};
 pub use transfer::{export, import, Format, ImportReport};

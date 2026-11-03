@@ -306,6 +306,7 @@
        prompt-history-modal.jsx and confirm-close.jsx
        call window.useModalFocus at render time. -->
   <script src="design/ui/use-modal-focus.js"></script>
+  <script src="design/ui/window-chrome.js"></script>
   <!-- Keyboard-driven popup lists: useActiveRowIntoView (composer.jsx's
        slash menu and mentions, history-modal.jsx, prompt-history-modal.jsx)
        and useListKeys (the two history modals), called at render time. -->
@@ -415,6 +416,10 @@
   <script type="text/babel" src="design/tab-parts.jsx"></script>
   <script type="text/babel" src="design/side-panel.jsx"></script>
   <script type="text/babel" src="design/side-chat.jsx"></script>
+  <script type="text/babel" src="design/librarian/lib-sidebar.jsx"></script>
+  <script type="text/babel" src="design/librarian/lib-list.jsx"></script>
+  <script type="text/babel" src="design/librarian/lib-detail.jsx"></script>
+  <script type="text/babel" src="design/librarian/librarian-window.jsx"></script>
   <script type="text/babel" src="design/context-menu.jsx"></script>
   <script type="text/babel" src="design/sidebar-account.jsx"></script>
   <!-- Mode switch atop both sidebars: they render window.ModeSwitch, so it loads first. -->
@@ -485,6 +490,7 @@
   <script type="text/babel" src="design/settings/rows-notifications.jsx"></script>
   <script type="text/babel" src="design/settings/shortcuts-editor.jsx"></script>
   <script type="text/babel" src="design/settings/page.jsx"></script>
+  <script type="text/babel" src="design/settings/settings-window.jsx"></script>
 
   <!-- Live data layer (must load before app-live.jsx) -->
   <script src="model-names.js"></script>
@@ -515,6 +521,7 @@
   <!-- Independent SideChat controller shares the delta projection but never
        the main session bridge or its persisted transcript. -->
   <script src="app/sidechat.js"></script>
+  <script src="app/librarian.js"></script>
   <script src="live.js"></script>
 
   <!-- App root — wired to OMP_BRIDGE, no demo effects -->

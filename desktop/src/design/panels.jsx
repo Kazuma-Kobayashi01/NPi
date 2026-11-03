@@ -25,6 +25,8 @@ function PhasePill({ phase }) {
 
 // ── Plan kanban ───────────────────────────────────────────────────────
 function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
+  const panelRef = React.useRef(null);
+  const wc = window.useWindowChrome(onClose, panelRef);
   const total  = kanban.reduce((n, c) => n + c.tasks.length, 0);
   const done   = kanban.reduce((n, c) => n + c.tasks.filter(t => t.status === "done").length, 0);
   const inProg = kanban.reduce((n, c) => n + c.tasks.filter(t => t.status === "in_progress").length, 0);
@@ -35,10 +37,11 @@ function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
 
   return (
     <div className="kanban-scrim" onClick={onClose}>
-      <div className="kanban slide-in" onClick={e => e.stopPropagation()}>
+      <div className="kanban slide-in" ref={panelRef} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="kanban-head">
+        <div className="kanban-head" {...wc.headProps}>
+          {wc.lights}
           <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Icon name="plan" size={16} color="var(--accent)" />
@@ -57,9 +60,6 @@ function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
               </div>
             )}
           </div>
-          <button className="btn ghost icon" onClick={onClose} title="Close (esc)">
-            <Icon name="close" size={11} />
-          </button>
         </div>
 
         {/* Risks */}

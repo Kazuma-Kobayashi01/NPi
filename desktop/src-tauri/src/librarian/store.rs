@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA_V1: &str = "
 CREATE TABLE refs (
@@ -35,6 +35,29 @@ CREATE INDEX refs_doi ON refs(doi) WHERE doi IS NOT NULL;
 CREATE INDEX refs_title ON refs(title_norm);
 ";
 
+#[cfg(test)]
+pub(super) const SCHEMA_V1_FOR_TESTS: &str = SCHEMA_V1;
+
+/// Notes per reference, manual groups and tags.
+const SCHEMA_V2: &str = "
+ALTER TABLE refs ADD COLUMN notes TEXT NOT NULL DEFAULT '';
+CREATE TABLE groups (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE group_refs (
+    group_id INTEGER NOT NULL,
+    ref_id   INTEGER NOT NULL,
+    PRIMARY KEY (group_id, ref_id)
+);
+CREATE TABLE ref_tags (
+    ref_id INTEGER NOT NULL,
+    tag    TEXT NOT NULL COLLATE NOCASE,
+    PRIMARY KEY (ref_id, tag)
+);
+";
+
 /// One reference as the frontend sees it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,23 +68,27 @@ pub struct Entry {
     pub source: String,
     pub created_at: i64,
     pub updated_at: i64,
+    pub notes: String,
+    pub tags: Vec<String>,
+    /// Ids of the groups it is in.
+    pub groups: Vec<i64>,
 }
 
 pub struct Library {
-    conn: Connection,
+    pub(super) conn: Connection,
 }
 
-fn now() -> i64 {
+pub(super) fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0))
 }
 
-fn sql(e: rusqlite::Error) -> String {
+pub(super) fn sql(e: rusqlite::Error) -> String {
     format!("library: {e}")
 }
 
-fn entry(row: &Row<'_>) -> rusqlite::Result<Entry> {
+pub(super) fn entry(row: &Row<'_>) -> rusqlite::Result<Entry> {
     let text: String = row.get(2)?;
     Ok(Entry {
         id: row.get(0)?,
@@ -70,10 +97,13 @@ fn entry(row: &Row<'_>) -> rusqlite::Result<Entry> {
         source: row.get(3)?,
         created_at: row.get(4)?,
         updated_at: row.get(5)?,
+        notes: row.get(6)?,
+        tags: Vec::new(),
+        groups: Vec::new(),
     })
 }
 
-const COLUMNS: &str = "id, citekey, csl_json, source, created_at, updated_at";
+pub(super) const COLUMNS: &str = "id, citekey, csl_json, source, created_at, updated_at, notes";
 
 impl Library {
     /// The library file of `project`.
@@ -87,10 +117,20 @@ impl Library {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("library folder: {e}"))?;
         }
+        // A library from before notes, groups and tags is kept as it was before it is migrated.
+        if path.is_file() {
+            let old: i64 = Connection::open(&path)
+                .and_then(|c| c.query_row("PRAGMA user_version", [], |r| r.get(0)))
+                .map_err(sql)?;
+            if old == 1 {
+                std::fs::copy(&path, path.with_extension("db.bak-v1"))
+                    .map_err(|e| format!("library backup: {e}"))?;
+            }
+        }
         Self::init(Connection::open(path).map_err(sql)?)
     }
 
-    fn init(conn: Connection) -> Result<Self, String> {
+    pub(super) fn init(conn: Connection) -> Result<Self, String> {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
@@ -102,6 +142,12 @@ impl Library {
         if version < 1 {
             conn.execute_batch(&format!(
                 "BEGIN; {SCHEMA_V1} PRAGMA user_version = 1; COMMIT;"
+            ))
+            .map_err(sql)?;
+        }
+        if version < 2 {
+            conn.execute_batch(&format!(
+                "BEGIN; {SCHEMA_V2} PRAGMA user_version = 2; COMMIT;"
             ))
             .map_err(sql)?;
         }
@@ -139,14 +185,18 @@ impl Library {
     }
 
     pub fn get(&self, id: i64) -> Result<Option<Entry>, String> {
-        self.conn
+        let found = self
+            .conn
             .query_row(
                 &format!("SELECT {COLUMNS} FROM refs WHERE id = ?1 AND deleted_at IS NULL"),
                 [id],
                 entry,
             )
             .optional()
-            .map_err(sql)
+            .map_err(sql)?;
+        let mut one: Vec<Entry> = found.into_iter().collect();
+        self.hydrate(&mut one)?;
+        Ok(one.pop())
     }
 
     /// Every live reference, oldest first.
@@ -158,7 +208,9 @@ impl Library {
             ))
             .map_err(sql)?;
         let rows = stmt.query_map([], entry).map_err(sql)?;
-        rows.collect::<Result<_, _>>().map_err(sql)
+        let mut entries: Vec<Entry> = rows.collect::<Result<_, _>>().map_err(sql)?;
+        self.hydrate(&mut entries)?;
+        Ok(entries)
     }
 
     /// Replaces a record's content; its citekey stays, since drafts cite it.

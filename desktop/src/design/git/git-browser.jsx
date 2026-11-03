@@ -13,6 +13,7 @@ const { Icon: _GB_Icon, GitFileTree: _GB_Tree, GitFileView: _GB_View, GitHistory
 const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath, branch, edits }) {
   const g = window.useGitBrowser({ bridge, initialPath, branch, edits });
   const rootRef = React.useRef(null);
+  const wc = window.useWindowChrome(onClose, rootRef);
 
   // The dialog takes focus, so keystrokes never reach the hidden composer;
   // on close the focus goes back where it was (the composer, usually).
@@ -62,7 +63,8 @@ const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath
       onMouseDown={e => { downOnScrim.current = e.target === e.currentTarget; }}
       onClick={e => { if (downOnScrim.current && e.target === e.currentTarget) onClose(); downOnScrim.current = false; }}>
       <div className="gitb" ref={rootRef} role="dialog" aria-modal="true" aria-label="git browser" tabIndex={-1}>
-        <div className="gitb-head">
+        <div className="gitb-head" {...wc.headProps}>
+          {wc.lights}
           <_GB_Icon name="branch" size={13} color="var(--accent)" />
           <span className="gitb-title">git</span>
           {repo && <span className="gitb-project">{repo.name}</span>}
@@ -74,7 +76,6 @@ const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath
             {g.status && <span>{changed} changed</span>}
           </span>
           <button type="button" className="btn ghost" onClick={g.refresh} title="Refresh" aria-label="refresh"><_GB_Icon name="refresh" size={12} /></button>
-          <button type="button" className="btn ghost" onClick={onClose} title="Close (Esc)" aria-label="close"><_GB_Icon name="close" size={12} /></button>
         </div>
         {g.error ? (
           <div className="gitb-empty tall gitb-error">{g.error}</div>

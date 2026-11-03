@@ -60,3 +60,11 @@ Removed tweak keys: `scanlines`, `autosave` (with the status-bar autosave toggle
 `rows-conversations.jsx` lists saved files across the selected profile's workspaces. Each listed record carries its source `profile`; resume, preview, rename, export and delete pass that identity instead of relying on whichever tab later becomes active. Opening a specific history item honors its exact file path and dismisses Settings, including when that tab was already active. Single-file deletion closes its owning tab through the busy-close guard first; failures remain visible and unsuccessful batch items stay selected.
 
 The search icon uses a positioned wrapper around the shared `Icon`, preserving its `.ui-icon` sizing class. Export menus use the existing `.st-menu` overflow contract rather than overriding shared card clipping globally.
+
+## Windows: traffic lights and dragging
+
+Settings (`design/settings/settings-window.jsx`), the Librarian, the git browser, the file preview and the Approvals, Usage and Plan panels share `design/ui/window-chrome.js`: `useWindowChrome(onClose, panelRef)` gives the head's drag handlers and the three lights. The head must be a direct child of the frame (`panelRef`): yellow adds `.wc-shaded` (only the head shows) and green `.wc-zoomed` (fills the overlay), see `layout/window-chrome.css`. A drag moves the frame with a `translate`, never off the screen (`clampMove`), and not from a button, field or link. The state lives as long as the component that calls the hook, so a reopened window starts centred and unfolded. Palette-style popups (command palette, history, confirmations, the image lightbox) are not windows and have no lights.
+
+## Closing the main window (macOS)
+
+`lib.rs` `hides_on_close`: the red button and Cmd+W (the default menu's Close Window) only hide the `main` window; nothing is stopped. `RunEvent::Reopen` (a Dock click) shows it again. Quitting is Cmd+Q, which `CloseGuard` still holds for confirmation while a tab is busy; the webview then quits through the `quit_app` command (`live.js` `_requestQuit`), since closing the window no longer ends the app. Other platforms: a window close is a quit, as before.

@@ -86,6 +86,8 @@ function FilePreview({ target, onClose, onOpenGit }) {
   // null while loading; then the bridge's `{ok, value | error}`.
   const [res, setRes] = React.useState(null);
   const scrimRef = React.useRef(null);
+  const panelRef = React.useRef(null);
+  const wc = window.useWindowChrome(onClose, panelRef);
   // Whether the press began on the scrim: a drag-select out of the code
   // that ends there still clicks the scrim, and must not close the preview.
   const downOnScrim = React.useRef(false);
@@ -155,8 +157,9 @@ function FilePreview({ target, onClose, onOpenGit }) {
         downOnScrim.current = false;
       }}
     >
-      <div className="fp-panel">
-        <div className="fp-head">
+      <div className="fp-panel" ref={panelRef}>
+        <div className="fp-head" {...wc.headProps}>
+          {wc.lights}
           <_FP_Icon name={value?.kind === "Image" ? "image" : "file"} size={13} color="var(--cyan)" />
           <span className="fp-crumb mono" title={shownPath}>
             {shownPath.slice(0, slash)}<b>{shownPath.slice(slash)}</b>
@@ -178,9 +181,6 @@ function FilePreview({ target, onClose, onOpenGit }) {
               <_FP_Icon name="branch" size={12} /> Open in git browser
             </button>
           )}
-          <button type="button" className="btn ghost icon" onClick={onClose} title="Close (Esc)" aria-label="Close">
-            <_FP_Icon name="close" size={12} />
-          </button>
         </div>
         <div className="fp-body">{body}</div>
       </div>

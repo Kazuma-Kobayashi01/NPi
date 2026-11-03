@@ -60,6 +60,8 @@ function statsTotalTokens(stats) {
 // in approval-rules-panel.jsx.
 function UsageStatsPanel({ onClose, profileLabel }) {
   const bridge = window.OMP_BRIDGE;
+  const panelRef = React.useRef(null);
+  const wc = window.useWindowChrome(onClose, panelRef);
   const [range, setRange]     = React.useState("all");
   const [result, setResult]   = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -92,15 +94,13 @@ function UsageStatsPanel({ onClose, profileLabel }) {
 
   return (
     <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "6vh" }}>
-      <div className="stats-panel" onClick={e => e.stopPropagation()}>
-        <div className="stats-head">
+      <div className="stats-panel" ref={panelRef} onClick={e => e.stopPropagation()}>
+        <div className="stats-head" {...wc.headProps}>
+          {wc.lights}
           <_StatsIcon name="cost" size={13} color="var(--accent)" />
           <span className="mono" style={{ color: "var(--fg-2)" }}>usage · {profileLabel} · {selected.window}</span>
           <button className="btn icon ghost" style={{ marginLeft: "auto" }} onClick={refresh} title="Refresh">
             <_StatsIcon name="refresh" size={11} />
-          </button>
-          <button className="btn icon ghost" onClick={onClose} title="Close">
-            <_StatsIcon name="close" size={11} />
           </button>
         </div>
         <div className="stats-body">

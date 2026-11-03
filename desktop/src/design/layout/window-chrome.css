@@ -1,0 +1,28 @@
+/* ── Secondary windows: traffic lights and a draggable head ───────────────
+   design/ui/window-chrome.js. The head is a direct child of the window's
+   frame; the frames keep their own sizes, so the folded and enlarged states
+   override them. */
+.wc-lights { display: inline-flex; align-items: center; gap: 8px; flex: none; margin-right: 6px; }
+.wc-light {
+  width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: transparent; font-size: 10px; font-weight: 700; line-height: 1; cursor: default;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.28);
+}
+.wc-light > span { transform: translateY(-0.5px); }
+.wc-close { background: #ff5f57; }
+.wc-min { background: #febc2e; }
+.wc-zoom { background: #28c840; }
+.wc-lights:hover .wc-light, .wc-light:focus-visible { color: rgba(0, 0, 0, 0.6); }
+.wc-light:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A window that is not in front, like the main window's own lights. */
+.wc-light:active { filter: brightness(0.82); }
+
+[data-wc-head] { cursor: default; user-select: none; -webkit-user-select: none; }
+body.wc-dragging, body.wc-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
+
+.wc-shaded { height: auto !important; min-height: 0 !important; }
+.wc-shaded > :not([data-wc-head]) { display: none !important; }
+.wc-zoomed { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; transform: none !important; }
+
+.st-modal-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

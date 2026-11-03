@@ -676,15 +676,6 @@ html.tauri-native .window {
 .st-favs, .st-vendors { display: flex; flex-direction: column; gap: 10px; }
 .st-fav-vendor, .st-vendor-head { color: var(--fg-3); font-family: var(--font-ui-sans); font-size: var(--d-text-sm); }
 .st-vendor-head { margin-top: 6px; color: var(--fg); font-weight: 600; }
-.st-fav-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.st-fav {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
-  border: 1px solid var(--line-bright); background: transparent; color: var(--fg-2); cursor: pointer;
-  font-family: var(--font-ui-sans); font-size: var(--d-text-sm);
-}
-.st-fav:hover { background: var(--bg-hover); color: var(--fg); }
-.st-fav.on { background: var(--bg-active); color: var(--fg); border-color: var(--fg-5); }
-.st-fav-tick { color: var(--accent); }
 .st-fav-empty { color: var(--fg-4); font-family: var(--font-ui-sans); font-size: var(--d-text-sm); }
 .st-vendor { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-soft); }
 .st-vendor-name { flex: 1; color: var(--fg); font-family: var(--font-ui-sans); font-size: var(--d-text); }

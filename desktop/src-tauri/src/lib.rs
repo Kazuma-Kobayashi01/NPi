@@ -1668,6 +1668,32 @@ fn set_close_guard(armed: bool, guard: State<'_, CloseGuard>) {
     guard.0.store(armed, Ordering::SeqCst);
 }
 
+/// Quit the app for real (macOS closes a window by hiding it, see
+/// [`hides_on_close`]): the webview calls this after a quit was confirmed.
+/// `exit` goes through `RunEvent::Exit`, i.e. [`kill_child_processes`].
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+/// Whether closing window `label` only hides it. On macOS the red button
+/// and Cmd+W put the main window away and leave the app (its agents, terminals
+/// and browsers) running; a click on the Dock icon brings it back
+/// ([`show_main_window`]). Elsewhere a window close is a quit.
+fn hides_on_close(label: &str) -> bool {
+    cfg!(target_os = "macos") && label == "main"
+}
+
+/// Bring the hidden or minimised main window back in front.
+#[cfg(target_os = "macos")]
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 /// Whether a close of window `label` is held for the webview to confirm:
 /// only the main window's, and only while the webview armed the guard.
 fn holds_close(label: &str, armed: bool) -> bool {
@@ -1952,6 +1978,14 @@ pub fn run() {
             librarian::commands::library_remove,
             librarian::commands::library_import,
             librarian::commands::library_export,
+            librarian::commands::library_export_save,
+            librarian::commands::library_import_pick,
+            librarian::commands::library_groups,
+            librarian::commands::library_group_add,
+            librarian::commands::library_group_rename,
+            librarian::commands::library_group_remove,
+            librarian::commands::library_member,
+            librarian::commands::library_meta,
             academic_copilot_start,
             take_pending_open_projects,
             start_git_watch,
@@ -2040,6 +2074,7 @@ pub fn run() {
             app_update_check,
             app_update_install,
             set_close_guard,
+            quit_app,
             python_runtime::python_runtime_status,
             python_runtime::python_runtime_ensure,
             python_runtime::python_runtime_packages,
@@ -2059,6 +2094,23 @@ pub fn run() {
 fn handle_run_event(app: &AppHandle, event: tauri::RunEvent) {
     match &event {
         tauri::RunEvent::Exit => kill_child_processes(app),
+        // The red button and Cmd+W of the main window (macOS): hide it, quit
+        // nothing. Fullscreen is left first, or the hidden window leaves its
+        // blank Space behind.
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if hides_on_close(label) => {
+            api.prevent_close();
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = window.set_fullscreen(false);
+                let _ = window.hide();
+            }
+        }
+        // A click on the Dock icon while the window is hidden.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => show_main_window(app),
         // The OS close (title-bar menu, Alt+F4, taskbar) of a window the
         // [`CloseGuard`] holds: the webview confirms, then closes it itself.
         tauri::RunEvent::WindowEvent {
@@ -2100,7 +2152,7 @@ fn announce_held_close(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{config_dir, holds_close, strip_compaction_section, StartSessionArgs};
+    use super::{config_dir, holds_close, hides_on_close, strip_compaction_section, StartSessionArgs};
     use std::path::PathBuf;
 
     #[test]
@@ -2122,6 +2174,12 @@ mod tests {
             config_dir::<&str>(Ok(PathBuf::from("omp-desktop-config"))),
             None
         );
+    }
+
+    #[test]
+    fn only_the_main_window_hides_on_close_and_only_on_macos() {
+        assert_eq!(hides_on_close("main"), cfg!(target_os = "macos"));
+        assert!(!hides_on_close("other"));
     }
 
     /// The guard holds only the main window's close, and only while armed:

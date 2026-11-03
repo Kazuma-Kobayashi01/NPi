@@ -3357,9 +3357,9 @@
     try {
       await window.__TAURI__.core.invoke("set_close_guard", { armed: false });
       _closeGuardSent = false;
-      await window.__TAURI__.window.getCurrentWindow().close();
+      await window.__TAURI__.core.invoke("quit_app");
     } catch (e) {
-      console.error("[live] closing the window failed:", e);
+      console.error("[live] quitting failed:", e);
       _quitting = false;
       _closeGuardSent = null;
       _syncCloseGuard(_sessionsView());
@@ -4938,6 +4938,15 @@
     async academicDir() {
       if (!window.__TAURI__) return "";
       return (await _invokeSafe("academic_dir", {}, "")) || "";
+    },
+
+    /** A Librarian command of one Academic project (librarian/commands.rs):
+     *  `library_<name>` with `project` (its folder name) and `args`. Resolves to
+     *  `{ ok, value | error }`. Only the listed names go through. */
+    library(name, project, args) {
+      const NAMES = ["list", "add", "update", "remove", "import", "export", "export_save", "import_pick", "groups", "group_add", "group_rename", "group_remove", "member", "meta"];
+      if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown library command: ${name}` });
+      return _invokeResult(`library_${name}`, { project, ...(args ?? {}) });
     },
 
     /** List project-relative file/dir paths matching `query`, for the

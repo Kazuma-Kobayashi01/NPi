@@ -21,6 +21,8 @@ const { Icon: _RulesIcon, ApprovalModeSection: _RulesModeSection } = window;
 // tab's entry, null with no tab open.
 function ApprovalRulesPanel({ onClose, activeProject, sessions, approvalModes }) {
   const bridge = window.OMP_BRIDGE;
+  const panelRef = React.useRef(null);
+  const wc = window.useWindowChrome(onClose, panelRef);
   const [rules, setRules]     = React.useState([]);
   const [loading, setLoading] = React.useState(false);
 
@@ -44,15 +46,13 @@ function ApprovalRulesPanel({ onClose, activeProject, sessions, approvalModes })
 
   return (
     <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "10vh" }}>
-      <div className="rules-panel" onClick={e => e.stopPropagation()}>
-        <div className="rules-head">
+      <div className="rules-panel" ref={panelRef} onClick={e => e.stopPropagation()}>
+        <div className="rules-head" {...wc.headProps}>
+          {wc.lights}
           <_RulesIcon name="check" size={13} color="var(--accent)" />
           <span className="mono" style={{ color: "var(--fg-2)" }}>approvals</span>
           <button className="btn icon ghost" style={{ marginLeft: "auto" }} onClick={refresh} title="Refresh">
             <_RulesIcon name="refresh" size={11} />
-          </button>
-          <button className="btn icon ghost" onClick={onClose} title="Close">
-            <_RulesIcon name="close" size={11} />
           </button>
         </div>
         <div className="rules-body">

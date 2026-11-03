@@ -75,30 +75,65 @@ function _SRM_Default({ row, ctx, query }) {
 function _SRM_Favorites({ row, ctx, query }) {
   const { SettingsRow: Row } = window;
   const M = window.OMP_MODELS;
+  const T = window.OMP_I18N.t;
   const cat = _SRM_useCatalog(ctx);
+  const [filter, setFilter] = React.useState("");
   const favorites = Array.isArray(ctx.t.favoriteModels) ? ctx.t.favoriteModels : [];
   const groups = React.useMemo(() => M.groupByVendor(cat.models), [cat.models]);
+  const set = next => ctx.setTweak("favoriteModels", next);
+  const needle = filter.trim().toLowerCase();
+  const shown = groups
+    .map(g => ({ ...g, visible: needle ? g.models.filter(m => `${g.vendor} ${m.name} ${m.id}`.toLowerCase().includes(needle)) : g.models }))
+    .filter(g => g.visible.length > 0);
+  // Several providers can offer a model of the same name: the id tells them apart.
+  const tagOf = (g, m) => {
+    const same = g.models.filter(x => x.name === m.name);
+    if (same.length < 2) return "";
+    return new Set(same.map(x => x.provider)).size > 1 ? m.provider : m.id;
+  };
+  const setMany = (keys, on) => set(on ? [...favorites, ...keys.filter(k => !favorites.includes(k))] : favorites.filter(k => !keys.includes(k)));
   return (
     <Row stack label={row.label} desc={row.desc} query={query}>
       <div className="st-favs">
-        {groups.map(g => (
-          <div key={g.vendor} className="st-fav-group">
-            <div className="st-fav-vendor">{g.vendor}</div>
-            <div className="st-fav-list">
-              {g.models.map(m => {
-                const k = M.keyOf(m);
-                const on = favorites.includes(k);
-                return (
-                  <button key={k} type="button" className={`st-fav${on ? " on" : ""}`} aria-pressed={on}
-                    onClick={() => ctx.setTweak("favoriteModels", M.toggleFavorite(favorites, k))}>
-                    {on && <span className="st-fav-tick" aria-hidden="true">✓</span>}{m.name}
-                  </button>
-                );
-              })}
-            </div>
+        {groups.length > 0 && (
+          <div className="st-fav-bar">
+            <input className="st-fav-filter" value={filter} placeholder={T("Filter models")} aria-label={T("Filter models")}
+              onChange={e => setFilter(e.target.value)} />
+            <span className="st-fav-total">{T("{n} selected", { n: favorites.length })}</span>
+            <button type="button" className="st-fav-link" disabled={favorites.length === 0} onClick={() => set([])}>{T("Clear all")}</button>
           </div>
-        ))}
+        )}
+        {shown.map(g => {
+          const keys = g.models.map(M.keyOf);
+          const on = keys.filter(k => favorites.includes(k)).length;
+          return (
+            <section key={g.vendor} className="st-fav-card">
+              <header className="st-fav-head">
+                <span className="st-fav-vendor">{g.vendor}</span>
+                <span className="st-fav-count">{on} / {keys.length}</span>
+                <span className="st-fav-acts">
+                  <button type="button" className="st-fav-link" disabled={on === keys.length} onClick={() => setMany(keys, true)}>{T("All")}</button>
+                  <button type="button" className="st-fav-link" disabled={on === 0} onClick={() => setMany(keys, false)}>{T("None")}</button>
+                </span>
+              </header>
+              <div className="st-fav-grid">
+                {g.visible.map(m => {
+                  const k = M.keyOf(m);
+                  const picked = favorites.includes(k);
+                  return (
+                    <label key={k} className={`st-fav-item${picked ? " on" : ""}`} title={k}>
+                      <input type="checkbox" checked={picked} onChange={() => set(M.toggleFavorite(favorites, k))} />
+                      <span className="st-fav-name">{m.name}</span>
+                      {tagOf(g, m) && <span className="st-fav-id mono">{tagOf(g, m)}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
         {groups.length === 0 && <div className="st-fav-empty">{cat.loading ? "Loading models…" : "No models yet. Add a vendor below."}</div>}
+        {groups.length > 0 && shown.length === 0 && <div className="st-fav-empty">{T("No model matches.")}</div>}
         {favorites.length > 0 && <div className="st-fav-empty">The picker lists every ticked model, sorted by vendor.</div>}
       </div>
     </Row>

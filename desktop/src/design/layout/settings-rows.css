@@ -121,3 +121,26 @@
 .st-profile-name i { font-style: normal; color: var(--fg-4); font-size: var(--d-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-profile-tag { color: var(--accent); font-size: var(--d-text-xs); align-self: center; }
 .st-profile-input { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--line-bright); border-radius: 6px; background: var(--bg-2); color: var(--fg-1); font: inherit; }
+
+/* ── Models → the picker's models ────────────────────────────────── */
+.st-fav-bar { display: flex; align-items: center; gap: 12px; }
+.st-fav-filter { flex: 1; min-width: 0; padding: 6px 10px; border-radius: var(--r-2); border: 1px solid var(--line-soft); background: var(--bg-input); color: var(--fg-1); font: inherit; font-size: var(--d-text-sm); }
+.st-fav-filter:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 70%, var(--line-bright)); }
+.st-fav-total { color: var(--fg-4); font-size: var(--d-text-xs); white-space: nowrap; }
+.st-fav-link { background: none; border: 0; padding: 2px 4px; color: var(--accent); font: inherit; font-size: var(--d-text-xs); cursor: pointer; }
+.st-fav-link:disabled { color: var(--fg-5, var(--fg-4)); cursor: default; opacity: 0.5; }
+.st-fav-card { border: 1px solid var(--line-soft); border-radius: var(--r-2); overflow: hidden; }
+.st-fav-head { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: color-mix(in oklab, var(--fg-1) 4%, transparent); border-bottom: 1px solid var(--line-soft); }
+.st-fav-head .st-fav-vendor { flex: 1; color: var(--fg-1); font-weight: 600; }
+.st-fav-count { color: var(--fg-4); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; }
+.st-fav-acts { display: flex; gap: 4px; }
+.st-fav-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.st-fav-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 12px; color: var(--fg-2); font-size: var(--d-text-sm); cursor: pointer; border-top: 1px solid var(--line-soft); }
+.st-fav-item:nth-child(-n+2) { border-top: 0; }
+.st-fav-item:nth-child(odd) { border-right: 1px solid var(--line-soft); }
+.st-fav-item:hover { background: color-mix(in oklab, var(--fg-1) 5%, transparent); }
+.st-fav-item.on { color: var(--fg-1); }
+.st-fav-item input { flex: none; accent-color: var(--accent); margin: 0; }
+.st-fav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-fav-id { flex: none; color: var(--fg-4); font-size: var(--d-text-xs); }
+@media (max-width: 720px) { .st-fav-grid { grid-template-columns: minmax(0, 1fr); } .st-fav-item:nth-child(2) { border-top: 1px solid var(--line-soft); } .st-fav-item:nth-child(odd) { border-right: 0; } }
