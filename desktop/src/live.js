@@ -5048,6 +5048,8 @@
     notifyStatus() { return _invokeSafe("notify_status", {}, null); },
     notifyRequest() { return _invokeSafe("notify_request_permission", {}, null); },
     notifyTest() { return _invokeSafe("notify_test", {}, null); },
+    /** `{ error, signing }`: the system's last refusal and how this build is signed ("adhoc" | "signed" | "unknown"). */
+    notifyDiagnose() { return _invokeSafe("notify_diagnose", {}, null); },
   };
 
   // ── Connect to Tauri IPC ──────────────────────────────────────────────────
@@ -5063,6 +5065,20 @@
       const id = event.payload?.sessionId;
       if (typeof id === "string") void window.OMP_BRIDGE.activateSession(id);
     }).catch(error => console.error("[live] notification click listener failed:", error));
+    // The quick-ask window (Option+Space, quick_ask.rs): a prompt for a new chat or the tab on screen.
+    window.__TAURI__.event.listen("quickask://submit", async event => {
+      const { text, target } = event.payload ?? {};
+      if (typeof text !== "string" || !text.trim()) return;
+      try {
+        if (target === "new" || !activeSessionId) {
+          const dir = await window.OMP_BRIDGE.chatDir();
+          if (!dir) return;
+          window.dispatchEvent(new CustomEvent("npi:show-chat"));
+          await window.OMP_BRIDGE.openSession(dir);
+        }
+        await window.OMP_BRIDGE.send(text);
+      } catch (error) { console.error("[live] quick ask failed:", error); }
+    }).catch(error => console.error("[live] quick ask listener failed:", error));
     window.__TAURI__.event.listen("computer-use://error", event => {
       const { sessionId, error } = event.payload;
       computerStates.set(sessionId, { state: computerStates.get(sessionId)?.state ?? null, error });

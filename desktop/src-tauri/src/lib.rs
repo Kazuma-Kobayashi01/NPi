@@ -17,6 +17,9 @@ mod librarian;
 mod chat_image;
 mod mcp_skills;
 mod notify;
+mod quick_ask;
+#[cfg(target_os = "macos")]
+mod quick_ask_glass;
 mod screen_capture;
 mod session_actions;
 mod approval_mode;
@@ -1687,11 +1690,7 @@ fn hides_on_close(label: &str) -> bool {
 /// Bring the hidden or minimised main window back in front.
 #[cfg(target_os = "macos")]
 fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    }
+    quick_ask::show_main(app);
 }
 
 /// Whether a close of window `label` is held for the webview to confirm:
@@ -2047,6 +2046,7 @@ pub fn run() {
             notify::notify_status,
             notify::notify_request_permission,
             notify::notify_test,
+            notify::notify_diagnose,
             pr_automation::pr_automation_snapshot,
             screen_capture::capture_screen_to_tmp,
             workspace_accept,
@@ -2090,6 +2090,8 @@ pub fn run() {
             app_update_install,
             set_close_guard,
             quit_app,
+            quick_ask::quickask_submit,
+            quick_ask::quickask_hide,
             python_runtime::python_runtime_status,
             python_runtime::python_runtime_ensure,
             python_runtime::python_runtime_packages,
@@ -2097,6 +2099,7 @@ pub fn run() {
         .setup(|app| {
             setup(app);
             computer_overlay::setup(app.handle())?;
+            quick_ask::setup(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -2122,7 +2125,14 @@ fn handle_run_event(app: &AppHandle, event: tauri::RunEvent) {
                 let _ = window.set_fullscreen(false);
                 let _ = window.hide();
             }
+            quick_ask::main_hidden(app);
         }
+        // A click outside the quick-ask window puts it away.
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Focused(false),
+            ..
+        } if label == quick_ask::QUICK_LABEL => quick_ask::on_blur(app),
         // A click on the Dock icon while the window is hidden.
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => show_main_window(app),

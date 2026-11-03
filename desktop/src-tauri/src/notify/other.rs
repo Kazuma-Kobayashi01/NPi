@@ -12,6 +12,14 @@ pub fn request() -> Status {
     Status::Granted
 }
 
+pub fn last_error() -> Option<String> {
+    None
+}
+
+pub const fn signing() -> &'static str {
+    "unknown"
+}
+
 pub fn post(title: &str, body: &str, _sid: &str) {
     #[cfg(target_os = "linux")]
     {

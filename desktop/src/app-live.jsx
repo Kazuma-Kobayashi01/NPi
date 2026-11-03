@@ -165,6 +165,12 @@ function App() {
   // The mode picks the system prompt omp starts with (app_mode.rs); anything unknown is Code.
   const appModeName = ["chat", "academic"].includes(t.appMode) ? t.appMode : "code";
   React.useEffect(() => { bridge?.setAppMode?.(appModeName); }, [bridge, appModeName]);
+  // A quick-ask prompt for a new chat (live.js) shows the Chat space first.
+  React.useEffect(() => {
+    const show = () => setTweak("appMode", "chat");
+    window.addEventListener("npi:show-chat", show);
+    return () => window.removeEventListener("npi:show-chat", show);
+  }, [setTweak]);
 
   // Chat and Code live apart: a chat is a tab in the Chat folder (chat_space.rs),
   // everything else is a code project. Each mode remembers the tab it had open.

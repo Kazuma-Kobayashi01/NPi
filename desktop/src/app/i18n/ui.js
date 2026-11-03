@@ -150,6 +150,8 @@
     ["Restored {key}", "已恢复 {key}", "已還原 {key}", "{key} を復元しました"],
     ["Moved {key} to the trash", "已把 {key} 移入回收站", "已把 {key} 移入資源回收筒", "{key} をごみ箱へ移動しました"],
     ["Removed references are kept, and their citekeys are never reused.", "移除的文献会保留，它们的 citekey 不会被再用。", "移除的文獻會保留，它們的 citekey 不會被再用。", "削除した文献は保持され、citekey は再利用されません。"],
+    ["The system said", "系统返回", "系統回應", "システムの応答"],
+    ["This build is signed ad hoc, so macOS may treat every update as a new app and forget this permission. Sign it with a stable local certificate (docs/architecture/notifications.md).", "这个版本是临时（ad hoc）签名，macOS 可能把每次更新都当成新应用并忘掉通知权限。请用固定的本地证书签名（见 docs/architecture/notifications.md）。", "這個版本是臨時（ad hoc）簽名，macOS 可能把每次更新都當成新應用並忘掉通知權限。請用固定的本地憑證簽名（見 docs/architecture/notifications.md）。", "このビルドは ad hoc 署名のため、macOS が更新のたびに別のアプリとみなして通知の許可を忘れることがあります。固定のローカル証明書で署名してください（docs/architecture/notifications.md）。"],
     ["Nothing to copy", "没有可复制的内容", "沒有可複製的內容", "コピーするものがありません"],
     ["Copies the reference list of what the list shows", "复制当前列表的参考文献", "複製目前列表的參考文獻", "表示中のリストの参考文献をコピーします"],
     ["The in-text citation, in the chosen style", "所选样式的文内引用", "所選樣式的文內引用", "選択したスタイルの本文中引用"],

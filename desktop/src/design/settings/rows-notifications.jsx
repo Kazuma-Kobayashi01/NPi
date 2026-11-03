@@ -13,9 +13,11 @@ function _SRN_Notifications({ row, ctx, query }) {
   const [status, setStatus] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [sent, setSent] = React.useState(false);
+  const [diag, setDiag] = React.useState(null);
 
   const refresh = React.useCallback(() => {
     Promise.resolve(ctx.bridge?.notifyStatus?.()).then(s => setStatus(s ?? "unsupported"));
+    Promise.resolve(ctx.bridge?.notifyDiagnose?.()).then(d => setDiag(d ?? null));
   }, [ctx.bridge]);
   React.useEffect(() => {
     refresh();
@@ -28,7 +30,7 @@ function _SRN_Notifications({ row, ctx, query }) {
     ctx.setTweak({ notifications: next });
     if (!next) return;
     setBusy(true);
-    try { setStatus((await ctx.bridge?.notifyRequest?.()) ?? "unsupported"); }
+    try { setStatus((await ctx.bridge?.notifyRequest?.()) ?? "unsupported"); setDiag((await ctx.bridge?.notifyDiagnose?.()) ?? null); }
     finally { setBusy(false); }
   };
   const test = async () => {
@@ -37,6 +39,7 @@ function _SRN_Notifications({ row, ctx, query }) {
       const s = await ctx.bridge?.notifyTest?.();
       setStatus(s ?? "unsupported");
       setSent(s === "granted");
+      setDiag((await ctx.bridge?.notifyDiagnose?.()) ?? null);
       window.setTimeout(() => setSent(false), 3000);
     } finally { setBusy(false); }
   };
@@ -56,6 +59,12 @@ function _SRN_Notifications({ row, ctx, query }) {
           <Toggle value={on} onChange={turnOn} label={T("Send system notifications")} />
         </label>
         <p className={`st-notify-state is-${info.tone}`} role="status">{info.text}</p>
+        {status !== "granted" && status !== "unsupported" && diag?.error && (
+          <p className="st-notify-state is-warn">{T("The system said")}: {diag.error}</p>
+        )}
+        {status !== "granted" && status !== "unsupported" && diag?.signing === "adhoc" && (
+          <p className="st-notify-state is-warn">{T("This build is signed ad hoc, so macOS may treat every update as a new app and forget this permission. Sign it with a stable local certificate (docs/architecture/notifications.md).")}</p>
+        )}
         {on && kinds.map(([key, label]) => (
           <label key={key} className="st-notify-line">
             <span>{T(label)}</span>

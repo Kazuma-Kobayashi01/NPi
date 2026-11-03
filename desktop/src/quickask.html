@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quick Ask</title>
+  <link rel="stylesheet" href="quickask.css">
+</head>
+<body>
+  <div class="bar" data-tauri-drag-region>
+    <svg class="logo" viewBox="104 124 304 260" aria-hidden="true" data-tauri-drag-region>
+      <g transform="translate(0 12)" fill="currentColor">
+        <rect x="116" y="116" width="280" height="14"/><rect x="136" y="136" width="240" height="34"/>
+        <rect x="158" y="169" width="48" height="11"/><polygon points="162,179 202,179 195,192 169,192"/>
+        <polygon points="169,191 195,191 199,343 165,343"/><rect x="156" y="341" width="52" height="14"/>
+        <rect x="306" y="169" width="48" height="11"/><polygon points="310,179 350,179 343,192 317,192"/>
+        <polygon points="317,191 343,191 347,343 313,343"/><rect x="304" y="341" width="52" height="14"/>
+        <rect x="124" y="353" width="264" height="10"/><rect x="104" y="361" width="304" height="11"/>
+        <circle cx="256" cy="272" r="15"/>
+      </g>
+    </svg>
+    <input id="q" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Ask">
+    <div class="target">
+      <button id="target" type="button" aria-haspopup="listbox" aria-expanded="false"><span id="target-label"></span>
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <ul id="menu" role="listbox" hidden>
+        <li role="option" data-target="new"></li>
+        <li role="option" data-target="current"></li>
+      </ul>
+    </div>
+    <button id="send" type="button" disabled aria-label="Send">
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M10 16V4M4.5 9.5L10 4l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <script src="quickask.js"></script>
+</body>
+</html>

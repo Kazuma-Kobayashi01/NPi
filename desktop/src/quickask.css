@@ -1,0 +1,25 @@
+/* The quick-ask window (src-tauri/src/quick_ask.rs): one rounded bar on a transparent window. */
+:root { --accent: #d97757; --bg: rgba(31, 26, 43, 0.96); --fg: #ece8f4; --muted: #8e869f; --line: rgba(255, 255, 255, 0.08); --menu: #2a2438; --logo: #f1ede4; }
+:root[data-theme="light"] { --bg: rgba(255, 255, 255, 0.97); --fg: #25212e; --muted: #8a8496; --line: rgba(0, 0, 0, 0.1); --menu: #ffffff; --logo: #1f1f1d; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; color: var(--fg); -webkit-user-select: none; user-select: none; }
+body { display: flex; align-items: center; justify-content: center; padding: 14px; }
+.bar { width: 100%; height: 64px; display: flex; align-items: center; gap: 14px; padding: 0 12px 0 18px; border-radius: 22px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
+.logo { width: 34px; height: 30px; flex: none; color: var(--logo); }
+#q { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 20px; -webkit-user-select: text; user-select: text; }
+#q::placeholder { color: var(--muted); }
+.target { position: relative; flex: none; }
+#target { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-size: 16px; cursor: pointer; }
+#target:hover, #target[aria-expanded="true"] { background: var(--line); color: var(--fg); }
+#menu { position: absolute; right: 0; bottom: calc(100% + 10px); min-width: 150px; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--line); border-radius: 12px; background: var(--menu); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4); }
+#menu li { padding: 8px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+#menu li:hover, #menu li.on { background: var(--line); }
+#send { flex: none; width: 48px; height: 40px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; display: grid; place-items: center; cursor: pointer; }
+#send:disabled { opacity: 0.35; cursor: default; }
+/* A native backdrop (quick_ask_glass.rs: Liquid Glass on macOS 26, a HUD material before) sits behind the
+   transparent bar, so the bar only tints it and drops its own fill and shadow. */
+[data-backdrop] .bar { background: rgba(24, 20, 36, 0.22); border-color: rgba(255, 255, 255, 0.16); box-shadow: none; }
+:root[data-theme="light"][data-backdrop] .bar { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.5); }
+[data-backdrop] #menu { backdrop-filter: blur(24px) saturate(1.4); background: rgba(40, 34, 56, 0.78); }
+:root[data-theme="light"][data-backdrop] #menu { background: rgba(255, 255, 255, 0.82); }
+[data-backdrop] #send:disabled { opacity: 0.45; }

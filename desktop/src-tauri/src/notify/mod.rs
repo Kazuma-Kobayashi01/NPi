@@ -268,6 +268,16 @@ pub async fn notify_request_permission() -> Result<String, String> {
     Ok(status.as_str().to_string())
 }
 
+/// What the Settings row shows beside the state: the system's last refusal and how this build is signed.
+#[tauri::command]
+pub async fn notify_diagnose() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        serde_json::json!({ "error": platform::last_error(), "signing": platform::signing() })
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// The Settings "Send test notification" button. Resolves to the permission state.
 #[tauri::command]
 pub async fn notify_test(state: State<'_, NotifyState>) -> Result<String, String> {

@@ -32,6 +32,12 @@ The centre only works for a launched `.app`: an unbundled binary (`tauri dev`) h
 
 `other.rs` keeps the previous mechanism, repaired: PowerShell reads the title and body from environment variables instead of having them spliced into the script, and `notify-send` takes them after `--`. There is no per-app permission to ask for on this path (status is always `granted`) and a click on the toast is not wired. The `tauri-plugin-notification` desktop implementation was considered and not used: it answers `Granted` without asking, on macOS it goes through the deprecated `NSUserNotification` and cannot report a denial or a click.
 
+## Why a macOS build may never be allowed (ad-hoc signing)
+
+Checked on the developer's machine: `~/Library/Preferences/com.apple.ncprefs.plist` listed `dev.npi.desktop` with **eight** separate sources, one per build, each with a different code requirement and `auth: 0`. The shipped bundle is signed ad hoc (`signingIdentity: "-"`, `codesign` says `Signature=adhoc`), and an ad-hoc signature's identity is the build's own hash, so macOS sees every build as a new, never-asked app: the permission does not carry over and the prompt may not return. The Settings row therefore shows what the system said when it refused (`notify_diagnose`: the last `NSError` of the authorization request or of a post) and, for an ad-hoc build that is not allowed, a note pointing here.
+
+The fix is a stable signing identity, not code. `scripts/macos-local-signing.sh` creates a self-signed code-signing certificate ("NPi Desktop Local") in the login keychain once (it asks macOS to trust it for code signing, which needs your password, so it is run by hand), and `npm run build -- --config src-tauri/tauri.localsign.conf.json` signs with it, so the code identity stays the same across builds and the permission is kept. Remove the stale "NPi Desktop" entries from System Settings → Notifications first if the old ones are still listed. Not verified: the script and the signed build have not been run, and whether macOS keeps the permission for a self-signed identity is the expected behaviour, not a measured one.
+
 ## Not the same as phone push
 
 Web Push to a paired phone (`remote-access.md`, `remote/push*.rs`) is a different feature with its own settings; nothing here touches it.

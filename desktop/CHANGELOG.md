@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Quick ask: Option+Space opens a small prompt box over whatever you are doing; the prompt goes to a new chat or to the tab on screen. The app also has a menu-bar icon, and on macOS Cmd+W and the red button now close the window to it (the Dock icon goes while the window is hidden; click the menu-bar icon to bring it back).
+- Notifications on macOS: the Settings row shows what the system said when it refused, and explains that an ad-hoc signed build is treated as a new app by every build. `scripts/macos-local-signing.sh` and `src-tauri/tauri.localsign.conf.json` sign local builds with one stable certificate so the permission is kept.
 - Librarian trash: removed references are kept and listed under "Trash", and "Restore" brings one back with its groups, tags, notes and files.
 - Librarian for the Academic Copilot: it can search the reference library, read a reference with its formatted citation, check a draft's citations against the library (matched, other year, not in the library) and suggest tags, groups or notes that you accept or dismiss on the reference. "Check a draft…" runs the same check from the Librarian window; the main chat gets the read-only tools. New projects also get a Librarian skill.
 - Librarian citation styles: APA, IEEE, Chicago, MLA, Nature, Vancouver, Harvard and GB/T 7714 (numeric, author-date, note) through a CSL engine, your own `.csl` files, "Copy citation" / "Copy reference" / "Copy list" in the chosen style, and "Cite a draft…" which turns `[@citekey]` in a Markdown draft into citations plus a reference list.

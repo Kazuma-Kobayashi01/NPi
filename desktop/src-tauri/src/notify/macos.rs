@@ -9,7 +9,7 @@
 
 use std::ptr::NonNull;
 use std::sync::mpsc;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use block2::{DynBlock, RcBlock};
@@ -33,6 +33,37 @@ const ANSWER_TIMEOUT: Duration = Duration::from_secs(10);
 const SEP: char = '|';
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// What the system last said when it refused a request or a post, for the Settings row.
+static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
+
+fn remember(error: *mut NSError) {
+    // SAFETY: the system passes either null or a live NSError for the duration of its completion block.
+    let text = unsafe { error.as_ref() }.map(|e| format!("{} ({}, {})", e.localizedDescription(), e.domain(), e.code()));
+    if let Ok(mut last) = LAST_ERROR.lock() {
+        *last = text;
+    }
+}
+
+/// The system's last refusal, if any.
+pub fn last_error() -> Option<String> {
+    LAST_ERROR.lock().ok().and_then(|e| e.clone())
+}
+
+/// `adhoc` when the running bundle carries an ad-hoc signature: such a build has a new code
+/// identity on every build, so the system treats each as a different app and may not keep its
+/// notification permission. `signed` otherwise, `unknown` when `codesign` could not be run.
+pub fn signing() -> &'static str {
+    let bundle = NSBundle::mainBundle().bundlePath().to_string();
+    let mut cmd = std::process::Command::new("/usr/bin/codesign");
+    cmd.args(["-dv", "--verbose=2", &bundle]);
+    match crate::spawn_gate::output(&mut cmd) {
+        Ok(out) => {
+            let text = String::from_utf8_lossy(&out.stderr);
+            if text.contains("Signature=adhoc") { "adhoc" } else { "signed" }
+        }
+        Err(_) => "unknown",
+    }
+}
 
 define_class!(
     #[unsafe(super(NSObject))]
@@ -120,7 +151,8 @@ pub fn request() -> Status {
         return Status::Unsupported;
     }
     let (tx, rx) = mpsc::channel();
-    let block = RcBlock::new(move |_granted: Bool, _error: *mut NSError| {
+    let block = RcBlock::new(move |_granted: Bool, error: *mut NSError| {
+        remember(error);
         let _ = tx.send(());
     });
     UNUserNotificationCenter::currentNotificationCenter()
@@ -144,6 +176,7 @@ pub fn post(title: &str, body: &str, sid: &str) {
     let identifier = NSString::from_str(&format!("npi.{}{SEP}{sid}", super::next_id()));
     let request =
         UNNotificationRequest::requestWithIdentifier_content_trigger(&identifier, &content, None);
+    let done = RcBlock::new(|error: *mut NSError| remember(error));
     UNUserNotificationCenter::currentNotificationCenter()
-        .addNotificationRequest_withCompletionHandler(&request, None);
+        .addNotificationRequest_withCompletionHandler(&request, Some(&done));
 }
