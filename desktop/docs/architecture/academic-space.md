@@ -51,7 +51,7 @@ Its only tools come over omp's Host Tool RPC, registered by Rust (`AgentBridge::
 
 Everything else (`papers/` and `data/raw/` writes, `.omp/`, `.npi-academic/`, paths outside the project, the network, a shell) has no tool at all.
 
-PDFs are searched and read as extracted text (`pdf_text.rs`, below); known gaps: a scanned PDF has no text layer and OCR is not available; search is a plain term match, not FTS5 (planned in `docs/PLAN_3.0.md`); `research_propose_ops`, authorisation per paper and calling the Copilot from the main chat are not built. The tools were exercised only by unit tests: a real omp run needs model credentials, which the self-hosting rules keep out of probes, so the `set_host_tools` handshake and the model's use of the tools are unverified end to end.
+PDFs are searched and read as extracted text (`pdf_text.rs`, below); known gaps: a scanned PDF has no text layer and OCR is not available; search is a plain term match until a project is indexed, then FTS5 over page-level blocks with Chinese short-word support (`research-core.md`); `research_propose_ops`, authorisation per paper and calling the Copilot from the main chat are not built. The tools were exercised only by unit tests: a real omp run needs model credentials, which the self-hosting rules keep out of probes, so the `set_host_tools` handshake and the model's use of the tools are unverified end to end.
 
 ## The Academic library as tools for the main chat (`copilot::ResearchHub`)
 
