@@ -42,7 +42,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_search",
             "label": "Search project",
-            "description": "Search the text files of this research project (notes, digests, artifacts, processed data, text papers and the extracted text of PDFs) for passages containing the query terms. Returns file, line and a snippet for each hit. A scanned PDF has no text and is reported, not searched.",
+            "description": "Search the text files of this research project (notes, digests, artifacts, processed data, text papers and the extracted text of PDFs) for passages containing the query terms. Returns file, line and a snippet for each hit; once the project is indexed, hits show the page (file p.N) and an anchor id that research_check_quote and citations can use. Chinese and English both work. A scanned PDF has no text and is reported, not searched.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -84,7 +84,24 @@ pub fn tool_definitions() -> Value {
                 "required": ["kind", "name", "content"],
                 "additionalProperties": false
             },
-            "loadMode": "essential"        },
+            "loadMode": "essential"
+        },
+        {
+            "name": "research_check_quote",
+            "label": "Check quote",
+            "description": "Deterministically check that a quotation is on a page of a paper in this project, using the indexed text (line breaks, hyphenation and case are ignored). Give the project-relative path, the 1-based page and the exact words. Answers matched (with the anchor id), not found, or stale (the file changed since it was indexed). It does not judge whether the quote supports a claim.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Project-relative path, for example papers/2021-smith-attention.pdf" },
+                    "page": { "type": "integer", "description": "1-based page of a PDF; omit for a text file." },
+                    "quote": { "type": "string", "description": "The quoted words, copied from the paper." }
+                },
+                "required": ["path", "quote"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
         {
             "name": "library_search",
             "label": "Search reference library",
@@ -335,6 +352,7 @@ impl CopilotHost {
             "research_search" => self.search(args),
             "research_read" => self.read(args),
             "research_save" => self.save(args),
+            "research_check_quote" => self.check_quote(args),
             "library_search" => self.library_search(args),
             "library_get" => self.library_get(args),
             "library_check" => self.library_check(args),
@@ -359,9 +377,89 @@ impl CopilotHost {
         let limit = args.get("limit").and_then(Value::as_u64).map_or(10, |n| {
             usize::try_from(n).unwrap_or(MAX_HITS).clamp(1, MAX_HITS)
         });
-        let (_, entries) = self.library()?;
-        let hits = crate::librarian::search(&entries, query, limit);
+        let (lib, entries) = self.library()?;
+        // The full-text index when the project has one (it finds short Chinese words); the plain
+        // scan otherwise, and when the index finds nothing.
+        let ranked = lib.search_library(&entries, query, limit).ok().flatten().unwrap_or_default();
+        let mut hits: Vec<&crate::librarian::Entry> =
+            ranked.iter().filter_map(|id| entries.iter().find(|e| e.id == *id)).collect();
+        if hits.is_empty() {
+            hits = crate::librarian::search(&entries, query, limit);
+        }
         Ok(crate::librarian::render_search(&hits, query))
+    }
+
+    /// Hits from the Research Core's index, or `None` when the project has no index or it finds
+    /// nothing (the caller then scans the files). New and changed files are indexed first, a few
+    /// PDFs at a time.
+    fn indexed_search(&self, query: &str, limit: usize) -> Option<String> {
+        use crate::librarian::{IndexOptions, Library};
+        let lib = Library::open(&self.root).ok()?;
+        if !lib.has_index().ok()? {
+            return None;
+        }
+        let report = lib
+            .index_project(&self.root, IndexOptions { text: true, max_new_pdfs: Some(MAX_FRESH_PDFS) })
+            .ok()?;
+        let hits = lib.search_blocks(query, None, limit).ok()?;
+        if hits.is_empty() {
+            return None;
+        }
+        let mut lines: Vec<String> = hits
+            .iter()
+            .map(|h| {
+                let page = h.page.map_or(String::new(), |p| format!(" p.{p}"));
+                let anchor = h.anchor_id.map_or(String::new(), |a| format!(" [anchor {a}]"));
+                format!("{}{page}{anchor}: {}", h.path, h.snippet)
+            })
+            .collect();
+        if report.waiting > 0 {
+            lines.push(format!(
+                "{} PDF(s) were not indexed yet: they are read a few at a time, so search again.",
+                report.waiting
+            ));
+        }
+        if !report.scanned.is_empty() {
+            lines.push(format!(
+                "No text layer (scanned, needs OCR), not searched: {}.",
+                report.scanned.join(", ")
+            ));
+        }
+        Some(lines.join("\n"))
+    }
+
+    fn check_quote(&self, args: &Value) -> ToolResult {
+        use crate::librarian::{Library, QuoteCheck};
+        let get = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
+        let real = self.resolve(get("path"), READ_DIRS)?;
+        let rel = real
+            .strip_prefix(&self.root)
+            .map_err(|_| "the path leaves the project".to_string())?
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+        let page = match args.get("page") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(
+                v.as_u64()
+                    .and_then(|n| u32::try_from(n).ok())
+                    .filter(|n| *n >= 1)
+                    .ok_or("page is a 1-based integer")?,
+            ),
+        };
+        let lib = Library::open(&self.root)?;
+        let verdict = lib.check_quote(&self.root, &rel, page, get("quote"))?;
+        let at = page.map_or(rel.clone(), |p| format!("{rel} p.{p}"));
+        Ok(match verdict {
+            QuoteCheck::Matched { anchor_id, .. } => format!(
+                "matched: the quote is on {at}{}.",
+                anchor_id.map_or(String::new(), |a| format!(" (anchor {a})"))
+            ),
+            QuoteCheck::NotFound => format!("not found: the quote is not on {at} of the indexed text. Check the page number and the wording."),
+            QuoteCheck::Stale => format!("stale: {rel} changed or is gone since it was indexed, so the indexed text cannot vouch for it. Search the project again to re-index it."),
+            QuoteCheck::Unreadable { status } => format!("{rel} has no searchable text (parse status: {status}), so the quote cannot be checked."),
+        })
     }
 
     fn library_get(&self, args: &Value) -> ToolResult {
@@ -480,6 +578,9 @@ impl CopilotHost {
         let limit = args.get("limit").and_then(Value::as_u64).map_or(10, |n| {
             usize::try_from(n).unwrap_or(MAX_HITS).clamp(1, MAX_HITS)
         });
+        if let Some(found) = self.indexed_search(query, limit) {
+            return Ok(found);
+        }
         let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
         let mut hits: Vec<(usize, String, usize, String)> = Vec::new();
         let (mut fresh, mut waiting, mut scanned) = (0usize, 0usize, Vec::new());
@@ -759,7 +860,7 @@ mod tests {
         assert_eq!(
             names,
             [
-                "research_search", "research_read", "research_save", "library_search",
+                "research_search", "research_read", "research_save", "research_check_quote", "library_search",
                 "library_get", "library_check", "library_suggest"
             ]
         );
@@ -850,7 +951,7 @@ mod tests {
                 assert_eq!(hub.call("1", tool, &args)["isError"], true, "{tool} {project:?}");
             }
         }
-        for tool in ["library_suggest", "library_search", "research_save", "research_read"] {
+        for tool in ["library_suggest", "library_search", "research_save", "research_read", "research_check_quote"] {
             assert_eq!(hub.call("2", tool, &json!({ "project": "Thesis" }))["isError"], true, "{tool} is not the chat's");
         }
     }
@@ -1103,6 +1204,37 @@ mod tests {
             )["isError"],
             true
         );
+    }
+
+    #[test]
+    fn an_indexed_project_searches_the_index_and_checks_quotes() {
+        let (_d, h) = host("indexed");
+        std::fs::write(h.root.join("papers/p.pdf"), crate::pdf_text::pages_pdf(&["First page", "Transformers replace recurrence"])).unwrap();
+        std::fs::write(h.root.join("notes/n.md"), "综述文献检索方法\n".as_bytes()).unwrap();
+        // No index yet: the plain scan answers (no page, no anchor).
+        let scan = text_of(&h.call("1", "research_search", &json!({ "query": "recurrence" })));
+        assert!(scan.starts_with("papers/p.pdf:"), "{scan}");
+        let before = text_of(&h.call("2", "research_check_quote", &json!({ "path": "papers/p.pdf", "page": 2, "quote": "replace  RECURRENCE" })));
+        assert!(before.starts_with("matched: the quote is on papers/p.pdf p.2 (anchor "), "{before}");
+        // Now the project has an index: hits show the page and an anchor, and short Chinese words are found.
+        let found = text_of(&h.call("3", "research_search", &json!({ "query": "recurrence" })));
+        assert!(found.starts_with("papers/p.pdf p.2 [anchor "), "{found}");
+        assert!(text_of(&h.call("4", "research_search", &json!({ "query": "文献" }))).starts_with("notes/n.md [anchor "));
+        assert!(text_of(&h.call("5", "research_check_quote", &json!({ "path": "papers/p.pdf", "page": 1, "quote": "recurrence" }))).starts_with("not found"));
+        assert_eq!(h.call("6", "research_check_quote", &json!({ "path": "papers/p.pdf", "quote": "recurrence" }))["isError"], true);
+        assert_eq!(h.call("7", "research_check_quote", &json!({ "path": "../p.pdf", "page": 1, "quote": "x" }))["isError"], true);
+        assert_eq!(h.call("8", "research_check_quote", &json!({ "path": ".npi-academic/research.db", "quote": "x" }))["isError"], true);
+        // A changed paper is reported stale until the next search re-indexes it.
+        std::fs::write(h.root.join("papers/p.pdf"), crate::pdf_text::pages_pdf(&["First page changed", "Other words entirely here"])).unwrap();
+        let stale = text_of(&h.call("9", "research_check_quote", &json!({ "path": "papers/p.pdf", "page": 2, "quote": "recurrence" })));
+        assert!(stale.starts_with("stale:"), "{stale}");
+        let fresh = text_of(&h.call("10", "research_search", &json!({ "query": "entirely" })));
+        assert!(fresh.contains("p.2"), "{fresh}");
+        // The library search uses the index too (a two-character Chinese title word).
+        let lib = crate::librarian::Library::open(&h.root).unwrap();
+        lib.add(&json!({"title": "文献检索综述", "type": "book"}), "manual").unwrap();
+        let refs = text_of(&h.call("11", "library_search", &json!({ "query": "文献" })));
+        assert!(refs.contains("文献检索综述"), "{refs}");
     }
 
     #[test]

@@ -3,7 +3,7 @@
 
 use super::{
     add_user_style, cite_draft, export, format as format_entries, import, styles, Entry, Format, Formatted, Group,
-    Cited, ImportReport, Library, StyleInfo, Trashed,
+    Cited, ImportReport, IndexOptions, IndexReport, IndexStatus, Library, StyleInfo, Trashed,
 };
 use super::{attach, check_citations, lookup, pdf_meta};
 use crate::academic_space::AcademicSpace;
@@ -664,6 +664,33 @@ pub async fn library_check_draft_pick(
         Ok(Some(check_citations(&entries, &text)))
     })
     .await?
+}
+
+/// (Re)indexes a project's papers and, with `text`, its notes, digests and drafts. `rebuild`
+/// also rebuilds the search index from the blocks first. The webview names only the project.
+#[tauri::command]
+pub async fn research_index(
+    space: Space<'_>,
+    project: String,
+    text: Option<bool>,
+    rebuild: Option<bool>,
+) -> Result<IndexReport, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let lib = Library::open(&dir)?;
+        if rebuild == Some(true) {
+            lib.rebuild_search()?;
+        }
+        lib.index_project(&dir, IndexOptions { text: text.unwrap_or(true), max_new_pdfs: None })
+    })
+    .await?
+}
+
+/// What the project's index holds: counts, scanned and stale files, consistency problems.
+#[tauri::command]
+pub async fn research_index_status(space: Space<'_>, project: String) -> Result<IndexStatus, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.index_status(&dir)).await?
 }
 
 #[cfg(test)]
