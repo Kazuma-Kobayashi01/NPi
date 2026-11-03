@@ -2000,6 +2000,8 @@ pub fn run() {
             librarian::commands::library_restore,
             librarian::commands::library_suggestion_resolve,
             librarian::commands::library_check_draft_pick,
+            librarian::commands::research_index,
+            librarian::commands::research_index_status,
             academic_copilot_start,
             take_pending_open_projects,
             start_git_watch,

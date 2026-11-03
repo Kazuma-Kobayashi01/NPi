@@ -16,7 +16,7 @@ use std::path::Path;
 use std::time::UNIX_EPOCH;
 
 /// Largest PDF read; a larger file is refused, not partly read.
-const MAX_PDF_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_PDF_BYTES: u64 = 64 * 1024 * 1024;
 const CACHE_DIR: &str = ".npi-academic/cache/pdf";
 
 /// What a PDF gave.
@@ -52,6 +52,45 @@ pub fn extract(path: &Path) -> Result<Extracted, String> {
         return Ok(Extracted::Scanned);
     }
     Ok(Extracted::Text(markdown))
+}
+
+/// A PDF page by page, for the Research Core's index.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Paged {
+    /// `(1-based page, Markdown)` of each page that has text, and the pages left out
+    /// because they have no reliable text layer (they need OCR).
+    Pages {
+        pages: Vec<(u32, String)>,
+        ocr_pages: Vec<u32>,
+        page_count: u32,
+    },
+    Scanned,
+}
+
+/// The text of every page of the PDF `bytes` (no cache: the index is the cache). The caller
+/// has checked the size against [`MAX_PDF_BYTES`].
+pub fn pages(bytes: &[u8]) -> Result<Paged, String> {
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        pdf_inspector::extract_pages_markdown_mem(bytes, None)
+    }))
+    .map_err(|_| "the PDF could not be read (its structure is malformed)".to_string())?
+    .map_err(|e| describe(&e))?;
+    let page_count = u32::try_from(result.pages.len()).unwrap_or(u32::MAX);
+    let mut pages = Vec::new();
+    let mut ocr_pages = Vec::new();
+    for p in result.pages {
+        let number = p.page + 1;
+        // Garbled text is not indexed either: a quote check on it would be a guess.
+        if p.markdown.trim().is_empty() || p.needs_ocr {
+            ocr_pages.push(number);
+        } else {
+            pages.push((number, p.markdown));
+        }
+    }
+    if pages.is_empty() {
+        return Ok(Paged::Scanned);
+    }
+    Ok(Paged::Pages { pages, ocr_pages, page_count })
 }
 
 /// The text of page 1 of `path` (the Librarian reads a PDF's title and DOI there); no cache.
@@ -139,15 +178,24 @@ pub fn extract_cached(project: &Path, rel: &str, path: &Path) -> Result<Extracte
 
 #[cfg(test)]
 pub fn tiny_pdf(text: &str) -> Vec<u8> {
-    // One page, Helvetica, the text shown at 12 pt; xref offsets computed.
-    let stream = format!("BT /F1 12 Tf 72 700 Td ({text}) Tj ET");
-    let objects = [
+    pages_pdf(&[text])
+}
+
+/// A PDF with one page per entry of `texts` (Helvetica, shown at 12 pt; xref offsets computed).
+#[cfg(test)]
+pub fn pages_pdf(texts: &[&str]) -> Vec<u8> {
+    // Objects: 1 catalog, 2 pages, 3 font, then a page and its content stream per text.
+    let kids: Vec<String> = (0..texts.len()).map(|i| format!("{} 0 R", 4 + 2 * i)).collect();
+    let mut objects = vec![
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".to_string(),
-        format!("<< /Length {} >>\nstream\n{stream}\nendstream", stream.len()),
+        format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), texts.len()),
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
     ];
+    for (i, text) in texts.iter().enumerate() {
+        let stream = format!("BT /F1 12 Tf 72 700 Td ({text}) Tj ET");
+        objects.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 3 0 R >> >> >>", 5 + 2 * i));
+        objects.push(format!("<< /Length {} >>\nstream\n{stream}\nendstream", stream.len()));
+    }
     let mut out = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
     for (i, body) in objects.iter().enumerate() {
@@ -183,6 +231,15 @@ mod tests {
             panic!("expected text")
         };
         assert!(t.contains("Attention is all you need"), "{t}");
+    }
+
+    #[test]
+    fn pages_are_numbered_from_one() {
+        let Paged::Pages { pages, page_count, .. } = pages(&tiny_pdf("page one words")).unwrap() else {
+            panic!("expected text")
+        };
+        assert_eq!((page_count, pages[0].0), (1, 1));
+        assert!(pages[0].1.contains("page one words"));
     }
 
     #[test]

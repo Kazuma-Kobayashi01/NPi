@@ -7,6 +7,7 @@
 mod attach;
 mod bibtex;
 mod citekey;
+mod cjk;
 pub mod commands;
 mod csl;
 mod format;
@@ -14,6 +15,7 @@ mod lookup;
 pub mod agent;
 mod organize;
 mod pdf_meta;
+mod research;
 mod ris;
 mod store;
 mod suggest;
@@ -23,5 +25,6 @@ pub use agent::{check_citations, render_get, render_report, render_search, searc
 pub use format::{add_user_style, cite_draft, format, styles, Cited, Formatted, StyleInfo};
 
 pub use organize::Group;
+pub use research::{IndexOptions, IndexReport, IndexStatus, QuoteCheck};
 pub use store::{Entry, Library, Trashed};
 pub use transfer::{export, import, Format, ImportReport};
