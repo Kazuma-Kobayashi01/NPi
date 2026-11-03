@@ -52,6 +52,11 @@ tar = "0.4"
 # (MIT, on lopdf), reads CJK text and tells scanned pages from text ones.
 pdf-inspector = "=1.25.0"
 
+# Citation styles for the Librarian (`src/librarian/format.rs`): a CSL engine with
+# the bundled style archive (APA, IEEE, Chicago, MLA, Nature, Vancouver, Harvard,
+# GB/T 7714 and more; the styles are CC-BY-SA, see THIRD_PARTY_NOTICES.md).
+hayagriva = "0.10"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",

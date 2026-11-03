@@ -54,6 +54,26 @@ pub fn extract(path: &Path) -> Result<Extracted, String> {
     Ok(Extracted::Text(markdown))
 }
 
+/// The text of page 1 of `path` (the Librarian reads a PDF's title and DOI there); no cache.
+pub fn first_page(path: &Path) -> Result<Extracted, String> {
+    let len = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
+    if len > MAX_PDF_BYTES {
+        return Err("the PDF is too large".to_string());
+    }
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let options = pdf_inspector::PdfOptions::new().pages([1]);
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        pdf_inspector::process_pdf_mem_with_options(&bytes, options)
+    }))
+    .map_err(|_| "the PDF could not be read (its structure is malformed)".to_string())?
+    .map_err(|e| describe(&e))?;
+    let markdown = result.markdown.unwrap_or_default();
+    if markdown.trim().is_empty() {
+        return Ok(Extracted::Scanned);
+    }
+    Ok(Extracted::Text(markdown))
+}
+
 /// The cache file of `path` (project-relative `rel`): `<hash of rel>.<size>-<mtime>.md`.
 fn cache_name(rel: &str, path: &Path) -> Option<(String, String)> {
     let meta = std::fs::metadata(path).ok()?;

@@ -16,6 +16,10 @@ function LibrarianWindow({ bridge, project, onClose }) {
   const [sort, setSort] = React.useState({ key: "added", dir: "desc" });
   const [selectedId, setSelectedId] = React.useState(null);
   const [notice, setNotice] = React.useState("");
+  const [draft, setDraft] = React.useState(null);   // a PDF draft awaiting the user's confirmation
+  const [styles, setStyles] = React.useState([]);
+  const styleKey = `npi.librarian.style.${project}`;
+  const [styleId, setStyleId] = React.useState(() => { try { return localStorage.getItem(styleKey) || "apa"; } catch { return "apa"; } });
   const rootRef = React.useRef(null);
   window.useModalFocus(rootRef);
   const wc = window.useWindowChrome(onClose, rootRef);
@@ -30,6 +34,40 @@ function LibrarianWindow({ bridge, project, onClose }) {
     setLoaded(true);
   }, [call]);
   React.useEffect(() => { reload(); }, [reload]);
+  React.useEffect(() => { call("styles").then(r => { if (r.ok) setStyles(r.value); }); }, [call]);
+  const pickStyle = id => { setStyleId(id); try { localStorage.setItem(styleKey, id); } catch {} };
+  const addStyle = async () => {
+    const r = await call("style_add_pick");
+    if (!r.ok) return say(r.error);
+    if (!r.value) return;
+    setStyles((await call("styles")).value ?? styles);
+    pickStyle(r.value.id);
+    say(T("Added the style {name}", { name: r.value.name }));
+  };
+  /** Copies `text` (and `html` when the browser takes rich text) to the clipboard. */
+  const copyRich = async (text, html) => {
+    try {
+      if (html && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          "text/plain": new Blob([text], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        })]);
+      } else await navigator.clipboard.writeText(text);
+      return true;
+    } catch { return false; }
+  };
+  /** `kind`: "citation" (in text) or "reference" (the list entry) for `ids`, in the chosen style. */
+  const cite = async (ids, kind) => {
+    const r = await call("format", { style: styleId, ids });
+    if (!r.ok) { say(r.error); return false; }
+    const lines = kind === "citation" ? r.value.citations : r.value.bibliography;
+    if (lines.length === 0) { say(T("Nothing to copy")); return false; }
+    const text = lines.map(l => l.text).join("\n");
+    const html = lines.map(l => `<p>${l.html}</p>`).join("");
+    if (await copyRich(text, html)) return true;
+    say(T("could not copy"));
+    return false;
+  };
 
   React.useEffect(() => {
     const onKey = e => { if (e.key === "Escape") { e.preventDefault(); onClose(); } };
@@ -60,7 +98,48 @@ function LibrarianWindow({ bridge, project, onClose }) {
     const res = await call("export_save", { format, ids });
     if (!res.ok) say(res.error); else if (res.value) say(T("Saved {n} references", { n: ids.length }));
   };
+  const importPdf = async () => {
+    const res = await call("pdf_pick");
+    if (!res.ok) return say(res.error);
+    if (!res.value) return;
+    setSelectedId(null);
+    setDraft(res.value);
+  };
+  const attachPick = async entry => {
+    const res = await call("attach_pick", { id: entry.id });
+    if (!res.ok) return say(res.error);
+    if (res.value) { replace(res.value); say(T("Attached")); }
+  };
+  const attachDuplicate = async existing => {
+    const res = await call("attach_pdf", { id: existing.id, hash: draft.hash });
+    if (!res.ok) return say(res.error);
+    replace(res.value); setDraft(null); setSelectedId(existing.id);
+    say(T("Attached to {key}", { key: existing.citekey }));
+  };
+  const openAttachment = async a => {
+    const res = await call("attachment_open", { id: a.id });
+    if (!res.ok) say(res.error);
+  };
+  const removeAttachment = async a => {
+    const res = await call("attachment_remove", { id: a.id });
+    if (!res.ok) return say(res.error);
+    await reload();
+  };
+  const lookup = args => call("lookup", args);
+  const saveDraft = async csl => {
+    const res = await call("add_pdf", { csl, hash: draft.hash });
+    if (!res.ok) return res;
+    if (res.value.duplicate) {
+      setDraft(d => ({ ...d, duplicateOf: res.value.duplicate }));
+      return { ok: false, error: T("Already in the library") };
+    }
+    setEntries(list => [...list, res.value.entry]);
+    setScope({ group: null, tag: null }); setQuery("");
+    setDraft(null); setSelectedId(res.value.entry.id);
+    return { ok: true };
+  };
   const save = async (entry, csl, tagList, notes) => {
+    if (entry.draft) return saveDraft(csl);
     let current = entry;
     if (L.formChanged(entry.csl, L.toForm(csl))) {
       const r = await call("update", { id: entry.id, csl });
@@ -100,6 +179,27 @@ function LibrarianWindow({ bridge, project, onClose }) {
           <span className="lb-head-tools">
             <button type="button" className="btn ghost" onClick={addReference}><Icon name="plus" size={11} /> {T("New reference")}</button>
             <button type="button" className="btn ghost" onClick={importFile}>{T("Import…")}</button>
+            <button type="button" className="btn ghost" onClick={importPdf}>{T("Add PDF…")}</button>
+            <select className="lb-select" aria-label={T("Citation style")} value={styleId}
+              onChange={e => { if (e.target.value === "__add") addStyle(); else pickStyle(e.target.value); }}>
+              {styles.length === 0 && <option value={styleId}>{styleId}</option>}
+              {styles.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+              <option value="__add">{T("Add a .csl style…")}</option>
+            </select>
+            <button type="button" className="btn ghost" disabled={shown.length === 0}
+              title={T("Copies the reference list of what the list shows")}
+              onClick={async () => { if (await cite(shown.map(e => e.id), "reference")) say(T("Copied {n} references", { n: shown.length })); }}>
+              {T("Copy list")}
+            </button>
+            <button type="button" className="btn ghost" title={T("Replaces [@citekey] in a Markdown draft and appends the references")}
+              onClick={async () => {
+                const r = await call("cite_draft", { style: styleId });
+                if (!r.ok) return say(r.error);
+                if (!r.value) return;
+                say(r.value.missing.length
+                  ? T("Cited {n}; not in the library: {keys}", { n: r.value.cited, keys: r.value.missing.join(", ") })
+                  : T("Cited {n} in the draft", { n: r.value.cited }));
+              }}>{T("Cite a draft…")}</button>
             <select className="lb-select" aria-label={T("Export")} value="" disabled={shown.length === 0}
               onChange={e => { if (e.target.value) exportAs(e.target.value); }}>
               <option value="">{T("Export")}</option>
@@ -115,12 +215,16 @@ function LibrarianWindow({ bridge, project, onClose }) {
             onGroupAdd={name => groupOp("group_add", { name })}
             onGroupRename={(id, name) => groupOp("group_rename", { id, name })}
             onGroupRemove={async id => { await groupOp("group_remove", { id }); if (scope.group === id) setScope({ group: null, tag: null }); await reload(); }} />
-          <LibList entries={entries} shown={loaded ? shown : []} selectedId={selectedId} onSelect={setSelectedId}
+          <LibList entries={entries} shown={loaded ? shown : []} selectedId={selectedId} onSelect={id => { setDraft(null); setSelectedId(id); }}
             query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
-          {selected
-            ? <LibDetail key={`${selected.id}:${selected.updatedAt}`} entry={selected} groups={groups}
-                onSave={save} onMember={member} onDelete={remove} />
-            : <section className="lb-detail lb-detail-empty">{T("Select a reference.")}</section>}
+          {draft
+            ? <LibDetail key={`draft:${draft.hash}`} entry={L.draftEntry(draft)} groups={groups} draft={draft}
+                onSave={save} onLookup={lookup} onAttachDuplicate={attachDuplicate} onDiscardDraft={() => setDraft(null)} />
+            : selected
+              ? <LibDetail key={`${selected.id}:${selected.updatedAt}:${selected.attachments.length}`} entry={selected} groups={groups}
+                  onSave={save} onMember={member} onDelete={remove} onCite={cite} onLookup={lookup} onAttach={attachPick}
+                  onOpenAttachment={openAttachment} onRemoveAttachment={removeAttachment} />
+              : <section className="lb-detail lb-detail-empty">{T("Select a reference.")}</section>}
         </div>
       </div>
     </div>

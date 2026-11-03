@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Librarian citation styles: APA, IEEE, Chicago, MLA, Nature, Vancouver, Harvard and GB/T 7714 (numeric, author-date, note) through a CSL engine, your own `.csl` files, "Copy citation" / "Copy reference" / "Copy list" in the chosen style, and "Cite a draft…" which turns `[@citekey]` in a Markdown draft into citations plus a reference list.
+- Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
 ### Fixed
 
 - After Rewind (or Fork) the sidebar listed the conversation twice. A Rewind to the first prompt moves the tab onto an empty session omp writes only at the next message, so the saved list could not tie the tab to its old conversation. The tab now remembers the file it came from and the sidebar hides that conversation; the Chat list also refreshes when a chat moves onto another file.

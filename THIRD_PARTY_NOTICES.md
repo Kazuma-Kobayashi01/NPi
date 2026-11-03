@@ -55,6 +55,18 @@ Bundled as subset woff2 files in `desktop/src/assets/fonts/`, under the
 | Noto Sans SC | (c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source' |
 | Noto Serif SC | (c) 2017-2024 Adobe (http://www.adobe.com/) |
 
+## Citation styles
+
+The Librarian formats references with **hayagriva** (MIT OR Apache-2.0,
+https://github.com/typst/hayagriva). Its bundled archive of CSL styles and
+locales (APA, IEEE, Chicago, MLA, Nature, Vancouver, Harvard, GB/T 7714 and
+others, taken from the Citation Style Language project,
+https://github.com/citation-style-language/styles) is under the **Creative
+Commons Attribution-ShareAlike 3.0** license
+(https://creativecommons.org/licenses/by-sa/3.0/); each style keeps its
+authors in its own metadata. Styles a user adds are theirs and stay outside the
+app.
+
 ## Colour
 
 **Catppuccin** (Latte, Frappé, Macchiato, Mocha) — MIT License ·

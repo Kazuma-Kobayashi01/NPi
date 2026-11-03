@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA_V1: &str = "
 CREATE TABLE refs (
@@ -72,6 +72,7 @@ pub struct Entry {
     pub tags: Vec<String>,
     /// Ids of the groups it is in.
     pub groups: Vec<i64>,
+    pub attachments: Vec<super::attach::Attachment>,
 }
 
 pub struct Library {
@@ -100,10 +101,24 @@ pub(super) fn entry(row: &Row<'_>) -> rusqlite::Result<Entry> {
         notes: row.get(6)?,
         tags: Vec::new(),
         groups: Vec::new(),
+        attachments: Vec::new(),
     })
 }
 
 pub(super) const COLUMNS: &str = "id, citekey, csl_json, source, created_at, updated_at, notes";
+
+/// Files attached to a reference (PDFs kept under the project's `papers/`).
+const SCHEMA_V3: &str = "
+CREATE TABLE attachments (
+    id       INTEGER PRIMARY KEY,
+    ref_id   INTEGER NOT NULL,
+    path     TEXT NOT NULL,
+    hash     TEXT NOT NULL,
+    kind     TEXT NOT NULL,
+    added_at INTEGER NOT NULL
+);
+CREATE INDEX attachments_ref ON attachments(ref_id);
+";
 
 impl Library {
     /// The library file of `project`.
@@ -122,8 +137,8 @@ impl Library {
             let old: i64 = Connection::open(&path)
                 .and_then(|c| c.query_row("PRAGMA user_version", [], |r| r.get(0)))
                 .map_err(sql)?;
-            if old == 1 {
-                std::fs::copy(&path, path.with_extension("db.bak-v1"))
+            if old == 1 || old == 2 {
+                std::fs::copy(&path, path.with_extension(format!("db.bak-v{old}")))
                     .map_err(|e| format!("library backup: {e}"))?;
             }
         }
@@ -148,6 +163,12 @@ impl Library {
         if version < 2 {
             conn.execute_batch(&format!(
                 "BEGIN; {SCHEMA_V2} PRAGMA user_version = 2; COMMIT;"
+            ))
+            .map_err(sql)?;
+        }
+        if version < 3 {
+            conn.execute_batch(&format!(
+                "BEGIN; {SCHEMA_V3} PRAGMA user_version = 3; COMMIT;"
             ))
             .map_err(sql)?;
         }

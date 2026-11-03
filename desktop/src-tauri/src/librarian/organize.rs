@@ -54,9 +54,11 @@ impl Library {
             let (id, group) = row.map_err(sql)?;
             groups.entry(id).or_default().push(group);
         }
+        let mut attachments = self.attachments_by_ref()?;
         for e in entries {
             e.tags = tags.remove(&e.id).unwrap_or_default();
             e.groups = groups.remove(&e.id).unwrap_or_default();
+            e.attachments = attachments.remove(&e.id).unwrap_or_default();
         }
         Ok(())
     }

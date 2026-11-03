@@ -137,14 +137,49 @@
   /** A tag line "a, b; c" → ["a","b","c"]. */
   const parseTags = line => line.split(/[,;，；]/).map(t => t.trim()).filter(Boolean);
 
-  /** The plain-text citation used for "copy": `Author (Year). Title. Container.` — a stand-in until citation styles (L2). */
+  /** A plain `Author (Year). Title. Container.` line; the window now formats through Rust (citation styles), this stays as a fallback for tools. */
   function plainCitation(entry) {
     const d = display(entry);
     const parts = [d.authors ? `${d.authors}${d.year ? ` (${d.year})` : ""}.` : d.year ? `(${d.year}).` : "", `${d.title}.`, d.container ? `${d.container}.` : ""];
     return parts.filter(Boolean).join(" ");
   }
 
+  const FORM_LABELS = {
+    type: "Type", title: "Title", authors: "Authors", year: "Year", volume: "Volume", issue: "Issue", page: "Pages",
+    container: "Journal / book / conference", publisher: "Publisher", doi: "DOI", url: "URL", abstract: "Abstract",
+  };
+  const norm = v => String(v ?? "").trim();
+
+  /** The form fields where a looked-up record has something the form lacks or says differently:
+   *  `[{ key, label, current, found, differs }]`, in form order, only fields the record fills. */
+  function lookupDiff(form, found = {}) {
+    const other = toForm(found);
+    return Object.keys(FORM_LABELS)
+      .filter(key => (key === "type" ? text(found.type) !== "" : norm(other[key]) !== ""))
+      .map(key => ({ key, label: FORM_LABELS[key], current: norm(form[key]), found: norm(other[key]),
+        differs: norm(form[key]) !== norm(other[key]) }));
+  }
+
+  /** The form with the `keys` of a lookup diff taken from the record. */
+  function applyLookup(form, found = {}, keys = []) {
+    const other = toForm(found);
+    const out = { ...form };
+    for (const key of keys) if (key in FORM_LABELS) out[key] = other[key];
+    return out;
+  }
+
+  /** A not-yet-saved entry shown in the form for a PDF draft (`draft` from library_pdf_pick). */
+  const draftEntry = draft => ({
+    id: -1, citekey: "", csl: draft.csl, source: "pdf", createdAt: 0, updatedAt: 0,
+    notes: "", tags: [], groups: [], attachments: [], draft: true,
+  });
+
+  /** The form names a PDF draft's rules filled (CSL `guessed` names → form names), for the "check" marks. */
+  const GUESS_FORM = { title: "title", author: "authors", issued: "year", DOI: "doi", URL: "url" };
+  const guessedFields = draft => new Set((draft?.guessed ?? []).map(g => GUESS_FORM[g]).filter(Boolean));
+
   window.OMP_LIBRARIAN = {
+    lookupDiff, applyLookup, draftEntry, guessedFields, FORM_LABELS,
     TYPES, SORT_KEYS, display, matches, visible, sorted, tagCounts,
     toForm, fromForm, formChanged, parseTags, parsePerson, plainCitation, personText,
   };

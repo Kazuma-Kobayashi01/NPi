@@ -4,14 +4,20 @@
 //! citation keys. The webview names a project and a reference id, never a
 //! path or SQL.
 
+mod attach;
 mod bibtex;
 mod citekey;
 pub mod commands;
 mod csl;
+mod format;
+mod lookup;
 mod organize;
+mod pdf_meta;
 mod ris;
 mod store;
 mod transfer;
+
+pub use format::{add_user_style, cite_draft, format, styles, Cited, Formatted, StyleInfo};
 
 pub use organize::Group;
 pub use store::{Entry, Library};

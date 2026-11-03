@@ -81,4 +81,23 @@ check("the plain citation reads Author (Year). Title. Journal.", () => {
   assert.equal(L.plainCitation(entry({ title: "Bare" })), "Bare.");
 });
 
+check("a lookup offers the fields the record fills and marks the ones that differ", () => {
+  const form = L.toForm({ title: "Draft title", author: [{ family: "Smith", given: "J." }], DOI: "10.1/x" });
+  const found = { title: "Draft title", author: [{ family: "Smith", given: "John" }], issued: { "date-parts": [[2020]] }, "container-title": "J. Things", DOI: "10.1/x" };
+  const rows = L.lookupDiff(form, found);
+  assert.deepEqual(rows.map(r => [r.key, r.differs]), [["title", false], ["authors", true], ["year", true], ["container", true], ["doi", false]]);
+  assert.deepEqual(rows.find(r => r.key === "authors"), { key: "authors", label: "Authors", current: "Smith, J.", found: "Smith, John", differs: true });
+  const applied = L.applyLookup(form, found, ["year", "container", "nope"]);
+  assert.deepEqual([applied.year, applied.container, applied.title, applied.authors], [2020, "J. Things", "Draft title", "Smith, J."]);
+  assert.equal(L.lookupDiff(form, {}).length, 0);
+});
+
+check("a PDF draft is an unsaved entry and names the form fields its rules guessed", () => {
+  const draft = { csl: { title: "T", author: [{ literal: "A" }], issued: { "date-parts": [[2020]] }, DOI: "10.1/x" }, guessed: ["title", "author", "issued", "DOI", "bogus"], hash: "h" };
+  const e = L.draftEntry(draft);
+  assert.deepEqual([e.id, e.draft, e.attachments, e.tags], [-1, true, [], []]);
+  assert.deepEqual([...L.guessedFields(draft)], ["title", "authors", "year", "doi"]);
+  assert.equal(L.guessedFields(undefined).size, 0);
+});
+
 console.log(`test-librarian: ${n} checks passed`);
