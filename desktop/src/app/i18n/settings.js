@@ -52,13 +52,13 @@
 
     // Section blurbs
     ["Your profile and what the assistant remembers.", "你的个人资料，以及助手记住的内容。", "你的個人資料，以及助理記住的內容。", "あなたのプロフィールと、アシスタントが覚えている内容。"],
-    ["Look, text and how tabs behave.", "外观、文字，以及标签页的行为。", "外觀、文字，以及分頁的行為。", "外観、文字、タブの動作。"],
+    ["Look, text, how tabs behave and the keyboard shortcuts.", "外观、文字、标签页的行为，以及键盘快捷键。", "外觀、文字、分頁的行為，以及鍵盤快速鍵。", "外観、文字、タブの動作、キーボードショートカット。"],
     ["The transcript, workflow pipelines and the prompt box.", "对话记录、工作流管线和输入框。", "對話記錄、工作流程管線和輸入框。", "会話の表示、ワークフロー、入力欄。"],
     ["Manage, search, preview, export and organize your conversation history across projects.", "跨项目管理、搜索、预览、导出和整理你的会话历史。", "跨專案管理、搜尋、預覽、匯出和整理你的對話歷史。", "プロジェクトをまたいで会話履歴を管理・検索・プレビュー・エクスポート・整理します。"],
     ["Default model, favourites, vendors and usage statistics.", "默认模型、收藏、服务商和用量统计。", "預設模型、收藏、供應商和用量統計。", "既定のモデル、お気に入り、プロバイダー、使用状況。"],
     ["Profiles, execution behaviors, subagents, MCP and skills.", "配置、执行行为、子代理、MCP 和技能。", "設定檔、執行行為、子代理、MCP 和技能。", "プロファイル、実行の挙動、サブエージェント、MCP、スキル。"],
     ["Screen access, app control and macOS permissions.", "屏幕访问、应用控制和 macOS 权限。", "螢幕存取、應用程式控制和 macOS 權限。", "画面へのアクセス、アプリ操作、macOS の権限。"],
-    ["Terminal, browser and the floating cards.", "终端、浏览器和浮动卡片。", "終端機、瀏覽器和浮動卡片。", "ターミナル、ブラウザ、フローティングカード。"],
+    ["Side column and column widths, terminal, browser and the floating cards.", "侧栏与各列宽度、终端、浏览器和浮动卡片。", "側欄與各欄寬度、終端機、瀏覽器和浮動卡片。", "サイド列と列の幅、ターミナル、ブラウザ、フローティングカード。"],
     ["Layout and keyboard shortcuts.", "布局和键盘快捷键。", "版面配置和鍵盤快速鍵。", "レイアウトとキーボードショートカット。"],
 
     // Group names

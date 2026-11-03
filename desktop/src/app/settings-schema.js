@@ -244,14 +244,13 @@
   // Each settings destination gathers the relevant sections authored above.
   const MERGED = [
     { id: "account", icon: "agent", title: "Account", blurb: "Your profile and what the assistant remembers.", from: ["account"] },
-    { id: "general", icon: "sparkle", title: "General", blurb: "Look, text and how tabs behave.", from: ["appearance", "session"] },
+    { id: "general", icon: "sparkle", title: "General", blurb: "Look, text, how tabs behave and the keyboard shortcuts.", from: ["appearance", "session", "shortcuts"] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript, workflow pipelines and the prompt box.", from: ["chat"] },
     { id: "conversations", icon: "clock", title: "Conversations", blurb: "Manage, search, preview, export and organize your conversation history across projects.", from: ["conversations"] },
     { id: "models", icon: "bolt", title: "Models", blurb: "Default model, favourites, vendors and usage statistics.", from: ["models"] },
     { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
     { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Screen access, app control and macOS permissions.", from: ["computerUse"] },
-    { id: "code", icon: "terminal", title: "Code", blurb: "Terminal, browser and the floating cards.", from: ["terminal", "browser", "rail"] },
-    { id: "advanced", icon: "command", title: "Advanced", sep: true, blurb: "Layout and keyboard shortcuts.", from: ["layout", "shortcuts"] },
+    { id: "code", icon: "terminal", title: "Code", sep: true, blurb: "Side column and column widths, terminal, browser and the floating cards.", from: ["layout", "terminal", "browser", "rail"] },
   ];
   const SECTIONS = MERGED.map(m => ({
     id: m.id, icon: m.icon, title: m.title, sep: m.sep, blurb: m.blurb,

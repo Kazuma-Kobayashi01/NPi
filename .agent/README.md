@@ -4,6 +4,8 @@
 
 ## 开始工作前
 
+- CLI 本轮交接记录见 [docs/HANDOFF_CLI.md](../docs/HANDOFF_CLI.md)，包含改动范围、用户保留的 Agent 特色、验证边界和打包产物记录。
+
 - 本项目是用户正在使用的 Agent 源码；自举开发不得影响当前会话和已安装应用。
 - 修改 `desktop/` 前读取 [桌面端约定](../desktop/AGENTS.md)，再按其中索引读取对应的架构文档。
 - 修改 `omp/` 前读取 [内核约定](../omp/AGENTS.md)；本文件补充跨项目约束，不替代子目录规则。

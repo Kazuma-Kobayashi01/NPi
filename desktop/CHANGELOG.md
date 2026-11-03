@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Settings: the Advanced destination is gone. Its rows moved to where they belong: the side column, "New tabs show", project sidebar and column widths into Code, the keyboard shortcuts into General.
 - Settings → Models: the picker's models are a tidy grid per vendor (a checkbox per model, a count, All / None per vendor, a filter, Clear all); models that share a name show their id.
 - Secondary windows (Settings, Librarian, Git, file preview, Approvals, Usage, Plan) have traffic lights at the top left and drag by their head: red closes, yellow folds the window down to its head, green fills the screen (a double click on the head does the same). They replace the × buttons.
 - macOS: the red button and Cmd+W hide the main window and leave the app, its agents and terminals running; a click on the Dock icon brings it back. Cmd+Q still quits (and still asks first while a tab is busy).

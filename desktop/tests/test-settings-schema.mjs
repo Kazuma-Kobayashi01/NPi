@@ -126,8 +126,8 @@ check("custom rows count their owned tweak keys", () => {
 check("modifiedCount per section and overall, hidden rows excluded", () => {
   const v = vals({ fontSize: 110, showSubagents: false, railWidth: 300 });
   assert.equal(S.modifiedCount("general", v), 1);
-  assert.equal(S.modifiedCount("code", v), 1);
-  assert.equal(S.modifiedCount("advanced", v), 1);
+  assert.equal(S.modifiedCount("code", v), 2); // the rail card and the rail width (Layout sits under Code now)
+  assert.equal(S.SECTIONS.some(s => s.id === "advanced"), false);
   assert.equal(S.modifiedCount("all", v), 3);
   assert.equal(S.modifiedCount(undefined, v), 3);
   const hidden = vals({ foldThinking: "open", foldTools: "open", collapseAfter: 9 });
@@ -138,7 +138,7 @@ check("resetEdits resets only changed rows; theme brings its accent", () => {
   const v = vals({ theme: "ivory", accent: "#FF7AC6", fontSize: 120, showSubagents: false });
   assert.deepEqual(S.resetEdits("general", v), { theme: D.theme, accent: S.themeAccent(D.theme), fontSize: D.fontSize });
   assert.deepEqual(S.resetEdits("code", vals({ "widget:plugin:git": false })), { "widget:plugin:git": true });
-  assert.deepEqual(S.resetEdits("advanced", vals({ railWidth: 400, sidebar: false })), { sidebar: true, railWidth: 0 });
+  assert.deepEqual(S.resetEdits("code", vals({ railWidth: 400, sidebar: false })), { sidebar: true, railWidth: 0 });
   assert.deepEqual(S.resetEdits("general", vals()), {});
   const all = S.resetEdits("all", v);
   assert.equal(all.showSubagents, true);
