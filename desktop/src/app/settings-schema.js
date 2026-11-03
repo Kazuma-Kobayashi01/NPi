@@ -188,7 +188,8 @@
     ] },
     { id: "agent", icon: "agent", title: "Agent", blurb: "Agent profiles, engine execution behaviors, subagents, and extensions.", groups: [
       { name: "Profiles", src: "profiles.json", rows: [
-        custom("startupProfile", "Startup profile", "The profile of the tab opened at launch and of new tabs. Profiles are created and renamed from the profile menu.", "profile account"),
+        custom("startupProfile", "Startup profile", "The profile of the tab opened at launch and of new tabs.", "profile account"),
+        custom("profileList", "Profiles", "A profile is a separate omp account space: its own login, conversations, settings and caches. Pick the one new tabs start in, switch the open tab to another (this restarts its agent), or add, rename and remove profiles. Removing only unlists it; the files stay on disk.", "profile profiles account login switch create rename delete multiple"),
       ] },
       { name: "Execution behaviors", rows: [
         tweak("interactionPolicy", "seg", "Interaction policy", "How readily the agent offers structured forms. Clear tasks run directly; permissions and required Ask dialogs stay separate.", "generative ui interaction form structured standard aggressive minimal choices parameters",

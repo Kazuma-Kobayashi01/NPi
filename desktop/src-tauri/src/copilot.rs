@@ -33,6 +33,8 @@ const MAX_HITS: usize = 20;
 const MAX_READ_CHARS: usize = 24_000;
 const MAX_WRITE_BYTES: usize = 256 * 1024;
 const SNIPPET_CHARS: usize = 300;
+/// PDFs extracted for the first time by one search; the rest wait for the next call.
+const MAX_FRESH_PDFS: usize = 4;
 
 /// The tools registered with omp (`set_host_tools`).
 pub fn tool_definitions() -> Value {
@@ -40,7 +42,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_search",
             "label": "Search project",
-            "description": "Search the text files of this research project (notes, digests, artifacts, processed data, text papers) for passages containing the query terms. Returns file, line and a snippet for each hit. PDFs are not searched: they have no extracted text yet.",
+            "description": "Search the text files of this research project (notes, digests, artifacts, processed data, text papers and the extracted text of PDFs) for passages containing the query terms. Returns file, line and a snippet for each hit. A scanned PDF has no text and is reported, not searched.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -141,7 +143,7 @@ impl HostTools for ResearchHub {
             {
                 "name": "academic_search",
                 "label": "Search Academic project",
-                "description": "Search one Academic project's local text files (notes, digests, artifacts, processed data, text papers) for passages containing the query terms; returns file:line and a snippet. Cite what you use. PDFs have no extracted text yet.",
+                "description": "Search one Academic project's local text files (notes, digests, artifacts, processed data, text papers and the extracted text of PDFs) for passages containing the query terms; returns file:line and a snippet. Cite what you use. A scanned PDF has no text and is reported, not searched.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -279,7 +281,7 @@ impl CopilotHost {
                 let path = entry.path();
                 if kind.is_dir() {
                     stack.push(path);
-                } else if is_text(&path) && out.len() < MAX_SCANNED_FILES {
+                } else if (is_text(&path) || is_pdf(&path)) && out.len() < MAX_SCANNED_FILES {
                     out.push(path);
                 }
             }
@@ -302,21 +304,46 @@ impl CopilotHost {
         });
         let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
         let mut hits: Vec<(usize, String, usize, String)> = Vec::new();
+        let (mut fresh, mut waiting, mut scanned) = (0usize, 0usize, Vec::new());
         for path in self.files() {
-            let Ok(meta) = std::fs::metadata(&path) else {
-                continue;
-            };
-            if meta.len() > MAX_FILE_BYTES {
-                continue;
-            }
-            let Ok(text) = std::fs::read_to_string(&path) else {
-                continue;
-            };
             let rel = path
                 .strip_prefix(&self.root)
                 .unwrap_or(&path)
                 .to_string_lossy()
                 .into_owned();
+            let text = if is_pdf(&path) {
+                let known = crate::pdf_text::cached(&self.root, &rel, &path);
+                let outcome = match known {
+                    Some(hit) => Ok(hit),
+                    None if fresh < MAX_FRESH_PDFS => {
+                        fresh += 1;
+                        crate::pdf_text::extract_cached(&self.root, &rel, &path)
+                    }
+                    None => {
+                        waiting += 1;
+                        continue;
+                    }
+                };
+                match outcome {
+                    Ok(crate::pdf_text::Extracted::Text(t)) => t,
+                    Ok(crate::pdf_text::Extracted::Scanned) => {
+                        scanned.push(rel);
+                        continue;
+                    }
+                    Err(_) => continue,
+                }
+            } else {
+                let Ok(meta) = std::fs::metadata(&path) else {
+                    continue;
+                };
+                if meta.len() > MAX_FILE_BYTES {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                text
+            };
             for (score, line, snippet) in best_passages(&text, &terms) {
                 hits.push((score, rel.clone(), line, snippet));
             }
@@ -327,14 +354,27 @@ impl CopilotHost {
                 .then_with(|| a.2.cmp(&b.2))
         });
         hits.truncate(limit);
-        if hits.is_empty() {
-            return Ok("No passage matched. Only text files are searched; PDFs have no extracted text yet.".into());
+        let mut notes = Vec::new();
+        if waiting > 0 {
+            notes.push(format!(
+                "{waiting} PDF(s) were not searched yet: their text is extracted a few at a time, so search again."
+            ));
         }
-        Ok(hits
+        if !scanned.is_empty() {
+            notes.push(format!(
+                "No text layer (scanned, needs OCR), not searched: {}.",
+                scanned.join(", ")
+            ));
+        }
+        let mut lines: Vec<String> = hits
             .iter()
             .map(|(_, file, line, snippet)| format!("{file}:{line}: {snippet}"))
-            .collect::<Vec<_>>()
-            .join("\n"))
+            .collect();
+        if lines.is_empty() {
+            lines.push("No passage matched.".into());
+        }
+        lines.extend(notes);
+        Ok(lines.join("\n"))
     }
 
     fn read(&self, args: &Value) -> ToolResult {
@@ -352,13 +392,22 @@ impl CopilotHost {
             names.sort();
             return Ok(names.join("\n"));
         }
-        if !is_text(&real) {
-            return Err("only text files can be read; a PDF has no extracted text yet".into());
-        }
-        if std::fs::metadata(&real).map_err(|e| e.to_string())?.len() > MAX_FILE_BYTES {
-            return Err("the file is too large".into());
-        }
-        let text = std::fs::read_to_string(&real).map_err(|e| e.to_string())?;
+        let text = if is_pdf(&real) {
+            let rel = real.strip_prefix(&self.root).unwrap_or(&real).to_string_lossy().into_owned();
+            match crate::pdf_text::extract_cached(&self.root, &rel, &real)? {
+                crate::pdf_text::Extracted::Text(t) => t,
+                crate::pdf_text::Extracted::Scanned => {
+                    return Err("the PDF has no text layer (scanned); OCR is not available".into())
+                }
+            }
+        } else if is_text(&real) {
+            if std::fs::metadata(&real).map_err(|e| e.to_string())?.len() > MAX_FILE_BYTES {
+                return Err("the file is too large".into());
+            }
+            std::fs::read_to_string(&real).map_err(|e| e.to_string())?
+        } else {
+            return Err("only text files and PDFs can be read".into());
+        };
         let from = args
             .get("from_line")
             .and_then(Value::as_u64)
@@ -437,6 +486,12 @@ fn is_text(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| TEXT_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+fn is_pdf(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
 }
 
 fn valid_name(name: &str) -> bool {
@@ -613,16 +668,41 @@ mod tests {
     }
 
     #[test]
-    fn a_pdf_is_listed_but_not_readable_as_text() {
+    fn a_pdf_is_listed_read_and_searched_through_its_extracted_text() {
         let (_d, h) = host("pdf");
-        std::fs::write(h.root.join("papers/p.pdf"), "%PDF").unwrap();
-        assert!(
-            text_of(&h.call("1", "research_read", &json!({ "path": "papers" }))).contains("p.pdf")
-        );
-        assert_eq!(
-            h.call("1", "research_read", &json!({ "path": "papers/p.pdf" }))["isError"],
-            true
-        );
+        std::fs::write(h.root.join("papers/p.pdf"), crate::pdf_text::tiny_pdf("Transformers replace recurrence")).unwrap();
+        assert!(text_of(&h.call("1", "research_read", &json!({ "path": "papers" }))).contains("p.pdf"));
+        let read = text_of(&h.call("1", "research_read", &json!({ "path": "papers/p.pdf" })));
+        assert!(read.contains("Transformers replace recurrence"), "{read}");
+        let found = text_of(&h.call("2", "research_search", &json!({ "query": "recurrence" })));
+        assert!(found.starts_with("papers/p.pdf:"), "{found}");
+        // The text is cached inside the project, never beside the paper.
+        assert!(h.root.join(".npi-academic/cache/pdf").is_dir());
+        assert!(!h.root.join("papers").read_dir().unwrap().flatten().any(|e| e.file_name() != "p.pdf"));
+    }
+
+    #[test]
+    fn a_broken_pdf_is_an_error_and_never_hides_other_hits() {
+        let (_d, h) = host("pdf-broken");
+        std::fs::write(h.root.join("papers/bad.pdf"), "%PDF-1.4 junk").unwrap();
+        std::fs::write(h.root.join("notes/n.md"), "recurrence notes").unwrap();
+        assert_eq!(h.call("1", "research_read", &json!({ "path": "papers/bad.pdf" }))["isError"], true);
+        let found = text_of(&h.call("2", "research_search", &json!({ "query": "recurrence" })));
+        assert!(found.starts_with("notes/n.md:"), "{found}");
+    }
+
+    #[test]
+    fn one_search_extracts_only_a_few_new_pdfs_and_says_so() {
+        let (_d, h) = host("pdf-budget");
+        for i in 0..=MAX_FRESH_PDFS + 1 {
+            std::fs::write(h.root.join(format!("papers/p{i}.pdf")), crate::pdf_text::tiny_pdf(&format!("alpha {i}"))).unwrap();
+        }
+        let first = text_of(&h.call("1", "research_search", &json!({ "query": "alpha", "limit": 20 })));
+        assert!(first.contains("were not searched yet"), "{first}");
+        let again = text_of(&h.call("2", "research_search", &json!({ "query": "alpha", "limit": 20 })));
+        let again2 = text_of(&h.call("3", "research_search", &json!({ "query": "alpha", "limit": 20 })));
+        assert!(!again2.contains("were not searched yet"), "{again}\n{again2}");
+        assert_eq!(again2.lines().filter(|l| l.starts_with("papers/")).count(), MAX_FRESH_PDFS + 2);
     }
 
     #[test]

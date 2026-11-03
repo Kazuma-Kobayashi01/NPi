@@ -246,11 +246,12 @@ function App() {
   React.useEffect(() => {
     if (!isChat || !chatDir) return undefined;
     let live = true;
+    // Read again when a chat moves onto another file (Rewind, Fork, /new), so its family is known.
     Promise.all((chatDirs.length ? chatDirs : [chatDir]).map(d => bridge?.listSavedSessions?.(d))).then(lists => {
       if (live) setSavedChats(lists.flatMap(l => (Array.isArray(l) ? l : [])));
     });
     return () => { live = false; };
-  }, [bridge, isChat, chatDir, chatDirs, chatTabs.length]);
+  }, [bridge, isChat, chatDir, chatDirs, chatTabs.length, chatTabs.map(tab => tab.sessionFile).join("|")]);
   React.useEffect(() => {
     bridge?.setPromptHistoryLimit(t.promptHistoryLimit ?? window.OMP_PROMPT_HISTORY.DEFAULT_LIMIT);
   }, [bridge, t.promptHistoryLimit]);
@@ -1022,6 +1023,8 @@ function App() {
     closeSettings,
     keymap,
     profiles, startupProfileId, onSetStartupProfile: handleSetStartupProfile,
+    activeProfileId, onSelectProfile: handleSelectProfile, onCreateProfile: handleCreateProfile,
+    onRenameProfile: handleRenameProfile, onDeleteProfile: handleDeleteProfile,
     approvalModes, sessions, activeProject,
     widgets, widgetTweakKey: _widgetTweakKey, extToggles, keyOpts: settingsKeyOpts,
     panes, terminalHeight: terminal.height,
@@ -1045,6 +1048,11 @@ function App() {
     { label: "Conversation tree", icon: "branch", on: treeShown, onClick: toggleTree },
     { label: "Goal mode", icon: "goal", on: goalUi.mode, onClick: () => { if (!goalUi.goalBlocked || goalUi.mode) goalUi.toggle(); } },
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
+    // Academic keeps the top bar to the research tools; these two move in here.
+    ...(appModeName === "academic" ? [
+      { label: window.OMP_I18N.t("Terminal"), icon: "terminal", hint: keyHint("desktop.terminal.toggle"), on: _TERM_entryOf(terminal.state, planKey).open, onClick: () => terminal.toggle(planKey) },
+      { label: window.OMP_I18N.t("Subagents"), icon: "agent", on: showSplit, onClick: subagentUi.togglePane },
+    ] : []),
     "-",
     { label: "Command palette", icon: "command", hint: keyHint("desktop.commands.open"), onClick: () => setBridgeOpen(true) },
     { label: window.OMP_I18N.t("Settings"), icon: "cog", hint: keyHint("desktop.settings.open"), onClick: () => (stab.open ? closeSettings() : openSettings()) },
@@ -1081,14 +1089,6 @@ function App() {
         <div className={`window scanlines mode-${appModeName} ${showSplit ? "is-split" : ""}${streaming ? " is-running" : ""}`} style={panes.style}>
           <WindowChrome
             project={activeProject}
-            profiles={profiles}
-            activeProfileId={activeProfileId}
-            startupProfileId={startupProfileId}
-            onSelectProfile={handleSelectProfile}
-            onCreateProfile={handleCreateProfile}
-            onRenameProfile={handleRenameProfile}
-            onDeleteProfile={handleDeleteProfile}
-            onSetStartupProfile={handleSetStartupProfile}
             sidebarOpen={showSidebar}
             onToggleSidebar={toggleSidebar}
             canBack={!showHome}
@@ -1103,6 +1103,7 @@ function App() {
                 onChanges={() => setGitOpen({ path: null })}
                 moreItems={moreItems}
                 chat={t.appMode === "chat"}
+                academic={appModeName === "academic"}
                 onBrowser={() => toggleSide("browser")}
                 browserOpen={side === "browser"}
                 browserHint={keyHint("desktop.browser.toggle")}

@@ -1,5 +1,5 @@
 /* ui/use-popover-dismiss.js — outside-click / Escape dismissal shared by the
-   dropdown menus (profile-menu.jsx, tab-group-chip.jsx, thinking-menu.jsx,
+   dropdown menus (tab-group-chip.jsx, thinking-menu.jsx,
    path-setting.jsx).
 
    usePopoverDismiss(open, rootRef, onOutside, onEscape = onOutside): while

@@ -48,6 +48,10 @@ url = "2"
 flate2 = "1"
 tar = "0.4"
 
+# Text from the PDFs in an Academic project's `papers/` (`src/pdf_text.rs`): pure Rust
+# (MIT, on lopdf), reads CJK text and tells scanned pages from text ones.
+pdf-inspector = "=1.25.0"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",

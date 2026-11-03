@@ -25,17 +25,31 @@ const _CV_AskBubble_M       = React.memo(_CV_AskBubble);
 const _CV_ToolGroup_M      = React.memo(_CV_ToolGroup);
 const _CV_WorkBox_M        = React.memo(_CV_WorkBox);
 
+// Title and chip per row status (app/compaction.js); only "error" is a failure.
+const _CV_COMPACT_TEXT = {
+  pending:   ["compact.running", "compact.runningChip"],
+  done:      ["compact.done", null],
+  skipped:   ["compact.skipped", "compact.skippedChip"],
+  cancelled: ["compact.cancelled", "compact.cancelledChip"],
+  error:     ["compact.failed", "compact.failedChip"],
+};
+
 const CompactRow = React.memo(function CompactRow({ msg }) {
   const [open, setOpen] = React.useState(false);
-  const pending  = msg.status === "pending";
-  const error    = msg.status === "error";
-  const COLOR    = error ? "var(--rose)" : "var(--lilac)";
+  const t        = window.OMP_I18N.t;
+  const status   = _CV_COMPACT_TEXT[msg.status] ? msg.status : "error";
+  const pending  = status === "pending";
+  const done     = status === "done";
+  const error    = status === "error";
+  const COLOR    = error ? "var(--rose)" : done || pending ? "var(--lilac)" : "var(--fg-3)";
+  const [titleKey, chipKey] = _CV_COMPACT_TEXT[status];
   // Shared with the status bar / usage-stats panel (adapter.js). Gate on
   // the *source* value being non-null, not the formatted string —
   // `formatTokens(null)` returns the truthy "—" placeholder, which would
   // render an empty "— before" chip instead of hiding it.
   const tok      = window.formatTokens(msg.tokensBefore);
-  const hasBody  = !!msg.summary && !pending && !error;
+  const body     = done ? msg.summary : msg.reason;
+  const hasBody  = !!body && !pending;
 
   return (
     <div className="row tool fade-up">
@@ -56,25 +70,23 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
             borderColor: `color-mix(in oklab, ${COLOR} 30%, var(--line))`,
           }}>compact</span>
           <span className="tool-title">
-            {pending ? "compacting context\u2026"
-              : error   ? "compaction failed"
-              : (msg.shortSummary || "context compacted")}
+            {done ? (msg.shortSummary || t(titleKey)) : t(titleKey)}
           </span>
           <div className="tool-card-spacer" />
           {pending && (
             <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
-              <span className="dot live" />{" "}running
+              <span className="dot live" />{" "}{t(chipKey)}
             </span>
           )}
-          {!pending && !error && msg.tokensBefore != null && (
-            <span className="chip muted mono">{tok} before</span>
+          {done && msg.tokensBefore != null && (
+            <span className="chip muted mono">{t("compact.before", { n: tok })}</span>
           )}
-          {error && <span className="chip" style={{ color: "var(--rose)" }}>failed</span>}
+          {!pending && chipKey && <span className="chip" style={{ color: COLOR }}>{t(chipKey)}</span>}
           {hasBody && <_CV_Icon name={open ? "chev" : "chevR"} size={10} color="var(--fg-4)" />}
         </div>
         {open && hasBody && (
           <div className="compact-body selectable">
-            {msg.summary}
+            {body}
           </div>
         )}
       </div>

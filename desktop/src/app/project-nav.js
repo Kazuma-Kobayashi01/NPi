@@ -316,7 +316,17 @@
     return result;
   }
 
+  /** The files that count as open for `collapseChatFamilies`: each tab's session file,
+   *  and the file a Rewind or Fork moved it from (`branchedFrom`, live.js). The new file
+   *  can be missing from a saved list (a Rewind to the first prompt is an empty session
+   *  omp writes only at the next message), and without the old file the tab's
+   *  conversation would show again beside it. */
+  function openFilesOf(tabs) {
+    return (Array.isArray(tabs) ? tabs : []).flatMap(t => [t?.sessionFile, t?.branchedFrom]).filter(Boolean);
+  }
+
   window.OMP_PROJECT_NAV = {
+    openFilesOf,
     normPath,
     basename,
     parentName,

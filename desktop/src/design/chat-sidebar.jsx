@@ -24,7 +24,7 @@ const _csFile = (r) => (r.tab ? r.tab.sessionFile : r.saved?.path) || null;
 /** Day groups, newest first, pinned ones first as their own group:
  *  `[{ label, items: [{ key, title, tab?, saved?, file }] }]`. Archived saved chats are left out. */
 function groupChats(tabs, saved, pinned = [], archived = []) {
-  const openFiles = new Set(tabs.map(t => t.sessionFile).filter(Boolean));
+  const openFiles = new Set(window.OMP_PROJECT_NAV.openFilesOf(tabs));
   const collapsedSaved = window.OMP_PROJECT_NAV.collapseChatFamilies(saved, openFiles);
 
   const isArchived = s => archived.includes(s.path)

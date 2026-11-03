@@ -378,4 +378,21 @@ check("collapseChatFamilies falls back cleanly when family_path is missing", () 
   assert.equal(collapsed[0].path, "/sessions/q.jsonl");
 });
 
+// ── openFilesOf: a Rewound tab still hides the conversation it came from ─────
+
+check("a tab rewound onto a file not listed yet still hides its old conversation", () => {
+  const old = { path: "/s/a.jsonl", family_path: "/s/a.jsonl", resume_path: "/s/a.jsonl", title: "T" };
+  const branch = { path: "/s/b.jsonl", family_path: "/s/a.jsonl", resume_path: "/s/b.jsonl", title: "T", parent_session: "/s/a.jsonl" };
+  const tab = { sessionFile: "/s/b.jsonl", branchedFrom: "/s/a.jsonl" };
+  // Only the tab's own file: its family is unknown while b.jsonl is unlisted, so the old row shows twice.
+  assert.equal(N.collapseChatFamilies([old], [tab.sessionFile]).length, 1);
+  // With the file it came from, the old conversation counts as open.
+  assert.deepEqual(N.openFilesOf([tab, { sessionFile: null }]), ["/s/b.jsonl", "/s/a.jsonl"]);
+  assert.equal(N.collapseChatFamilies([old], N.openFilesOf([tab])).length, 0);
+  assert.equal(N.collapseChatFamilies([old, branch], N.openFilesOf([tab])).length, 0);
+  // A tab that never branched hides only its own family.
+  const other = { path: "/s/c.jsonl", family_path: "/s/c.jsonl", resume_path: "/s/c.jsonl", title: "U" };
+  assert.deepEqual(N.collapseChatFamilies([old, other], N.openFilesOf([{ sessionFile: "/s/a.jsonl" }])).map(r => r.path), ["/s/c.jsonl"]);
+});
+
 console.log(`project-nav: ${passed} checks passed`);

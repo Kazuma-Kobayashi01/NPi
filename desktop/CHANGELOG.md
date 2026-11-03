@@ -6,8 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- After Rewind (or Fork) the sidebar listed the conversation twice. A Rewind to the first prompt moves the tab onto an empty session omp writes only at the next message, so the saved list could not tie the tab to its old conversation. The tab now remembers the file it came from and the sidebar hides that conversation; the Chat list also refreshes when a chat moves onto another file.
+- Context compaction rows: "nothing to compact" and a cancelled compaction no longer show as a red "compaction failed", omp's reason is shown in the row, a skipped automatic pass leaves no row, and a row no longer stays "running" after its process died. The row is translated.
+
 ### Added
 
+- Academic: PDFs in `papers/` are now searched and read as extracted text (Chinese included) by the Copilot and the main chat's `academic_*` tools; text is cached under `.npi-academic/cache/pdf/`, and a scanned PDF is reported as having no text.
+- Librarian data layer: a reference library per Academic project (`research.db`), with RIS, BibTeX and CSL-JSON import and export, duplicate detection (DOI, or title + year + first author) and citation keys, behind `library_list/add/update/remove/import/export` commands. There is no Librarian tab yet.
 - The main chat's agent can search and read the Academic library: three read-only host tools (`academic_projects`, `academic_search`, `academic_read`) are registered in every tab, scoped to projects under `NPi/Academic` and never able to write.
 - Interface language: Settings → General → Language (Auto, 简体中文, 繁體中文, English (US), 日本語). Covers the Settings page (titles, descriptions, search), the sidebar and mode switch, window tooltips, the start page and its greetings, the composer basics, SideChat / Academic Copilot, the thinking-and-tools box and the subagent setup form; it never changes the model's reply language. Other text stays English for now (`docs/architecture/i18n.md`).
 - Academic Copilot: in Academic, the side-pane button opens a per-project assistant that runs without omp's own tools and only has three Rust-executed host tools (`research_search`, `research_read`, `research_save`) over the project's local files; originals and raw data are read-only, nothing reaches the network or a shell. PDFs are not readable yet and search is a plain term match (`docs/architecture/academic-space.md`).
@@ -17,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The profile menu left the top bar in every mode: Settings → Agent → Profiles lists the profiles and does the same (new default for new tabs, use in this tab, new, rename, remove).
+- Academic mode: the Terminal and Subagents buttons leave the top bar and sit in the ⋯ menu.
 - The sidebar's account line no longer shows the provider's plan name (for example `· plus`); it is the profile's photo and name only.
 - The Chat | Code | Academic switch is now a picker at the top of the sidebar: the current mode with a chevron, opening a menu of the three with a one-line hint each and a check on the current (arrow keys, Enter, Escape).
 - The Context card breaks the window down further, like Claude's: system tools, MCP tools (per server), skills and rules get their own rows with counts, and the MCP, skills and rules rows fold open to their names.

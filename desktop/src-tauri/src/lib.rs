@@ -13,6 +13,7 @@ mod approval;
 mod app_mode;
 mod chat_space;
 mod copilot;
+mod librarian;
 mod chat_image;
 mod mcp_skills;
 mod notify;
@@ -37,6 +38,7 @@ mod json_store;
 mod keybindings;
 mod model_usage;
 mod navigation_guard;
+mod pdf_text;
 mod omp_cli;
 mod open_tabs;
 mod pr_automation;
@@ -319,9 +321,9 @@ You are NPi Academic Copilot, a local literature assistant bound to one research
 Your only tools are research_search, research_read and research_save, which see this project's \
 files and nothing else. You have no network, shell or other file access; never claim otherwise. \
 Answer only from the project's files: cite the file and line for every claim taken from them, \
-quote exactly, and say plainly when the files do not contain the answer. PDFs have no extracted \
-text yet, so you cannot read them; ask the user for a text or Markdown version instead of \
-guessing. Save notes, digests and artifacts with research_save only when asked or when it \
+quote exactly, and say plainly when the files do not contain the answer. A PDF is read \
+as its extracted text (line numbers refer to that text); a scanned PDF has none, so ask the \
+user for a text version instead of guessing. Save notes, digests and artifacts with research_save only when asked or when it \
 clearly helps. Reply in the user's language.
 
 # Project rules
@@ -374,7 +376,7 @@ fn academic_copilot_start(
 /// Run blocking `work` (file or process I/O, a long scan) off Tauri's IPC
 /// thread, which would otherwise freeze the webview: `spawn_blocking`, with
 /// a panic in `work` reported as `"join error: …"`.
-async fn off_ipc<T: Send + 'static>(
+pub(crate) async fn off_ipc<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(work)
@@ -1944,6 +1946,12 @@ pub fn run() {
             streaming_message,
             open_project,
             academic_dir,
+            librarian::commands::library_list,
+            librarian::commands::library_add,
+            librarian::commands::library_update,
+            librarian::commands::library_remove,
+            librarian::commands::library_import,
+            librarian::commands::library_export,
             academic_copilot_start,
             take_pending_open_projects,
             start_git_watch,

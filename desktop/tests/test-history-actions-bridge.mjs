@@ -46,6 +46,7 @@ function harness(opts = {}) {
     "app/turn-status.js",
     "app/transcript-merge.js",
     "app/usage-view.js",
+    "app/compaction.js",
     "app/generative-ui.js",
     "adapter.js",
     "app/pr-automation.js",

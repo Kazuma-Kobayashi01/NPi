@@ -70,7 +70,7 @@
   <script src="app/wallpapers.js"></script>
 
   <!-- App constants. Dependency-free IIFE, loaded before the design
-       components: profile-menu.jsx, chrome.jsx and thinking-menu.jsx
+       components: chrome.jsx and thinking-menu.jsx
        destructure DEFAULT_PROFILE_ID / THINKING_LEVELS at top level,
        composer.jsx and chat/ask-*.jsx call its isSubmitEnter / isSubmitKey helpers,
        app/extension-widgets.js and app/browser.js its truncateText, and
@@ -110,6 +110,7 @@
        must load before them. -->
   <script src="app/tool-groups.js"></script>
   <script src="app/work-box.js"></script>
+  <script src="app/compaction.js"></script>
   <script src="app/chat-collapse.js"></script>
   <script src="app/generative-ui.js"></script>
 
@@ -289,7 +290,7 @@
        OMP_TWEAKS_STORE reader live.js uses at its top-level init. IIFE. -->
   <script src="design/tweaks/use-tweaks.js"></script>
   <!-- Outside-click / Escape dismissal shared by the dropdown menus
-       (profile-menu.jsx, tab-group-chip.jsx, thinking-menu.jsx,
+       (tab-group-chip.jsx, thinking-menu.jsx,
        path-setting.jsx's PathPicker). -->
   <script src="design/ui/use-popover-dismiss.js"></script>
   <!-- Pointer drag-to-reorder (#40) for the tab bar, the group chip's
@@ -402,9 +403,6 @@
   <script type="text/babel" src="design/model-menu.jsx"></script>
   <script type="text/babel" src="design/usage-popover.jsx"></script>
   <script type="text/babel" src="design/composer.jsx"></script>
-  <!-- Per-tab profile selector — chrome.jsx destructures window.ProfileMenu
-       at top level, so this must load before it. -->
-  <script type="text/babel" src="design/profile-menu.jsx"></script>
   <!-- Inline conversation-name editor (#32) — tab-group-chip.jsx, chrome.jsx
        and project-sidebar.jsx destructure window.RenameField at top level,
        so this must load before all three. -->
@@ -473,6 +471,7 @@
   <script type="text/babel" src="design/settings/rows-layout.jsx"></script>
   <script type="text/babel" src="design/settings/rows-programs.jsx"></script>
   <script type="text/babel" src="design/settings/rows-agent.jsx"></script>
+  <script type="text/babel" src="design/settings/rows-profiles.jsx"></script>
   <script type="text/babel" src="design/settings/rows-computer-use.jsx"></script>
   <script type="text/babel" src="design/settings/rows-mcp-skills.jsx"></script>
   <script type="text/babel" src="design/settings/rows-models.jsx"></script>

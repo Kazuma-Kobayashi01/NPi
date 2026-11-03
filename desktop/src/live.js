@@ -23,6 +23,7 @@
   const TURN = window.OMP_TURN_STATUS;
   const GOAL = window.OMP_GOAL;
   const EXT = window.OMP_EXT_WIDGETS;
+  const COMPACTION = window.OMP_COMPACTION;
   const DELTA = window.OMP_STREAM_DELTA;
   const { tsOf, mergeTranscript } = window.OMP_TRANSCRIPT;
 
@@ -774,6 +775,8 @@
   // will be acknowledged, and its background jobs died with it too.
   function _endDeadProcessState() {
     state.isCompacting = false;
+    // A compaction it was running will never report its end.
+    state.messages = COMPACTION.interruptPending(state.messages);
     state.subagents = SUB.mergeSnapshots(state.subagents, []);
     state.queue = QUEUE.EMPTY_QUEUE;
     state.queueSending = [];
@@ -1389,6 +1392,7 @@
     return {
       name: _tabNameFor(entry.path, "new session"),
       sessionFile: null,
+      branchedFrom: null,
       autoRenameArmed: true,
       autoRenameInFlight: false,
       autoRenameTurns: 0,
@@ -2058,19 +2062,16 @@
     }
     // Compact — handle success and failure both (must come before early-return below)
     if (resp.command === "compact") {
+      // Usually `manual_compaction_end` settled the row already (with the
+      // skipped / cancelled distinction this response lacks); this covers a
+      // failure omp refused before announcing the pass.
       state.isCompacting = false;
-      let idx = -1;
-      for (let i = state.messages.length - 1; i >= 0; i--) {
-        if (state.messages[i].kind === "compact" && state.messages[i].status === "pending") { idx = i; break; }
-      }
-      if (idx !== -1) {
-        const d = resp.data ?? {};
-        const update = resp.success
-          ? { status: "done", shortSummary: d.shortSummary || null, summary: d.summary || null, tokensBefore: d.tokensBefore }
-          : { status: "error" };
-        state.messages = state.messages.map((m, i) => i === idx ? { ...m, ...update } : m);
-      }
-      if (resp.success && idx !== -1) {
+      const before = state.messages;
+      state.messages = COMPACTION.settle(before, resp.success
+        ? COMPACTION.outcome({ result: resp.data ?? {} })
+        : COMPACTION.outcome({ errorMessage: resp.error }));
+      if (resp.success && state.messages !== before) {
+        state.contextMessages = null;
         _send({ type: "get_state" });
         _send({ type: "get_messages", fullHistory: true });
       }
@@ -2258,10 +2259,7 @@
     if (type === "auto_compaction_end" || type === "manual_compaction_end") {
       state.isCompacting = false;
       state.contextMessages = null;
-      const result = ev.result;
-      state.messages = state.messages.map(m => m.kind === "compact" && m.status === "pending"
-        ? { ...m, status: result ? "done" : "error", summary: result?.summary, shortSummary: result?.shortSummary, tokensBefore: result?.tokensBefore }
-        : m);
+      state.messages = COMPACTION.settle(state.messages, COMPACTION.outcome({ ...ev, auto: type === "auto_compaction_end" }));
       _send({ type: "get_state" });
       _send({ type: "get_messages", fullHistory: true });
       notify();
@@ -3473,7 +3471,13 @@
    *  an exchange the tab already ran, and the `lastTurnOk` gate keeps a
    *  branch/fork of a failed turn from spending the auto-rename. */
   function _resetForNewFile() {
-    _reloadConversation(() => ({ sessionFile: null, autoRenameSessionId: null, autoRenameInFlight: false }), true);
+    // `branchedFrom`: the file the copy came from, so the sidebar hides that
+    // conversation while the new file is not listed yet (a branch at the
+    // first prompt is an empty session omp writes only at the next message).
+    _reloadConversation(entry => ({
+      sessionFile: null, branchedFrom: entry.sessionFile ?? entry.branchedFrom ?? null,
+      autoRenameSessionId: null, autoRenameInFlight: false,
+    }), true);
   }
 
   /** `branch` / `fork` (`send` runs the RPC); `_handleResponse` has already

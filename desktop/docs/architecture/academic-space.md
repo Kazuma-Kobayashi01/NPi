@@ -49,8 +49,17 @@ Its only tools come over omp's Host Tool RPC, registered by Rust (`AgentBridge::
 
 Everything else (`papers/` and `data/raw/` writes, `.omp/`, `.npi-academic/`, paths outside the project, the network, a shell) has no tool at all.
 
-Known gaps: PDFs have no extracted text, so they are listed but neither searched nor read; search is a plain term match, not FTS5 (planned in `docs/PLAN_3.0.md`); `research_propose_ops`, authorisation per paper and calling the Copilot from the main chat are not built. The tools were exercised only by unit tests: a real omp run needs model credentials, which the self-hosting rules keep out of probes, so the `set_host_tools` handshake and the model's use of the tools are unverified end to end.
+PDFs are searched and read as extracted text (`pdf_text.rs`, below); known gaps: a scanned PDF has no text layer and OCR is not available; search is a plain term match, not FTS5 (planned in `docs/PLAN_3.0.md`); `research_propose_ops`, authorisation per paper and calling the Copilot from the main chat are not built. The tools were exercised only by unit tests: a real omp run needs model credentials, which the self-hosting rules keep out of probes, so the `set_host_tools` handshake and the model's use of the tools are unverified end to end.
 
 ## The Academic library as tools for the main chat (`copilot::ResearchHub`)
 
 Every normal tab (Chat, Code, Academic) also starts with three read-only host tools over the same Host Tool RPC: `academic_projects` (names of the projects directly under `NPi/Academic`), `academic_search(project, query)` and `academic_read(project, path)`. They run the Copilot's own search/read with its limits (read folders only, no `..`, no symlink escape, text files, no PDF text) on a project named by a plain folder name (`AcademicSpace::project_named`, never a path); nothing can be written from here (`research_save` stays Copilot-only). The agent is expected to use them instead of memory for questions about the user's papers and notes. `start_session` passes the hub to `AgentBridge::start_session_with_host`; the reader's `host` is a `dyn HostTools`, so the Copilot worker (`CopilotHost`) and the main tabs share one path. Like the Copilot's tools, the `set_host_tools` handshake and a model actually calling them are unit-tested on the Rust side only; a live omp run is unverified.
+
+## PDF text
+
+`pdf_text.rs` turns a PDF into Markdown with `pdf-inspector` (pure Rust, MIT, on `lopdf`). Checked on generated PDFs only (English, a table inside two columns, two columns alone, Chinese, an image-only page): CJK text is read correctly (`lopdf`'s own `extract_text` garbles it), two plain columns come out in reading order, an image-only PDF is reported as scanned. Weak spot: a table beside a column can make it merge the two columns' lines. Not tried on real LaTeX or journal PDFs, nor timed in a release build.
+
+- A PDF over 64 MiB is refused; parsing runs behind `catch_unwind`, so a malformed file is an error, never a panic in the caller's thread.
+- The text is cached in `<project>/.npi-academic/cache/pdf/<hash of path>.<size>-<mtime>.md` (an empty file means scanned); a changed file misses and replaces its entry. The cache is rebuildable and holds nothing the user wrote.
+- `research_search` extracts at most 4 uncached PDFs per call and says how many are waiting; `research_read` extracts the one it is asked for. A scanned PDF is named in the search result and refused by read.
+- `PyMuPDF` / MuPDF were left out: AGPL.

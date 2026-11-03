@@ -14,6 +14,16 @@
     "work.open": "Show the steps",
     "work.close": "Hide the steps",
     "work.thoughtLabel": "Thinking",
+    "compact.running": "Compacting context…",
+    "compact.runningChip": "running",
+    "compact.done": "Context compacted",
+    "compact.before": "{n} before",
+    "compact.skipped": "Nothing to compact",
+    "compact.skippedChip": "skipped",
+    "compact.cancelled": "Compaction cancelled",
+    "compact.cancelledChip": "cancelled",
+    "compact.failed": "Compaction failed",
+    "compact.failedChip": "failed",
   });
 
   I.add([
@@ -24,6 +34,16 @@
     ["work.open", "展开过程", "展開過程", "過程を表示"],
     ["work.close", "折叠过程", "摺疊過程", "過程を隠す"],
     ["work.thoughtLabel", "思考", "思考", "思考"],
+    ["compact.running", "正在压缩上下文…", "正在壓縮上下文…", "コンテキストを圧縮中…"],
+    ["compact.runningChip", "进行中", "進行中", "実行中"],
+    ["compact.done", "上下文已压缩", "上下文已壓縮", "コンテキストを圧縮しました"],
+    ["compact.before", "压缩前 {n}", "壓縮前 {n}", "圧縮前 {n}"],
+    ["compact.skipped", "无需压缩", "無需壓縮", "圧縮するものはありません"],
+    ["compact.skippedChip", "已跳过", "已略過", "スキップ"],
+    ["compact.cancelled", "压缩已取消", "壓縮已取消", "圧縮をキャンセルしました"],
+    ["compact.cancelledChip", "已取消", "已取消", "キャンセル"],
+    ["compact.failed", "压缩失败", "壓縮失敗", "圧縮に失敗しました"],
+    ["compact.failedChip", "失败", "失敗", "失敗"],
 
     // Mode switch
     ["Chat", "聊天", "聊天", "チャット"],
@@ -84,6 +104,7 @@
     ["Terminal ({hint})", "终端（{hint}）", "終端機（{hint}）", "ターミナル（{hint}）"],
     ["Changes", "更改", "變更", "変更"],
     ["Browser panel", "浏览器面板", "瀏覽器面板", "ブラウザパネル"],
+    ["Terminal", "终端", "終端機", "ターミナル"],
     ["Subagents", "子代理", "子代理", "サブエージェント"],
     ["Conversation tree", "会话树", "對話樹", "会話ツリー"],
     ["Academic Copilot (this project's files)", "学术 Copilot（本项目的文件）", "學術 Copilot（本專案的檔案）", "アカデミック Copilot（このプロジェクトのファイル）"],

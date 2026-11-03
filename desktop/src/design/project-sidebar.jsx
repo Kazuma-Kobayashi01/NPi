@@ -53,7 +53,7 @@ function ProjectSidebar({
   const savedForProject = (path, profile) => {
     const projectSaved = saved.filter(s => s.profile === profile
       && window.OMP_PROJECT_NAV.normPath(s.cwd) === window.OMP_PROJECT_NAV.normPath(path));
-    const openFiles = tabs.filter(t => t.profile === profile).map(t => t.sessionFile);
+    const openFiles = window.OMP_PROJECT_NAV.openFilesOf(tabs.filter(t => t.profile === profile));
     return window.OMP_PROJECT_NAV.collapseChatFamilies(projectSaved, openFiles);
   };
   const savedRow = s => (

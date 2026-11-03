@@ -7,7 +7,7 @@
 
 // The UI language (app/i18n.js).
 const _CH_T = (key, vars) => window.OMP_I18N.t(key, vars);
-const { Icon, ProfileMenu, SubagentRailCard } = window;
+const { Icon, SubagentRailCard } = window;
 
 // Thin wrapper around the shared `OMP_KEYMAP.hintFor` — same guard and
 // rationale as composer.jsx's copy (the registry may not be loaded yet).
@@ -44,8 +44,6 @@ function ChevronGlyph({ dir }) {
 // full window height; the rest holds the session title and the tool buttons.
 function WindowChrome({
   project, onCmd,
-  profiles, activeProfileId, startupProfileId,
-  onSelectProfile, onCreateProfile, onRenameProfile, onDeleteProfile, onSetStartupProfile,
   sidebarOpen, onToggleSidebar, toolbar,
   canBack, canForward, onBack, onForward, home = false,
 }) {
@@ -77,18 +75,6 @@ function WindowChrome({
           )}
         </div>
 
-        {/* Per-tab omp profile — the selector acts on the active tab only. */}
-        <ProfileMenu
-          profiles={profiles}
-          activeId={activeProfileId}
-          startupId={startupProfileId}
-          onSelect={onSelectProfile}
-          onCreate={onCreateProfile}
-          onRename={onRenameProfile}
-          onDelete={onDeleteProfile}
-          onSetStartup={onSetStartupProfile}
-        />
-
         <div className="chrome-right">
           {toolbar}
           {/* Windows controls — right side, hidden on macOS/Linux */}
@@ -114,10 +100,10 @@ function WindowChrome({
 // The tool buttons that used to sit in the footer status bar.
 
 // ── Toolbar: the two code-mode tools, then everything else under "More" ──
-function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen, copilot = false }) {
+function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, academic = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen, copilot = false }) {
   return (
     <div className="chrome-toolbar">
-      {!chat && <button className={`chrome-btn ${terminalOpen ? "on" : ""}`} aria-pressed={!!terminalOpen}
+      {!chat && !academic && <button className={`chrome-btn ${terminalOpen ? "on" : ""}`} aria-pressed={!!terminalOpen}
         title={_CH_T("Terminal ({hint})", { hint: hintFor("desktop.terminal.toggle", "Ctrl+`") })} onClick={onTerminal}>
         <Icon name="terminal" size={15} />
       </button>}
@@ -130,7 +116,7 @@ function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = 
           <Icon name="web" size={15} />
         </button>
       )}
-      {!chat && onSubagents && (
+      {!chat && !academic && onSubagents && (
         <button className={`chrome-btn ${subagentsOpen ? "on" : ""}`} aria-pressed={!!subagentsOpen} title={_CH_T("Subagents")} onClick={onSubagents}>
           <Icon name="agent" size={15} />
         </button>
