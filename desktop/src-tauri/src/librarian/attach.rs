@@ -54,6 +54,46 @@ fn hash_valid(hash: &str) -> bool {
     hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+/// `rel` under `project`, created if absent, refusing a symlink on the way: a folder of ours
+/// (`papers/`, the inbox) that was swapped for a link must not carry a copy outside the project.
+fn own_dir(project: &Path, rel: &str) -> Result<PathBuf, String> {
+    let root = project.canonicalize().map_err(|e| format!("the project folder: {e}"))?;
+    let mut dir = root.clone();
+    for part in rel.split('/') {
+        dir.push(part);
+        match std::fs::symlink_metadata(&dir) {
+            Ok(meta) if meta.file_type().is_symlink() || !meta.is_dir() => {
+                return Err(format!("{rel} is not a plain folder of this project"));
+            }
+            Ok(_) => {}
+            Err(_) => std::fs::create_dir(&dir).map_err(|e| format!("could not create {rel}: {e}"))?,
+        }
+    }
+    if dir.canonicalize().map_err(|e| e.to_string())?.starts_with(&root) {
+        Ok(dir)
+    } else {
+        Err(format!("{rel} leaves the project"))
+    }
+}
+
+/// The file of an attachment `rel` as it may be opened: under `papers/`, no `..`, and,
+/// once links are resolved, still a file inside the project's `papers/`.
+pub fn open_target(project: &Path, rel: &str) -> Result<PathBuf, String> {
+    let rel_path = Path::new(rel);
+    let plain = rel_path.starts_with(PAPERS)
+        && rel_path.components().all(|c| matches!(c, std::path::Component::Normal(_)));
+    if !plain {
+        return Err("that file is not under papers/".into());
+    }
+    let root = project.canonicalize().map_err(|e| e.to_string())?;
+    let papers = root.join(PAPERS).canonicalize().map_err(|_| "the file is missing".to_string())?;
+    let file = project.join(rel_path).canonicalize().map_err(|_| "the file is missing".to_string())?;
+    if !papers.starts_with(&root) || !file.starts_with(&papers) || !file.is_file() {
+        return Err("that file is outside the project's papers/".into());
+    }
+    Ok(file)
+}
+
 /// Copies `source` (a PDF) into the project's inbox under its content hash.
 pub fn stage(project: &Path, source: &Path) -> Result<Staged, String> {
     let meta = std::fs::metadata(source).map_err(|e| format!("could not read the file: {e}"))?;
@@ -65,8 +105,7 @@ pub fn stage(project: &Path, source: &Path) -> Result<Staged, String> {
         return Err("that file is not a PDF".into());
     }
     let hash = hex(&Sha256::digest(&bytes));
-    let dir = project.join(INBOX);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("could not create the inbox: {e}"))?;
+    let dir = own_dir(project, INBOX)?;
     sweep(&dir);
     let target = dir.join(format!("{hash}.pdf"));
     if !target.exists() {
@@ -134,9 +173,8 @@ pub fn finalize(project: &Path, hash: &str, stem: &str) -> Result<String, String
     if !hash_valid(hash) {
         return Err("unknown staged file".into());
     }
-    let staged = project.join(INBOX).join(format!("{hash}.pdf"));
-    let papers = project.join(PAPERS);
-    std::fs::create_dir_all(&papers).map_err(|e| format!("could not create papers/: {e}"))?;
+    let staged = own_dir(project, INBOX)?.join(format!("{hash}.pdf"));
+    let papers = own_dir(project, PAPERS)?;
     for n in 0.. {
         let name = if n == 0 { format!("{stem}.pdf") } else { format!("{stem}-{n}.pdf") };
         let target: PathBuf = papers.join(&name);
@@ -191,6 +229,12 @@ impl Library {
 
     /// Records `path` (project-relative) as a file of reference `ref_id`; the same hash is recorded once.
     pub fn attach(&self, ref_id: i64, path: &str, hash: &str, kind: &str) -> Result<(), String> {
+        let rel = Path::new(path);
+        let inside_papers = rel.starts_with(PAPERS)
+            && rel.components().all(|c| matches!(c, std::path::Component::Normal(_)));
+        if !inside_papers || !hash_valid(hash) {
+            return Err("an attachment is a file under papers/".into());
+        }
         let exists: bool = self
             .conn
             .query_row("SELECT 1 FROM attachments WHERE ref_id = ?1 AND hash = ?2", params![ref_id, hash], |_| Ok(()))
@@ -253,6 +297,7 @@ mod tests {
     fn a_pdf_is_staged_confirmed_named_and_not_taken_twice() {
         let dir = TempDir::new("librarian", "attach");
         let project = dir.path().join("p");
+        std::fs::create_dir_all(&project).unwrap();
         let src = dir.path().join("Some Paper.pdf");
         std::fs::write(&src, tiny_pdf("hello")).unwrap();
         let staged = stage(&project, &src).unwrap();
@@ -280,6 +325,7 @@ mod tests {
     fn only_pdfs_and_known_hashes_get_through() {
         let dir = TempDir::new("librarian", "attach-bad");
         let project = dir.path().join("p");
+        std::fs::create_dir_all(&project).unwrap();
         let txt = dir.path().join("a.pdf");
         std::fs::write(&txt, "not a pdf").unwrap();
         assert!(stage(&project, &txt).unwrap_err().contains("not a PDF"));
@@ -300,6 +346,9 @@ mod tests {
         let project = dir.path().join("p");
         let lib = Library::open(&project).unwrap();
         let e = lib.add(&json!({"title": "T"}), "manual").unwrap();
+        for bad in ["../x.pdf", "/etc/passwd", "notes/x.pdf", "papers/../../x.pdf"] {
+            assert!(lib.attach(e.id, bad, &"b".repeat(64), "pdf").is_err(), "{bad}");
+        }
         lib.attach(e.id, "papers/t.pdf", &"b".repeat(64), "pdf").unwrap();
         lib.attach(e.id, "papers/t.pdf", &"b".repeat(64), "pdf").unwrap();
         let mut list = lib.list().unwrap();
@@ -312,5 +361,80 @@ mod tests {
         assert!(lib.list().unwrap()[0].attachments.is_empty());
         lib.remove(e.id).unwrap();
         assert_eq!(lib.attachment_path(id).unwrap(), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_papers_or_inbox_folder_swapped_for_a_link_carries_nothing_outside() {
+        use std::os::unix::fs::symlink;
+        let dir = TempDir::new("librarian", "attach-links");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let src = dir.path().join("a.pdf");
+        std::fs::write(&src, tiny_pdf("x")).unwrap();
+
+        let project = dir.path().join("p1");
+        std::fs::create_dir_all(project.join(".npi-academic")).unwrap();
+        symlink(&outside, project.join(PAPERS)).unwrap();
+        let staged = stage(&project, &src).unwrap();
+        assert!(finalize(&project, &staged.hash, "paper").is_err(), "papers/ is a link");
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0, "nothing was written through the link");
+
+        let project2 = dir.path().join("p2");
+        std::fs::create_dir_all(project2.join(".npi-academic")).unwrap();
+        symlink(&outside, project2.join(INBOX)).unwrap();
+        assert!(stage(&project2, &src).is_err(), "the inbox is a link");
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn only_a_file_inside_papers_opens() {
+        let dir = TempDir::new("librarian", "attach-open");
+        let project = dir.path().join("p");
+        std::fs::create_dir_all(project.join("papers/sub")).unwrap();
+        std::fs::create_dir_all(project.join("notes")).unwrap();
+        std::fs::write(project.join("papers/a.pdf"), tiny_pdf("a")).unwrap();
+        std::fs::write(project.join("papers/sub/b.pdf"), tiny_pdf("b")).unwrap();
+        std::fs::write(project.join("notes/n.pdf"), tiny_pdf("n")).unwrap();
+        std::fs::write(dir.path().join("secret.pdf"), "secret").unwrap();
+        assert!(open_target(&project, "papers/a.pdf").is_ok());
+        assert!(open_target(&project, "papers/sub/b.pdf").is_ok());
+        for bad in [
+            "notes/n.pdf",
+            "../secret.pdf",
+            "papers/../notes/n.pdf",
+            "papers/../../secret.pdf",
+            "/etc/passwd",
+            "papers",
+            "papers/sub",
+            "papers/missing.pdf",
+            "",
+        ] {
+            assert!(open_target(&project, bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_papers_that_leaves_the_project_does_not_open() {
+        use std::os::unix::fs::symlink;
+        let dir = TempDir::new("librarian", "attach-open-link");
+        let project = dir.path().join("p");
+        std::fs::create_dir_all(project.join("papers")).unwrap();
+        std::fs::write(dir.path().join("secret.pdf"), "secret").unwrap();
+        symlink(dir.path().join("secret.pdf"), project.join("papers/leak.pdf")).unwrap();
+        assert!(open_target(&project, "papers/leak.pdf").is_err());
+        // The same holds when the stored path was tampered with in the database.
+        let lib = Library::open(&project).unwrap();
+        let e = lib.add(&json!({"title": "T"}), "manual").unwrap();
+        lib.conn
+            .execute(
+                "INSERT INTO attachments (ref_id, path, hash, kind, added_at) VALUES (?1, '../../secret.pdf', 'h', 'pdf', 0)",
+                [e.id],
+            )
+            .unwrap();
+        let id = lib.list().unwrap()[0].attachments[0].id;
+        let stored = lib.attachment_path(id).unwrap().unwrap();
+        assert!(open_target(&project, &stored).is_err());
     }
 }

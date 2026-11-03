@@ -16,6 +16,8 @@ function LibrarianWindow({ bridge, project, onClose }) {
   const [sort, setSort] = React.useState({ key: "added", dir: "desc" });
   const [selectedId, setSelectedId] = React.useState(null);
   const [notice, setNotice] = React.useState("");
+  const [trash, setTrash] = React.useState(null);   // null = closed, else the removed references
+  const [report, setReport] = React.useState(null);   // the citation check of a draft
   const [draft, setDraft] = React.useState(null);   // a PDF draft awaiting the user's confirmation
   const [styles, setStyles] = React.useState([]);
   const styleKey = `npi.librarian.style.${project}`;
@@ -29,7 +31,11 @@ function LibrarianWindow({ bridge, project, onClose }) {
 
   const reload = React.useCallback(async () => {
     const [list, grp] = await Promise.all([call("list"), call("groups")]);
-    if (list.ok) setEntries(list.value); else say(list.error);
+    if (list.ok) {
+      setEntries(list.value);
+      const waiting = list.value.reduce((n, e) => n + (e.suggestions?.length ?? 0), 0);
+      if (waiting > 0) say(T("{n} suggestions from the Copilot are waiting", { n: waiting }));
+    } else say(list.error);
     if (grp.ok) setGroups(grp.value);
     setLoaded(true);
   }, [call]);
@@ -126,6 +132,30 @@ function LibrarianWindow({ bridge, project, onClose }) {
     await reload();
   };
   const lookup = args => call("lookup", args);
+  const openTrash = async () => {
+    const r = await call("trash");
+    if (!r.ok) return say(r.error);
+    setTrash(r.value);
+  };
+  const restore = async item => {
+    const r = await call("restore", { id: item.id });
+    if (!r.ok) return say(r.error);
+    setEntries(list => (list.some(e => e.id === r.value.id) ? list : [...list, r.value]));
+    setTrash(t => (t ?? []).filter(x => x.id !== item.id));
+    setGroups((await call("groups")).value ?? groups);
+    say(T("Restored {key}", { key: item.citekey }));
+  };
+  const resolveSuggestion = async (sg, accept) => {
+    const r = await call("suggestion_resolve", { id: sg.id, accept });
+    if (!r.ok) return say(r.error);
+    replace(r.value);
+    if (accept && sg.kind === "group") setGroups((await call("groups")).value ?? groups);
+  };
+  const checkDraft = async () => {
+    const r = await call("check_draft_pick");
+    if (!r.ok) return say(r.error);
+    if (r.value) setReport(r.value);
+  };
   const saveDraft = async csl => {
     const res = await call("add_pdf", { csl, hash: draft.hash });
     if (!res.ok) return res;
@@ -162,6 +192,8 @@ function LibrarianWindow({ bridge, project, onClose }) {
     if (!r.ok) return say(r.error);
     setEntries(list => list.filter(e => e.id !== entry.id));
     setSelectedId(null);
+    if (trash) setTrash(null);
+    say(T("Moved {key} to the trash", { key: entry.citekey }));
     setGroups((await call("groups")).value ?? groups);
   };
   const groupOp = async (name, args) => {
@@ -191,6 +223,8 @@ function LibrarianWindow({ bridge, project, onClose }) {
               onClick={async () => { if (await cite(shown.map(e => e.id), "reference")) say(T("Copied {n} references", { n: shown.length })); }}>
               {T("Copy list")}
             </button>
+            <button type="button" className="btn ghost" title={T("References you removed; restoring brings back their groups, tags, notes and files")} onClick={() => (trash ? setTrash(null) : openTrash())}>{T("Trash")}</button>
+            <button type="button" className="btn ghost" title={T("Checks a draft's citations against the library")} onClick={checkDraft}>{T("Check a draft…")}</button>
             <button type="button" className="btn ghost" title={T("Replaces [@citekey] in a Markdown draft and appends the references")}
               onClick={async () => {
                 const r = await call("cite_draft", { style: styleId });
@@ -210,6 +244,44 @@ function LibrarianWindow({ bridge, project, onClose }) {
           </span>
         </div>
         {notice && <div className="lb-notice" role="status" onClick={() => setNotice("")}>{notice}</div>}
+        {trash && (
+          <div className="lb-report lb-trash" role="region" aria-label={T("Trash")}>
+            <div className="lb-report-head">
+              <strong>{T("Trash")}</strong>
+              <span>{trash.length === 0 ? T("Nothing in the trash.") : T("{n} removed", { n: trash.length })}</span>
+              <button type="button" className="btn ghost" onClick={() => setTrash(null)}>{T("Close")}</button>
+            </div>
+            <ul>
+              {trash.map(item => (
+                <li key={item.id}>
+                  <button type="button" className="btn ghost" onClick={() => restore(item)}>{T("Restore")}</button>
+                  <code>{item.citekey}</code> <span>{(item.csl?.title ?? "").slice(0, 100)}</span>
+                </li>
+              ))}
+            </ul>
+            <small>{T("Removed references are kept, and their citekeys are never reused.")}</small>
+          </div>
+        )}
+        {report && (
+          <div className="lb-report" role="region" aria-label={T("Citation check")}>
+            <div className="lb-report-head">
+              <strong>{T("Citation check")}</strong>
+              <span>{report.findings.length === 0
+                ? T("No checkable citations found.")
+                : T("{matched} matched, {problems} need attention", { matched: report.matched, problems: report.problems })}</span>
+              <button type="button" className="btn ghost" onClick={() => setReport(null)}>{T("Close")}</button>
+            </div>
+            <ul>
+              {report.findings.map((f, i) => (
+                <li key={i} className={f.status === "matched" ? "ok" : "check"}>
+                  <span className="lb-report-status">{f.status === "matched" ? T("ok") : T("check")}</span>
+                  <code>{f.text}</code> <span>{f.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <small>{T("Only [@citekey], Author (Year) and DOIs are checked; numbered citations like [1] are not.")}</small>
+          </div>
+        )}
         <div className="lb-body">
           <LibSidebar total={entries.length} groups={groups} tags={tags} scope={scope} onScope={setScope}
             onGroupAdd={name => groupOp("group_add", { name })}
@@ -221,9 +293,9 @@ function LibrarianWindow({ bridge, project, onClose }) {
             ? <LibDetail key={`draft:${draft.hash}`} entry={L.draftEntry(draft)} groups={groups} draft={draft}
                 onSave={save} onLookup={lookup} onAttachDuplicate={attachDuplicate} onDiscardDraft={() => setDraft(null)} />
             : selected
-              ? <LibDetail key={`${selected.id}:${selected.updatedAt}:${selected.attachments.length}`} entry={selected} groups={groups}
+              ? <LibDetail key={`${selected.id}:${selected.updatedAt}:${selected.attachments.length}:${selected.suggestions.length}`} entry={selected} groups={groups}
                   onSave={save} onMember={member} onDelete={remove} onCite={cite} onLookup={lookup} onAttach={attachPick}
-                  onOpenAttachment={openAttachment} onRemoveAttachment={removeAttachment} />
+                  onOpenAttachment={openAttachment} onRemoveAttachment={removeAttachment} onSuggestion={resolveSuggestion} />
               : <section className="lb-detail lb-detail-empty">{T("Select a reference.")}</section>}
         </div>
       </div>

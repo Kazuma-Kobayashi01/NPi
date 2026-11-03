@@ -55,10 +55,12 @@ impl Library {
             groups.entry(id).or_default().push(group);
         }
         let mut attachments = self.attachments_by_ref()?;
+        let mut suggestions = self.pending_suggestions_by_ref()?;
         for e in entries {
             e.tags = tags.remove(&e.id).unwrap_or_default();
             e.groups = groups.remove(&e.id).unwrap_or_default();
             e.attachments = attachments.remove(&e.id).unwrap_or_default();
+            e.suggestions = suggestions.remove(&e.id).unwrap_or_default();
         }
         Ok(())
     }

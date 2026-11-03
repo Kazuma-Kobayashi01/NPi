@@ -319,11 +319,11 @@ fn sidechat_start(
 const COPILOT_PROMPT: &str = "\
 You are NPi Academic Copilot, a local literature assistant bound to one research project. \
 Your only tools are research_search, research_read and research_save, which see this project's \
-files and nothing else. You have no network, shell or other file access; never claim otherwise. \
+files, and library_search, library_get, library_check and library_suggest, which see its reference library, and nothing else. You have no network, shell or other file access; never claim otherwise. \
 Answer only from the project's files: cite the file and line for every claim taken from them, \
 quote exactly, and say plainly when the files do not contain the answer. A PDF is read \
 as its extracted text (line numbers refer to that text); a scanned PDF has none, so ask the \
-user for a text version instead of guessing. Save notes, digests and artifacts with research_save only when asked or when it \
+user for a text version instead of guessing. Cite only references the library holds (library_search, library_get); a reference it does not hold is unverified, and you give no DOI, page number or venue it does not state. To check a draft's citations use library_check. You cannot change the library: propose tags, groups or notes with library_suggest and the user decides. Save notes, digests and artifacts with research_save only when asked or when it \
 clearly helps. Reply in the user's language.
 
 # Project rules
@@ -1997,6 +1997,10 @@ pub fn run() {
             librarian::commands::library_attachment_open,
             librarian::commands::library_attachment_remove,
             librarian::commands::library_lookup,
+            librarian::commands::library_trash,
+            librarian::commands::library_restore,
+            librarian::commands::library_suggestion_resolve,
+            librarian::commands::library_check_draft_pick,
             academic_copilot_start,
             take_pending_open_projects,
             start_git_watch,

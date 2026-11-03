@@ -3,9 +3,9 @@
 
 use super::{
     add_user_style, cite_draft, export, format as format_entries, import, styles, Entry, Format, Formatted, Group,
-    Cited, ImportReport, Library, StyleInfo,
+    Cited, ImportReport, Library, StyleInfo, Trashed,
 };
-use super::{attach, lookup, pdf_meta};
+use super::{attach, check_citations, lookup, pdf_meta};
 use crate::academic_space::AcademicSpace;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -554,14 +554,7 @@ pub async fn library_attachment_open(
         let rel = Library::open(&dir)?
             .attachment_path(id)?
             .ok_or("no such attachment")?;
-        let root = dir.canonicalize().map_err(|e| e.to_string())?;
-        let file = dir
-            .join(&rel)
-            .canonicalize()
-            .map_err(|_| "the file is missing".to_string())?;
-        if !file.starts_with(&root) || !file.is_file() {
-            return Err("that file is outside the project".to_string());
-        }
+        let file = attach::open_target(&dir, &rel)?;
         let _gate = crate::spawn_gate::shared();
         #[allow(clippy::disallowed_methods)] // under the gate
         let opened = open::that_detached(&file);
@@ -602,10 +595,126 @@ pub async fn library_lookup(
     .await?
 }
 
+/// References removed from the library, newest removal first.
+#[tauri::command]
+pub async fn library_trash(space: Space<'_>, project: String) -> Result<Vec<Trashed>, String> {
+    with_library(&space, &project, Library::trashed).await
+}
+
+/// Brings a removed reference back with its groups, tags, notes and files.
+#[tauri::command]
+pub async fn library_restore(space: Space<'_>, project: String, id: i64) -> Result<Entry, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let mut entry = Library::open(&dir)?.restore(id)?;
+        attach::mark_missing(&dir, std::slice::from_mut(&mut entry));
+        Ok(entry)
+    })
+    .await?
+}
+
+/// The user's answer to a Copilot suggestion. Accepting applies it; either way it is closed.
+#[tauri::command]
+pub async fn library_suggestion_resolve(
+    space: Space<'_>,
+    project: String,
+    id: i64,
+    accept: bool,
+) -> Result<Entry, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let mut entry = Library::open(&dir)?.resolve_suggestion(id, accept)?;
+        attach::mark_missing(&dir, std::slice::from_mut(&mut entry));
+        Ok(entry)
+    })
+    .await?
+}
+
+/// Asks for a draft and checks its citations against the library (read only).
+/// `None` when the dialog is cancelled.
+#[tauri::command]
+pub async fn library_check_draft_pick(
+    app: tauri::AppHandle,
+    space: Space<'_>,
+    project: String,
+) -> Result<Option<super::agent::Report>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let dir = project_of(&space, &project)?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .set_title("Choose a draft to check")
+        .add_filter("Draft", &["md", "markdown", "txt", "tex"])
+        .pick_file(move |picked| {
+            let _ = tx.send(picked);
+        });
+    crate::off_ipc(move || {
+        let Some(picked) = rx.recv().map_err(|e| format!("channel error: {e}"))? else {
+            return Ok(None);
+        };
+        let path = picked
+            .into_path()
+            .map_err(|e| format!("invalid picked path: {e}"))?;
+        if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > MAX_DRAFT_BYTES {
+            return Err("the draft is too large".to_string());
+        }
+        let text =
+            std::fs::read_to_string(&path).map_err(|e| format!("could not read the draft: {e}"))?;
+        let entries = Library::open(&dir)?.list()?;
+        Ok(Some(check_citations(&entries, &text)))
+    })
+    .await?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::academic_space::AcademicSpace;
     use std::path::Path;
+
+    fn space(name: &str) -> (crate::test_support::TempDir, AcademicSpace) {
+        let d = crate::test_support::TempDir::new("librarian", name);
+        std::fs::create_dir_all(d.path().join("Academic/Thesis/notes")).unwrap();
+        std::fs::create_dir_all(d.path().join("Academic/Other")).unwrap();
+        std::fs::create_dir_all(d.path().join("Academic/.hidden")).unwrap();
+        std::fs::create_dir_all(d.path().join("outside/Evil")).unwrap();
+        let space = AcademicSpace::new(d.path().join("Academic"));
+        (d, space)
+    }
+
+    #[test]
+    fn a_command_names_a_project_by_a_plain_folder_name_only() {
+        let (_d, space) = space("project-names");
+        assert!(project_of(&space, "Thesis").is_ok());
+        for bad in ["", ".", "..", ".hidden", "../outside/Evil", "Thesis/notes", "Thesis\\notes", "/etc", "missing", "Thesis/.."] {
+            assert!(project_of(&space, bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_the_academic_folder_to_a_folder_elsewhere_is_not_a_project() {
+        let (d, space) = space("project-link");
+        std::os::unix::fs::symlink(d.path().join("outside/Evil"), d.path().join("Academic/Linked")).unwrap();
+        assert!(project_of(&space, "Linked").is_err());
+    }
+
+    #[test]
+    fn two_projects_never_see_each_others_library_or_trash() {
+        let (_d, space) = space("project-isolation");
+        let a = project_of(&space, "Thesis").unwrap();
+        let b = project_of(&space, "Other").unwrap();
+        let lib_a = Library::open(&a).unwrap();
+        let e = lib_a.add(&serde_json::json!({"title": "Only in Thesis"}), "manual").unwrap();
+        lib_a.remove(e.id).unwrap();
+        let lib_b = Library::open(&b).unwrap();
+        assert!(lib_b.list().unwrap().is_empty());
+        assert!(lib_b.trashed().unwrap().is_empty());
+        assert!(lib_b.restore(e.id).is_err(), "an id of another project restores nothing");
+        assert!(lib_b.resolve_suggestion(1, true).is_err());
+        assert_eq!(lib_a.trashed().unwrap().len(), 1);
+        assert_ne!(Library::path(&a), Library::path(&b));
+    }
 
     #[test]
     fn the_extension_names_the_format() {

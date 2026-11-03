@@ -84,6 +84,66 @@ pub fn tool_definitions() -> Value {
                 "required": ["kind", "name", "content"],
                 "additionalProperties": false
             },
+            "loadMode": "essential"        },
+        {
+            "name": "library_search",
+            "label": "Search reference library",
+            "description": "Search this project's reference library (the user's catalogued papers) by title, authors, year, venue, DOI, citekey, tags, notes or abstract. Returns citekey, authors, year, title and venue per reference. Use it, not memory, to know which references exist. A reference that is not in the library is unverified: say so.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Words to look for; a reference matches on any, and ranks higher the more it matches." },
+                    "limit": { "type": "integer", "description": "Maximum references (default 10, at most 20)." }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "library_get",
+            "label": "Get reference",
+            "description": "One reference of the library by citekey: its full record, the user's notes and tags, attached files (read those with research_read) and the reference formatted in a citation style.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "citekey": { "type": "string" },
+                    "style": { "type": "string", "description": "Citation style id, default apa. Others: ieee, chicago-author-date, modern-language-association, nature, vancouver, harvard-cite-them-right, gb-7714-2015-numeric, gb-7714-2015-author-date." }
+                },
+                "required": ["citekey"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "library_check",
+            "label": "Check citations",
+            "description": "Check the citations of a draft against the library, deterministically: [@citekey] markers, Author (Year) and (Author, Year) mentions, and DOIs. Reports which match a reference, which have a different year, and which are not in the library (possibly invented). Give the draft text, or a project-relative path such as drafts/intro.md. Numbered citations like [1] cannot be checked.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": { "type": "string", "description": "The draft text." },
+                    "path": { "type": "string", "description": "Or a project-relative path to the draft." }
+                },
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "library_suggest",
+            "label": "Suggest library change",
+            "description": "Propose a tag, a group or a note for a reference. Nothing changes: the user sees the suggestion on the reference and accepts or dismisses it. Use it for classification and organisation, with a short reason.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "citekey": { "type": "string" },
+                    "kind": { "type": "string", "enum": ["tag", "group", "note"] },
+                    "value": { "type": "string", "description": "The tag, the group name, or the note text." },
+                    "reason": { "type": "string", "description": "Why, in one sentence." }
+                },
+                "required": ["citekey", "kind", "value"],
+                "additionalProperties": false
+            },
             "loadMode": "essential"
         }
     ])
@@ -171,6 +231,54 @@ impl HostTools for ResearchHub {
                     "additionalProperties": false
                 },
                 "loadMode": "essential"
+            },
+            {
+                "name": "academic_library_search",
+                "label": "Search reference library",
+                "description": "Search one Academic project's reference library (the user's catalogued papers) by title, authors, year, venue, DOI, citekey, tags or notes. A reference not in the library is unverified; say so instead of guessing.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string" },
+                        "query": { "type": "string" },
+                        "limit": { "type": "integer" }
+                    },
+                    "required": ["project", "query"],
+                    "additionalProperties": false
+                },
+                "loadMode": "essential"
+            },
+            {
+                "name": "academic_library_get",
+                "label": "Get reference",
+                "description": "One reference of an Academic project's library by citekey, with its formatted reference.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string" },
+                        "citekey": { "type": "string" },
+                        "style": { "type": "string" }
+                    },
+                    "required": ["project", "citekey"],
+                    "additionalProperties": false
+                },
+                "loadMode": "essential"
+            },
+            {
+                "name": "academic_library_check",
+                "label": "Check citations",
+                "description": "Check a draft's citations ([@citekey], Author (Year), DOIs) against an Academic project's library: which match, which have another year, which are not in the library (possibly invented).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string" },
+                        "text": { "type": "string" },
+                        "path": { "type": "string", "description": "Or a project-relative path to the draft." }
+                    },
+                    "required": ["project"],
+                    "additionalProperties": false
+                },
+                "loadMode": "essential"
             }
         ])
     }
@@ -187,6 +295,9 @@ impl HostTools for ResearchHub {
             }
             "academic_search" => self.with_project(args, CopilotHost::search),
             "academic_read" => self.with_project(args, CopilotHost::read),
+            "academic_library_search" => self.with_project(args, CopilotHost::library_search),
+            "academic_library_get" => self.with_project(args, CopilotHost::library_get),
+            "academic_library_check" => self.with_project(args, CopilotHost::library_check),
             other => Err(format!("unknown tool: {other}")),
         };
         frame(id, outcome)
@@ -224,9 +335,76 @@ impl CopilotHost {
             "research_search" => self.search(args),
             "research_read" => self.read(args),
             "research_save" => self.save(args),
+            "library_search" => self.library_search(args),
+            "library_get" => self.library_get(args),
+            "library_check" => self.library_check(args),
+            "library_suggest" => self.library_suggest(args),
             other => Err(format!("unknown tool: {other}")),
         };
         frame(id, outcome)
+    }
+
+    /// Every live reference of this project's library.
+    fn library(&self) -> Result<(crate::librarian::Library, Vec<crate::librarian::Entry>), String> {
+        let lib = crate::librarian::Library::open(&self.root)?;
+        let entries = lib.list()?;
+        Ok((lib, entries))
+    }
+
+    fn library_search(&self, args: &Value) -> ToolResult {
+        let query = args.get("query").and_then(Value::as_str).unwrap_or("").trim();
+        if query.is_empty() {
+            return Err("query is empty".into());
+        }
+        let limit = args.get("limit").and_then(Value::as_u64).map_or(10, |n| {
+            usize::try_from(n).unwrap_or(MAX_HITS).clamp(1, MAX_HITS)
+        });
+        let (_, entries) = self.library()?;
+        let hits = crate::librarian::search(&entries, query, limit);
+        Ok(crate::librarian::render_search(&hits, query))
+    }
+
+    fn library_get(&self, args: &Value) -> ToolResult {
+        let key = args.get("citekey").and_then(Value::as_str).unwrap_or("").trim();
+        let style = args.get("style").and_then(Value::as_str).unwrap_or("apa");
+        let (_, entries) = self.library()?;
+        entries
+            .iter()
+            .find(|e| e.citekey == key)
+            .map(|e| crate::librarian::render_get(e, style))
+            .ok_or_else(|| format!("no reference with the citekey {key:?}; use library_search"))
+    }
+
+    fn library_check(&self, args: &Value) -> ToolResult {
+        let text = match (args.get("text").and_then(Value::as_str), args.get("path").and_then(Value::as_str)) {
+            (Some(t), _) if !t.trim().is_empty() => t.to_string(),
+            (_, Some(p)) => {
+                let file = self.resolve(p, READ_DIRS)?;
+                if file.metadata().map_err(|e| e.to_string())?.len() > MAX_FILE_BYTES {
+                    return Err("the draft is too large".into());
+                }
+                std::fs::read_to_string(&file).map_err(|_| "the draft is not a text file".to_string())?
+            }
+            _ => return Err("give the draft as text or as a project-relative path".into()),
+        };
+        let (_, entries) = self.library()?;
+        Ok(crate::librarian::render_report(&crate::librarian::check_citations(&entries, &text)))
+    }
+
+    fn library_suggest(&self, args: &Value) -> ToolResult {
+        let get = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+        let (lib, entries) = self.library()?;
+        let key = get("citekey");
+        let entry = entries
+            .iter()
+            .find(|e| e.citekey == key)
+            .ok_or_else(|| format!("no reference with the citekey {key:?}; use library_search"))?;
+        let added = lib.suggest(entry.id, &get("kind"), &get("value"), &get("reason"))?;
+        Ok(if added {
+            format!("Suggested to the user for {key}. It changes nothing until they accept it.")
+        } else {
+            format!("That suggestion for {key} is already waiting for the user.")
+        })
     }
 
     /// A project-relative path resolved inside the project: no absolute path,
@@ -578,10 +756,103 @@ mod tests {
             .iter()
             .map(|d| d["name"].as_str().unwrap())
             .collect();
-        assert_eq!(names, ["research_search", "research_read", "research_save"]);
+        assert_eq!(
+            names,
+            [
+                "research_search", "research_read", "research_save", "library_search",
+                "library_get", "library_check", "library_suggest"
+            ]
+        );
         assert!(names
             .iter()
             .all(|n| n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')));
+    }
+
+    fn with_library(h: &CopilotHost) {
+        use crate::librarian::{import, Format, Library};
+        let lib = Library::open(&h.root).unwrap();
+        import(
+            &lib,
+            Format::Bibtex,
+            "@article{a, author = {Smith, Jo}, title = {Graph methods}, year = {2020}, doi = {10.1/x}}\n@book{b, author = {Lee, Al}, title = {Trees}, year = {2018}}\n",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn the_library_tools_search_get_check_and_only_suggest() {
+        let (_d, h) = host("library");
+        with_library(&h);
+        let found = text_of(&h.call("1", "library_search", &json!({ "query": "graph" })));
+        assert!(found.contains("[smith2020graph] Smith, Jo (2020). Graph methods"), "{found}");
+        assert_eq!(h.call("2", "library_search", &json!({ "query": " " }))["isError"], true);
+        let got = text_of(&h.call("3", "library_get", &json!({ "citekey": "smith2020graph" })));
+        assert!(got.contains("reference (apa): Smith, J. (2020). Graph methods."), "{got}");
+        assert_eq!(h.call("4", "library_get", &json!({ "citekey": "nobody" }))["isError"], true);
+
+        std::fs::create_dir_all(h.root.join("drafts")).unwrap();
+        std::fs::write(h.root.join("drafts/d.md"), "See [@smith2020graph], Jones (2021) and [@ghost].").unwrap();
+        let checked = text_of(&h.call("5", "library_check", &json!({ "path": "drafts/d.md" })));
+        assert!(checked.contains("CHECK [author-year] Jones 2021"), "{checked}");
+        assert!(checked.contains("unknown-key"), "{checked}");
+        assert_eq!(h.call("6", "library_check", &json!({ "path": "../x.md" }))["isError"], true);
+        assert_eq!(h.call("7", "library_check", &json!({ "path": "papers/../.omp/RULES.md" }))["isError"], true);
+
+        // A suggestion changes nothing in the library.
+        let said = text_of(&h.call("8", "library_suggest", &json!({ "citekey": "smith2020graph", "kind": "tag", "value": "graphs", "reason": "topic" })));
+        assert!(said.contains("changes nothing"), "{said}");
+        assert!(text_of(&h.call("9", "library_suggest", &json!({ "citekey": "smith2020graph", "kind": "tag", "value": "GRAPHS" }))).contains("already waiting"));
+        assert_eq!(h.call("10", "library_suggest", &json!({ "citekey": "smith2020graph", "kind": "delete", "value": "x" }))["isError"], true);
+        let entries = crate::librarian::Library::open(&h.root).unwrap().list().unwrap();
+        let smith = entries.iter().find(|e| e.citekey == "smith2020graph").unwrap();
+        assert!(smith.tags.is_empty());
+        assert_eq!(smith.suggestions.len(), 1);
+    }
+
+    #[test]
+    fn the_library_tools_see_only_their_own_project_and_stay_inside_it() {
+        let (_d, h) = host("library-bounds");
+        with_library(&h);
+        // A reference of another project's library is not reachable by citekey.
+        let other = TempDir::new("copilot", "library-bounds-other");
+        let other_root = other.path().join("proj");
+        std::fs::create_dir_all(&other_root).unwrap();
+        crate::librarian::Library::open(&other_root).unwrap().add(&json!({"title": "Secret elsewhere", "author": [{"family": "Hidden"}], "issued": {"date-parts": [[2001]]}}), "manual").unwrap();
+        assert_eq!(h.call("1", "library_get", &json!({ "citekey": "hidden2001secret" }))["isError"], true);
+        assert!(text_of(&h.call("2", "library_search", &json!({ "query": "secret" }))).contains("No reference"));
+        // A draft path may not leave the read folders, by `..`, by an absolute path or by a link.
+        std::fs::create_dir_all(h.root.join("drafts")).unwrap();
+        std::fs::write(other.path().join("outside.md"), "Jones (2021)").unwrap();
+        for path in ["../outside.md", "/etc/passwd", ".omp/RULES.md", "data/../../outside.md", ".npi-academic/research.db"] {
+            assert_eq!(h.call("3", "library_check", &json!({ "path": path }))["isError"], true, "{path}");
+        }
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(other.path().join("outside.md"), h.root.join("drafts/leak.md")).unwrap();
+            assert_eq!(h.call("4", "library_check", &json!({ "path": "drafts/leak.md" }))["isError"], true);
+        }
+        // Nothing but suggestions is written, and a suggestion for an unknown reference is refused.
+        assert_eq!(h.call("5", "library_suggest", &json!({ "citekey": "../x", "kind": "tag", "value": "x" }))["isError"], true);
+        assert!(!h.root.join("papers/x").exists());
+    }
+
+    #[test]
+    fn the_chat_hub_library_tools_take_a_plain_project_name_only() {
+        let d = TempDir::new("copilot", "hub-library");
+        let space = std::sync::Arc::new(crate::academic_space::AcademicSpace::new(d.path().join("Academic")));
+        std::fs::create_dir_all(d.path().join("Academic/Thesis")).unwrap();
+        std::fs::create_dir_all(d.path().join("outside")).unwrap();
+        space.prepare(&d.path().join("Academic/Thesis")).unwrap();
+        let hub = ResearchHub::new(space);
+        for tool in ["academic_library_search", "academic_library_get", "academic_library_check"] {
+            for project in ["../outside", "Thesis/notes", ".hidden", "", "missing", "/etc"] {
+                let args = json!({ "project": project, "query": "x", "citekey": "x", "text": "x" });
+                assert_eq!(hub.call("1", tool, &args)["isError"], true, "{tool} {project:?}");
+            }
+        }
+        for tool in ["library_suggest", "library_search", "research_save", "research_read"] {
+            assert_eq!(hub.call("2", tool, &json!({ "project": "Thesis" }))["isError"], true, "{tool} is not the chat's");
+        }
     }
 
     #[test]
@@ -783,8 +1054,18 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            ["academic_projects", "academic_search", "academic_read"]
+            [
+                "academic_projects", "academic_search", "academic_read", "academic_library_search",
+                "academic_library_get", "academic_library_check"
+            ]
         );
+        with_library(&CopilotHost::new(d.path().join("Academic/Thesis").canonicalize().unwrap()));
+        let lib = text_of(&hub.call("l1", "academic_library_search", &json!({ "project": "Thesis", "query": "graph" })));
+        assert!(lib.contains("[smith2020graph]"), "{lib}");
+        assert!(text_of(&hub.call("l2", "academic_library_get", &json!({ "project": "Thesis", "citekey": "smith2020graph" }))).contains("reference (apa)"));
+        assert!(text_of(&hub.call("l3", "academic_library_check", &json!({ "project": "Thesis", "text": "Jones (2021)" }))).contains("not-in-library"));
+        // The main chat cannot suggest anything: that tool is the Copilot's.
+        assert_eq!(hub.call("l4", "library_suggest", &json!({ "citekey": "smith2020graph", "kind": "tag", "value": "x" }))["isError"], true);
         assert_eq!(
             text_of(&hub.call("1", "academic_projects", &json!({}))),
             "Thesis"

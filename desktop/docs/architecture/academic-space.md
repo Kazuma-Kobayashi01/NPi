@@ -45,6 +45,8 @@ Its only tools come over omp's Host Tool RPC, registered by Rust (`AgentBridge::
 |---|---|---|
 |`research_search`|passages (blank-line blocks) containing any query term, ranked by how many; `file:line: snippet`|text files under `papers/ notes/ digests/ artifacts/ data/ drafts/`, 2 MB each, 2000 files, 20 hits; symlinks skipped|
 |`research_read`|a text file from a line, or a folder listing|same folders; project-relative only, no `..`, symlinks may not leave the project; 24k chars per call|
+|`library_search` / `library_get` / `library_check`|the project's reference library (see `librarian.md`)|read only; 20 hits; a draft by path comes from the read folders, 2 MB|
+|`library_suggest`|a tag, group or note for a reference, as a pending proposal|changes nothing until the user accepts it|
 |`research_save`|`note`/`digest`/`artifact`/`data` into `notes/ digests/ artifacts/ data/processed/`|plain file name, text extension, 256 KB, no overwrite unless `overwrite: true`, never through a symlink|
 
 Everything else (`papers/` and `data/raw/` writes, `.omp/`, `.npi-academic/`, paths outside the project, the network, a shell) has no tool at all.

@@ -45,6 +45,10 @@ const FILES: &[(&str, &str)] = &[
         ".omp/skills/data-processing/SKILL.md",
         include_str!("../templates/academic/skills/data-processing/SKILL.md"),
     ),
+    (
+        ".omp/skills/librarian/SKILL.md",
+        include_str!("../templates/academic/skills/librarian/SKILL.md"),
+    ),
 ];
 
 const DEFAULT_RULES: &str = include_str!("../templates/academic/RULES.md");

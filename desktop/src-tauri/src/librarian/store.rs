@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA_V1: &str = "
 CREATE TABLE refs (
@@ -73,6 +73,18 @@ pub struct Entry {
     /// Ids of the groups it is in.
     pub groups: Vec<i64>,
     pub attachments: Vec<super::attach::Attachment>,
+    /// Proposals from the Copilot waiting for the user.
+    pub suggestions: Vec<super::suggest::Suggestion>,
+}
+
+/// A removed reference, as the trash lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Trashed {
+    pub id: i64,
+    pub citekey: String,
+    pub csl: Value,
+    pub deleted_at: i64,
 }
 
 pub struct Library {
@@ -102,6 +114,7 @@ pub(super) fn entry(row: &Row<'_>) -> rusqlite::Result<Entry> {
         tags: Vec::new(),
         groups: Vec::new(),
         attachments: Vec::new(),
+        suggestions: Vec::new(),
     })
 }
 
@@ -118,6 +131,21 @@ CREATE TABLE attachments (
     added_at INTEGER NOT NULL
 );
 CREATE INDEX attachments_ref ON attachments(ref_id);
+";
+
+/// What the Copilot proposes and the user answers; a resolved row is the log of what was applied.
+const SCHEMA_V4: &str = "
+CREATE TABLE suggestions (
+    id          INTEGER PRIMARY KEY,
+    ref_id      INTEGER NOT NULL,
+    kind        TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    reason      TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  INTEGER NOT NULL,
+    resolved_at INTEGER
+);
+CREATE INDEX suggestions_ref ON suggestions(ref_id, status);
 ";
 
 impl Library {
@@ -137,7 +165,7 @@ impl Library {
             let old: i64 = Connection::open(&path)
                 .and_then(|c| c.query_row("PRAGMA user_version", [], |r| r.get(0)))
                 .map_err(sql)?;
-            if old == 1 || old == 2 {
+            if (1..=3).contains(&old) {
                 std::fs::copy(&path, path.with_extension(format!("db.bak-v{old}")))
                     .map_err(|e| format!("library backup: {e}"))?;
             }
@@ -146,6 +174,9 @@ impl Library {
     }
 
     pub(super) fn init(conn: Connection) -> Result<Self, String> {
+        // The window, the Copilot and the main chat may each open this file; wait a little for
+        // a writer instead of failing with "database is locked".
+        conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(sql)?;
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
@@ -169,6 +200,12 @@ impl Library {
         if version < 3 {
             conn.execute_batch(&format!(
                 "BEGIN; {SCHEMA_V3} PRAGMA user_version = 3; COMMIT;"
+            ))
+            .map_err(sql)?;
+        }
+        if version < 4 {
+            conn.execute_batch(&format!(
+                "BEGIN; {SCHEMA_V4} PRAGMA user_version = 4; COMMIT;"
             ))
             .map_err(sql)?;
         }
@@ -268,6 +305,42 @@ impl Library {
             )
             .map_err(sql)?;
         Ok(changed > 0)
+    }
+
+    /// What was removed, most recently removed first.
+    pub fn trashed(&self) -> Result<Vec<Trashed>, String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, citekey, csl_json, deleted_at FROM refs WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC")
+            .map_err(sql)?;
+        let rows = stmt
+            .query_map([], |r| {
+                let text: String = r.get(2)?;
+                Ok(Trashed {
+                    id: r.get(0)?,
+                    citekey: r.get(1)?,
+                    csl: serde_json::from_str(&text).unwrap_or(Value::Null),
+                    deleted_at: r.get(3)?,
+                })
+            })
+            .map_err(sql)?;
+        rows.collect::<Result<_, _>>().map_err(sql)
+    }
+
+    /// Brings a removed reference back, with its groups, tags, notes and files as they were.
+    pub fn restore(&self, id: i64) -> Result<Entry, String> {
+        let changed = self
+            .conn
+            .execute(
+                "UPDATE refs SET deleted_at = NULL, updated_at = ?2 WHERE id = ?1 AND deleted_at IS NOT NULL",
+                params![id, now()],
+            )
+            .map_err(sql)?;
+        if changed == 0 {
+            return Err("that reference is not in the trash".to_string());
+        }
+        self.get(id)?
+            .ok_or_else(|| "library: row vanished".to_string())
     }
 
     /// The live reference `csl` repeats: the same DOI, or the same title, year
@@ -372,6 +445,31 @@ mod tests {
             .is_none());
         l.remove(a.id).unwrap();
         assert!(l.duplicate_of(&by_doi).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_removed_reference_is_listed_in_the_trash_and_comes_back_whole() {
+        let dir = crate::test_support::TempDir::new("librarian", "trash");
+        let lib = Library::open(dir.path()).unwrap();
+        let a = lib.add(&json!({"title": "Keep me", "issued": {"date-parts": [[2020]]}}), "manual").unwrap();
+        let b = lib.add(&json!({"title": "Other"}), "manual").unwrap();
+        lib.set_meta(a.id, &["nlp".to_string()], "my note").unwrap();
+        let group = lib.add_group("Methods").unwrap();
+        lib.set_member(a.id, group.id, true).unwrap();
+        assert!(lib.remove(a.id).unwrap());
+        assert_eq!(lib.list().unwrap().len(), 1);
+        let trash = lib.trashed().unwrap();
+        assert_eq!(trash.iter().map(|t| t.citekey.as_str()).collect::<Vec<_>>(), [a.citekey.as_str()]);
+        assert_eq!(trash[0].csl["title"], "Keep me");
+        let back = lib.restore(a.id).unwrap();
+        assert_eq!((back.tags.as_slice(), back.notes.as_str(), back.groups.len()), (["nlp".to_string()].as_slice(), "my note", 1));
+        assert!(lib.trashed().unwrap().is_empty());
+        assert!(lib.restore(a.id).is_err(), "a live reference is not in the trash");
+        assert!(lib.restore(9999).is_err());
+        // A removed citekey is never given to a new reference.
+        lib.remove(b.id).unwrap();
+        let again = lib.add(&json!({"title": "Other"}), "manual").unwrap();
+        assert_ne!(again.citekey, b.citekey);
     }
 
     #[test]

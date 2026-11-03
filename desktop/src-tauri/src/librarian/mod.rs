@@ -11,14 +11,17 @@ pub mod commands;
 mod csl;
 mod format;
 mod lookup;
+pub mod agent;
 mod organize;
 mod pdf_meta;
 mod ris;
 mod store;
+mod suggest;
 mod transfer;
 
+pub use agent::{check_citations, render_get, render_report, render_search, search};
 pub use format::{add_user_style, cite_draft, format, styles, Cited, Formatted, StyleInfo};
 
 pub use organize::Group;
-pub use store::{Entry, Library};
+pub use store::{Entry, Library, Trashed};
 pub use transfer::{export, import, Format, ImportReport};

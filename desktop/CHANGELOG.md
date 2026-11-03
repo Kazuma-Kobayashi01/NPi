@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Librarian trash: removed references are kept and listed under "Trash", and "Restore" brings one back with its groups, tags, notes and files.
+- Librarian for the Academic Copilot: it can search the reference library, read a reference with its formatted citation, check a draft's citations against the library (matched, other year, not in the library) and suggest tags, groups or notes that you accept or dismiss on the reference. "Check a draft…" runs the same check from the Librarian window; the main chat gets the read-only tools. New projects also get a Librarian skill.
 - Librarian citation styles: APA, IEEE, Chicago, MLA, Nature, Vancouver, Harvard and GB/T 7714 (numeric, author-date, note) through a CSL engine, your own `.csl` files, "Copy citation" / "Copy reference" / "Copy list" in the chosen style, and "Cite a draft…" which turns `[@citekey]` in a Markdown draft into citations plus a reference list.
 - Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
 ### Fixed

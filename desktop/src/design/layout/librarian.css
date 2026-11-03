@@ -86,4 +86,22 @@
 .lb-files em { color: var(--rose); font-style: normal; font-size: var(--d-text-xs); }
 .lb-file-open { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* L4: Copilot suggestions and the citation check */
+.lb-suggest { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); font-size: var(--d-text-sm); }
+.lb-suggest-row { display: flex; align-items: center; gap: 6px; }
+.lb-suggest-what { flex: 1; min-width: 0; color: var(--fg-1); word-break: break-word; }
+.lb-suggest-what em { color: var(--accent); font-style: normal; margin-right: 4px; }
+.lb-suggest-what small { color: var(--fg-4); }
+.lb-report { border-bottom: 1px solid var(--line); padding: 8px 16px; max-height: 32%; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: var(--d-text-sm); }
+.lb-report-head { display: flex; align-items: center; gap: 10px; }
+.lb-report-head span { flex: 1; color: var(--fg-3); }
+.lb-report ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.lb-report li { display: flex; gap: 8px; align-items: baseline; color: var(--fg-2); }
+.lb-report li.check { color: var(--fg-1); }
+.lb-report-status { min-width: 3.2em; font-size: var(--d-text-xs); color: var(--fg-4); text-transform: uppercase; }
+.lb-report li.check .lb-report-status { color: var(--rose); }
+.lb-trash li { align-items: center; }
+.lb-report code { font-family: var(--font-mono); font-size: var(--d-text-xs); }
+.lb-report small { color: var(--fg-4); }
+
 @media (max-width: 900px) { .lb-body { grid-template-columns: 160px 1fr; } .lb-detail { display: none; } }

@@ -1,6 +1,6 @@
 # Librarian 方案(Academic 参考文献库)
 
-参考 EndNote 的思路,在 Academic 项目里做一个本地参考文献库。**实施状态:L0、L1、L2、L3 已实现(见 `desktop/docs/architecture/librarian.md`),L4 未做。** 下文保留原规划;其中 `hayagriva` 已验证可用(含 GB/T 7714 中文样式),PDF 文字提取用 `pdf-inspector`,在线查询只用 Crossref。
+参考 EndNote 的思路,在 Academic 项目里做一个本地参考文献库。**实施状态:L0 至 L4 均已实现(见 `desktop/docs/architecture/librarian.md`);L4 只做了库一侧的引用核对,论文原文引文与数字核对依赖 `docs/PLAN_3.0.md` 的锚点,未做。** 下文保留原规划;其中 `hayagriva` 已验证可用(含 GB/T 7714 中文样式),PDF 文字提取用 `pdf-inspector`,在线查询只用 Crossref。
 
 ## 1. 已确定的决定
 

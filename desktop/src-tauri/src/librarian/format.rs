@@ -208,7 +208,7 @@ pub struct Cited {
 }
 
 /// The `[@a; @b]` markers of `draft`: byte range and the keys.
-fn markers(draft: &str) -> Vec<(usize, usize, Vec<String>)> {
+pub(super) fn markers(draft: &str) -> Vec<(usize, usize, Vec<String>)> {
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(open) = draft[from..].find("[@").map(|i| i + from) {

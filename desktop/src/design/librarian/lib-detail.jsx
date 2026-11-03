@@ -3,7 +3,7 @@
    applies at once. The parent re-keys it by id and update time, so a saved or
    switched reference starts from what is stored. */
 
-function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, onLookup, onAttach, onOpenAttachment, onRemoveAttachment, onAttachDuplicate, onDiscardDraft }) {
+function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, onLookup, onAttach, onOpenAttachment, onRemoveAttachment, onAttachDuplicate, onDiscardDraft, onSuggestion }) {
   const T = window.OMP_I18N.t;
   const L = window.OMP_LIBRARIAN;
   const isDraft = Boolean(draft);
@@ -57,6 +57,19 @@ function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, o
               <span className="lb-draft-dup">{T("Already in the library as {key}.", { key: draft.duplicateOf.citekey })}{" "}
                 <button type="button" className="btn ghost" onClick={() => onAttachDuplicate(draft.duplicateOf)}>{T("Attach the PDF to it")}</button></span>
             )}
+          </div>
+        )}
+        {!isDraft && entry.suggestions.length > 0 && (
+          <div className="lb-suggest" role="group" aria-label={T("Suggestions from the Copilot")}>
+            <strong>{T("Suggestions from the Copilot")}</strong>
+            {entry.suggestions.map(sg => (
+              <div key={sg.id} className="lb-suggest-row">
+                <span className="lb-suggest-what"><em>{T(sg.kind === "tag" ? "Tag" : sg.kind === "group" ? "Group" : "Note")}</em> {sg.value}
+                  {sg.reason && <small> — {sg.reason}</small>}</span>
+                <button type="button" className="btn outlined accent" onClick={() => onSuggestion(sg, true)}>{T("Accept")}</button>
+                <button type="button" className="btn ghost" onClick={() => onSuggestion(sg, false)}>{T("Dismiss")}</button>
+              </div>
+            ))}
           </div>
         )}
         <div className="lb-lookup-bar">
