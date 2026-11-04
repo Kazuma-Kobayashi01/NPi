@@ -4,6 +4,8 @@
 > 同时不让它变得轻浮。
 
 状态：**草案 v0.2**（2026-10-31，已按第一轮决定修订）· 目标版本：**1.1.0** · 负责人：Kazuma
+
+> **进度以 [`PROGRESS.md`](PROGRESS.md) 为准。** 2026-11-04 起平台范围改为**只做 macOS**:下文"必须兼容 Windows"的要求、跨平台抽象与 Windows 验收用例作废(待逐处改写,见 `PROGRESS.md` §6);M7 已由 Librarian + Research Core 实现;M0.5 的 MCP 服务改走 Host Tool RPC。
 本文是计划，不是承诺。每个阶段结束时回来修订它。
 
 ## 0. 已确认的决定（v0.2）
