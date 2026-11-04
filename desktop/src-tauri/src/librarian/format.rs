@@ -41,6 +41,9 @@ pub struct StyleInfo {
     pub id: String,
     pub name: String,
     pub builtin: bool,
+    /// `common` (the short list first offered), `archive` (the rest of the bundled archive: publishers,
+    /// journal families, societies, regional standards) or `user` (a `.csl` the user added).
+    pub group: &'static str,
 }
 
 /// One formatted line: plain text and HTML for the record `id`.
@@ -67,12 +70,24 @@ fn slug(text: &str) -> String {
     s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-")
 }
 
-/// Built-in styles, then the user's (`<dir>/*.csl`).
+/// The short list first, then every other independent style of the bundled archive by name, then the
+/// user's (`<dir>/*.csl`).
 pub fn styles(user_dir: &Path) -> Vec<StyleInfo> {
     let mut out: Vec<StyleInfo> = BUILT_IN
         .iter()
-        .map(|(id, name)| StyleInfo { id: (*id).into(), name: (*name).into(), builtin: true })
+        .map(|(id, name)| StyleInfo { id: (*id).into(), name: (*name).into(), builtin: true, group: "common" })
         .collect();
+    let common: Vec<ArchivedStyle> = BUILT_IN.iter().filter_map(|(id, _)| ArchivedStyle::by_name(id)).collect();
+    let mut more: Vec<StyleInfo> = ArchivedStyle::all()
+        .iter()
+        .filter(|s| !common.contains(s) && matches!(s.get(), Style::Independent(_)))
+        .filter_map(|s| {
+            let id = s.names().first()?;
+            Some(StyleInfo { id: (*id).into(), name: s.display_name().into(), builtin: true, group: "archive" })
+        })
+        .collect();
+    more.sort_by_key(|s| s.name.to_lowercase());
+    out.extend(more);
     let mut user: Vec<StyleInfo> = std::fs::read_dir(user_dir)
         .into_iter()
         .flatten()
@@ -85,7 +100,7 @@ pub fn styles(user_dir: &Path) -> Vec<StyleInfo> {
             let stem = path.file_stem()?.to_str()?.to_string();
             let style = parse_user(&std::fs::read_to_string(&path).ok()?).ok()?;
             let title = style.info.title.value.to_string();
-            Some(StyleInfo { id: format!("{USER_PREFIX}{stem}"), name: title, builtin: false })
+            Some(StyleInfo { id: format!("{USER_PREFIX}{stem}"), name: title, builtin: false, group: "user" })
         })
         .collect();
     user.sort_by_key(|s| s.name.to_lowercase());
@@ -113,7 +128,7 @@ pub fn add_user_style(user_dir: &Path, xml: &str) -> Result<StyleInfo, String> {
     std::fs::create_dir_all(user_dir).map_err(|e| format!("could not create the styles folder: {e}"))?;
     let path: PathBuf = user_dir.join(format!("{stem}.csl"));
     std::fs::write(&path, xml).map_err(|e| format!("could not save the style: {e}"))?;
-    Ok(StyleInfo { id: format!("{USER_PREFIX}{stem}"), name: title, builtin: false })
+    Ok(StyleInfo { id: format!("{USER_PREFIX}{stem}"), name: title, builtin: false, group: "user" })
 }
 
 fn load(user_dir: &Path, id: &str) -> Result<IndependentStyle, String> {
@@ -405,5 +420,68 @@ mod tests {
         assert!(load(dir.path(), "user:../secret").is_err());
         assert!(load(dir.path(), "user:").is_err());
         assert!(load(dir.path(), "no-such-style").is_err());
+    }
+}
+
+#[cfg(test)]
+mod journal_tests {
+    use super::*;
+    use crate::test_support::TempDir;
+
+    fn entry() -> Entry {
+        let d = TempDir::new("format", "all-styles");
+        let root = d.path().join("p");
+        std::fs::create_dir_all(&root).unwrap();
+        let lib = crate::librarian::Library::open(&root).unwrap();
+        lib.add(
+            &serde_json::json!({ "type": "article-journal", "title": "Deep graph learning", "container-title": "Nature", "volume": "7", "issue": "2", "page": "1-9",
+                "issued": { "date-parts": [[2020]] }, "DOI": "10.1/x", "author": [{ "family": "Smith", "given": "Anna" }, { "family": "Lee", "given": "Wei" }] }),
+            "manual",
+        )
+        .unwrap();
+        lib.list().unwrap().remove(0)
+    }
+
+    #[test]
+    fn every_listed_style_formats_a_reference() {
+        let dir = std::env::temp_dir();
+        let listed = styles(&dir);
+        assert!(listed.len() > 60, "the whole archive is offered, not a short list: {}", listed.len());
+        assert_eq!(listed[0].group, "common");
+        let e = entry();
+        for s in &listed {
+            let out = format(&dir, &s.id, std::slice::from_ref(&e)).unwrap_or_else(|err| panic!("{}: {err}", s.id));
+            // A notes style may have no reference list for one entry; then it has its citation.
+            assert!(!out.bibliography.is_empty() || !out.citations.is_empty(), "{} formatted nothing", s.id);
+        }
+    }
+
+    /// Every `style: "…"` of the journal presets (src/app/librarian-journals.js) names a style the app has.
+    #[test]
+    #[ignore = "prints the bundled style ids"]
+    fn list_ids() {
+        for s in ArchivedStyle::all() {
+            println!("ID {:?} | {}", s.names(), s.display_name());
+        }
+    }
+
+    #[test]
+    fn every_journal_preset_names_a_bundled_style() {
+        let js = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/app/librarian-journals.js")).unwrap();
+        let mut seen = 0;
+        for line in js.lines().filter(|l| l.trim_start().starts_with("p(\"")) {
+            let after = line.split("\", \"").nth(1);
+            let Some(rest) = after else { continue };
+            let id = rest.split('"').next().unwrap_or("");
+            if id.is_empty() || line.contains("\", null,") {
+                continue;
+            }
+            assert!(
+                matches!(ArchivedStyle::by_name(id).map(ArchivedStyle::get), Some(Style::Independent(_))),
+                "preset style {id:?} is not a bundled independent style"
+            );
+            seen += 1;
+        }
+        assert!(seen > 60, "read {seen} presets");
     }
 }

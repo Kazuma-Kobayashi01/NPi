@@ -13,7 +13,7 @@ mod approval;
 mod app_mode;
 mod chat_space;
 mod copilot;
-mod librarian;
+pub mod librarian;
 mod chat_image;
 mod mcp_skills;
 mod notify;
@@ -42,6 +42,7 @@ mod keybindings;
 mod model_usage;
 mod navigation_guard;
 mod chat_handoff;
+mod clipboard;
 mod panel_window;
 mod ocr;
 mod pdf_text;
@@ -227,12 +228,23 @@ fn start_session(
     // (`copilot::ResearchHub`).
     // Chat keeps no library lookups: its one host tool offers the hand-off to
     // Code or Academic (`chat_handoff`).
+    // An Academic session in an Academic project has that project's library and research tools built
+    // in (`copilot::AcademicHost`: host tools, so no approval prompt and no MCP to connect).
+    let space = Arc::clone(&*app.state::<Arc<academic_space::AcademicSpace>>());
+    let academic_project = (app_mode == app_mode::AppMode::Academic)
+        .then(|| cwd_opt.and_then(|c| space.project(Path::new(c))))
+        .flatten();
     let research: Arc<dyn copilot::HostTools> = if app_mode == app_mode::AppMode::Chat {
         Arc::new(chat_handoff::ChatHandoff::new(app.clone(), args.session_id.clone()))
+    } else if let Some(project) = &academic_project {
+        Arc::new(copilot::AcademicHost::new(project.clone()))
     } else {
-        Arc::new(copilot::ResearchHub::new(Arc::clone(
-            &*app.state::<Arc<academic_space::AcademicSpace>>(),
-        )))
+        Arc::new(copilot::ResearchHub::new(space))
+    };
+    let append_prompt = if academic_project.is_some() {
+        format!("{}\n{}", app_mode::DESKTOP_RICH_OUTPUT_HINT, app_mode::ACADEMIC_LIBRARY_HINT)
+    } else {
+        app_mode::DESKTOP_RICH_OUTPUT_HINT.to_string()
     };
     bridge.start_session_with_host(
         // Owned by the bridge's map; the widget hook below still needs the id.
@@ -249,7 +261,7 @@ fn start_session(
             },
             config: overlay.as_deref(),
             prompt: prompt.as_deref(),
-            append_prompt: Some(app_mode::DESKTOP_RICH_OUTPUT_HINT),
+            append_prompt: Some(&append_prompt),
             sidechat: false,
         },
         app,
@@ -331,7 +343,7 @@ fn sidechat_start(
 const COPILOT_PROMPT: &str = "\
 You are NPi Academic Copilot, a local literature assistant bound to one research project. \
 Your only tools are research_search, research_read and research_save, which see this project's \
-files, research_check_quote, research_check_number and research_check_table, which check quotes, numbers and table cells against the indexed pages, research_summarize, research_summaries and research_compare, which keep your summaries and comparison tables for the user's reader, and library_search, library_get, library_check and library_suggest, which see its reference library, and nothing else. You have no network, shell or other file access; never claim otherwise. \
+files, research_check_quote, research_check_number and research_check_table, which check quotes, numbers and table cells against the indexed pages, research_summarize, research_summaries and research_compare, which keep your summaries and comparison tables for the user's reader, research_ocr, which reads pages of a scanned PDF with OCR (the text may contain mistakes), and library_search, library_get, library_check and library_suggest, which see its reference library, and nothing else. You have no network, shell or other file access; never claim otherwise. \
 Answer only from the project's files: cite the file and line for every claim taken from them, \
 quote exactly, and say plainly when the files do not contain the answer. A PDF is read \
 as its extracted text (line numbers refer to that text); a scanned PDF has none, so ask the \
@@ -1993,6 +2005,12 @@ pub fn run() {
             academic_dir,
             librarian::commands::library_list,
             librarian::commands::library_search,
+            librarian::commands::library_align,
+            librarian::commands::library_merge,
+            librarian::commands::library_citekey,
+            librarian::commands::library_pdf_dropped,
+            librarian::commands::library_export_text,
+            librarian::commands::library_mcp_register,
             librarian::commands::library_add,
             librarian::commands::library_update,
             librarian::commands::library_remove,
@@ -2015,6 +2033,8 @@ pub fn run() {
             librarian::commands::library_attach_pdf,
             librarian::commands::library_attach_pick,
             librarian::commands::library_attachment_open,
+            librarian::commands::library_attachment_locate,
+            librarian::commands::library_import_text,
             librarian::commands::library_attachment_remove,
             librarian::commands::library_lookup,
             librarian::commands::library_trash,
@@ -2026,6 +2046,7 @@ pub fn run() {
             librarian::commands::research_papers,
             librarian::commands::research_sections,
             librarian::commands::research_page,
+            librarian::commands::research_pdf,
             librarian::commands::research_anchor,
             librarian::commands::research_search,
             librarian::commands::research_summaries,
@@ -2123,6 +2144,7 @@ pub fn run() {
             quit_app,
             hide_main_window,
             panel_window::open_panel_window,
+            clipboard::clipboard_write,
             quick_ask::quickask_submit,
             quick_ask::quickask_hide,
             quick_ask::quickask_resize,

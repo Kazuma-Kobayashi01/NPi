@@ -32,7 +32,7 @@ All run through `off_ipc`; the webview reaches them through `OMP_BRIDGE.library(
 - **Draft from a PDF** (`library_pdf_pick`, `pdf_text::first_page`, `librarian/pdf_meta.rs`): Rust opens the file dialog, stages a copy in `<project>/.npi-academic/inbox/<hash>.pdf` (a staged file nobody confirmed is removed after 7 days) and reads page 1 for a draft by plain rules: first DOI or arXiv id, a year outside identifiers, the title (a Markdown heading, else the first line that is not page furniture, joined with a wrapped second line) and a line of names. Every field the rules filled is listed in `guessed` and marked "check" in the form. A scanned PDF gives an empty draft named after the file. Checked on text fixtures (English, Chinese, nothing), not on real journal PDFs.
 - **Confirm** (`library_add_pdf`): nothing enters the library or `papers/` before the user presses "Add to library". Then the record is added (source `pdf`) and the PDF is copied to `papers/<year>-<author>-<short title>.pdf` (a number is added if another file has the name, the same file is reused); the original is never touched. A repeat (same DOI, or normalised title + year + first author) is reported, nothing is added, and the form offers "Attach the PDF to it" (`library_attach_pdf`).
 - **Attachments**: `library_attach_pick` (attach a PDF to an existing reference), `library_attachment_open` (only a file inside the project opens, through the spawn gate), `library_attachment_remove` (forgets the link; the file stays). A file that moved shows as "missing", not silently dropped.
-- **Online lookup** (`library_lookup`, `librarian/lookup.rs`): only when the user clicks "Look up online…". The one host is `api.crossref.org` over HTTPS with no redirects, 15 s timeout, 2 MiB answer cap; it sends a DOI, or a title (at least 8 characters) and the first author's family name, never a PDF or other library content. A DOI gives one record (Crossref's CSL-JSON transform); a title gives up to 3 candidates. The form shows the found fields against its own, ticks the ones that differ, and "Take the ticked fields" changes the form only; Save keeps it.
+- **Online lookup** (`library_lookup`, `librarian/lookup.rs`): only when the user clicks "Look up online…". The hosts are `api.crossref.org` and, when it has no record or none with this title, `api.openalex.org` (preprints, arXiv and much Chinese work are only there), over HTTPS with no redirects, 15 s timeout, 2 MiB answer cap; it sends a DOI, or a title (at least 8 characters) and the first author's family name, never a PDF or other library content. A DOI gives one record (Crossref's CSL-JSON transform); a title gives up to 3 candidates. The form shows the found fields against its own, ticks the ones that differ, and "Take the ticked fields" changes the form only; Save keeps it.
 
 ## The library as tools for the Copilot (L4, `librarian/agent.rs`, `suggest.rs`, `copilot.rs`)
 
@@ -50,10 +50,61 @@ The Copilot gets four more host tools, bound to its project: `library_search` (t
 
 Negative cases are tests, not promises (`cargo test --lib`): a command names a project only by a plain folder name (`..`, `.hidden`, `a/b`, an absolute path and a link to a folder outside the space are all refused: `commands.rs`); two projects never see each other's references, trash or suggestions; an attachment opens only when, with links resolved, it is a file inside the project's `papers/` (`..`, absolute paths, other folders, directories and a link or a tampered database path that leaves the project are refused), and a `papers/` or inbox folder replaced by a link carries nothing outside (`attach.rs`); the Copilot's library tools reach only their own project's database, read drafts only from the read folders (no `..`, absolute path, `.omp/`, `.npi-academic/` or link out) and can only suggest; the chat's library tools take a plain project name, cannot suggest or save, and do not answer the Copilot's tool names (`copilot.rs`). Not covered: the dialog-driven writes (export, cite-a-draft) and the `set_host_tools` handshake end to end.
 
+## Copy as… (journal and regulation presets)
+
+`librarian/copy-menu.jsx` is the Librarian window's "Copy as…" popover: what to copy (reference list, in-text citation, or BibTeX / RIS / CSL-JSON text through `library_export_text`), for the selected reference or the whole list, and a search box over `app/librarian-journals.js` (`OMP_JOURNALS`): about 80 presets of journals, publishers and regulations, each `{ label, style, exact, match, note }`. A click on a result sets that style and copies; `exact` is false for "closest bundled style", `style: null` means none is bundled and the note says to add the journal's `.csl`. The table says which style a journal is named after, not what an editor accepts. `format::styles` lists every independent style of the bundled hayagriva archive (group `common` for the short list, `archive`, `user`); a Rust test formats a reference in each of them and checks that every preset's style id is bundled and independent.
+
 ## Search
 
 The window ranks its list with the project's FTS5 index when one exists (`library_search`; short Chinese words work) and still filters by substring, which finds fragments inside words and is all there is until the project is indexed.
 
+## Built-in library tools of Academic sessions (`librarian/tools.rs`, `copilot::AcademicHost`)
+
+An Academic-mode session whose folder is an Academic project gets that project's tools as **built-in host tools** (answered by Rust, like the Copilot's: no approval prompt, no MCP to connect, no `project` argument): everything the Copilot has (`research_*`, `library_*`) plus `library_lookup` (Crossref), `library_align`, `library_add` and `library_edit`. `app_mode::ACADEMIC_LIBRARY_HINT` is appended to the session's system prompt with the calling order and examples, and the `librarian` skill repeats them. Permissions are wide but bounded: no tool deletes; every change to a reference is first written, as it was, to `.npi-academic/agent-edits.jsonl`; `library_align` previews unless `apply`, fills blanks unless `overwrite`, and never applies a record whose title differs (`mismatch`); `library_add` never adds a duplicate. Errors are written for the model: a mistyped citekey gets the nearest ones, a missing argument is named. Other Academic sessions (not in a project folder) keep the read-only hub (`academic_*`); Chat has none; the in-app Copilot has no network.
+
+## The Librarian as an MCP server (`librarian/mcp.rs`)
+
+The app binary is also an MCP server for one project: `omp-desktop --npi-mcp-librarian <project folder>` (headless, stdio, JSON-RPC 2.0; `main.rs` handles the flag before Tauri starts, like `--npi-python-host`). The Librarian window's **Connect agents** button (`library_mcp_register`) adds it as `npi-librarian` to `<project>/.mcp.json`, which omp's `mcp-json` provider reads, so `npi` started in that folder (and any other MCP client) sees it; other servers in the file are kept, a file that is not valid JSON is refused untouched.
+
+Tools: the Copilot's `library_search/get/check/suggest` and the read-only research ones (`research_search`, `research_read`, `research_check_quote/number/table`, `research_ocr`, `research_summaries`), none that writes files; plus the four of `tools.rs` (the same ones the app's Academic sessions have built in): `library_lookup` (Crossref by DOI, or by title and first author; at most 3 candidates) and `library_align`. `library_align` takes a `citekey` or `all: true` (the first 20 references lacking a DOI or venue); it asks Crossref by DOI, else by title and first author, and accepts a record only when the shorter title's words are at least 85% inside the other (a subtitle does not matter); a record with another title is reported as `mismatch` and never applied. `apply` defaults to false (a field-by-field preview); with `apply: true` blank fields are filled and a user's value stays; `overwrite: true` also replaces differing values. Only the DOI or the title and first author leave the machine, to the pinned Crossref host (`lookup.rs`). The in-app Copilot still has no network.
+
+Checked with a hand-written MCP client against the debug binary and the real Crossref (lookup by DOI and by title); the alignment logic by unit tests with a fake lookup. Not checked: omp actually connecting to it from `.mcp.json`.
+
+## Working with the list (`librarian-window.jsx`, `lib-hooks.jsx`, `lib-batch.jsx`, `app/librarian.js`)
+
+- **Unsaved edits**: `settled()` saves the open form before anything that re-opens it from what is stored (moving the selection, attaching, locating or unlinking a file, a group tick, a suggestion, renaming the key, aligning, closing the window). If saving fails the form stays with its error and nothing moves on.
+- **Selection**: click, Cmd-click, Shift-click, arrows, Shift-arrows, Cmd+A. A filter that hides part of a multiple selection takes those out. Several selected: group, tag, align, trash; two selected can be merged (`Library::merge`: the kept one's values win, blanks are filled, tags, notes, groups, files and pending suggestions move, the other goes to the trash).
+- **Built-in filters** (`smartCounts`): missing metadata, no PDF, possible duplicates, suggestions waiting. A row shows when it has none.
+- **Citation key**: editable (`library_citekey`; plain characters, a key that is used, trash included, is refused). `[@key]` beside it, and "[@key]" in Copy as…, copy how a Markdown draft cites it.
+- **Drag to a group**: a row (or the whole selection it belongs to) dragged onto a sidebar group joins it. Pointer events, not HTML5 drag and drop, because the panel window's native file drop takes every HTML5 drag; a move under 5 px stays a click (`useLibRowDrag`).
+- **Keys**: Esc leaves the search, then a multiple selection; it never closes the separate window. Cmd+F is the search, Cmd+S saves the form. The sort is remembered.
+- Publisher markup in titles (`<i>`, `&amp;`) is cleaned on the way in (`csl::clean_markup`) and hidden on the way out (`plainText`), so old rows read clean too.
+- A new reference is a form until "Add to library", so an abandoned one leaves nothing. It goes through the import path and is refused as a repeat.
+
+## Adding what exists elsewhere
+
+- **Import…** (`lib-import.jsx`) takes a file or pasted text. `transfer::import_any` judges the format by the content, not the name: BibTeX, RIS, CSL-JSON, PubMed `.nbib`, Web of Science plain text, EndNote XML (`tagged.rs`; these last three are read only). Pasted DOIs, doi.org links, arXiv ids and links (`parseIdentifiers`; an arXiv id is looked up as its DOI) are looked up one at a time; the ones not found stay in the box. Repeats are reported, not added.
+- **PDFs**: "Add PDF…" (several at once) and dropping on the window feed one queue, one draft at a time, with what is waiting shown and skippable. `library_pdf_dropped` takes a path from the OS's drop event or dialog, checks it is a `.pdf` and only reads it.
+- A filed PDF is indexed by itself a moment later (`research_index` with `text: false`), and the Reader, asked for a file the index has not reached, indexes first.
+- **Missing files**: "Locate…" (`library_attachment_locate`) looks under `papers/` for the recorded content hash (a rename by hand), else asks for the file, copies it back to `papers/` and repoints the row.
+
 ## Not built yet
 
-Merging duplicates by hand, OpenAlex as a second source, EndNote XML / `.nbib` / Web of Science import, a "model reads page 1" option for PDFs without DOI, dragging a PDF onto the window, relocating a moved attachment by hash, a tab in the tab bar (it is a window), checking numbers and table cells against paper text (quotes are checked by the Research Core: `research-core.md`). The PDF rules, Crossref and the Copilot tools were not run against real PDFs, the real service or a real model (the `set_host_tools` handshake is still unverified end to end); the window was run in a browser against a fake bridge, not in the real app.
+A "model reads page 1" option for PDFs without a DOI, batch-adding a folder of PDFs without a form each, a tab in the tab bar (it is a window). The PDF rules were not run against real journal PDFs. OpenAlex's parser and the three new import formats were checked on hand-written samples, not on real exports or the live service. The Copilot tools have not met a real model (the `set_host_tools` handshake is still unverified end to end). The window's latest interactions were run in a browser against a fake bridge, not in the real app: native file drop, the dialogs and closing with an unsaved form are unchecked there.
+
+## Letting a terminal `npi` call the MCP tools without prompts
+
+omp asks before each MCP tool call (MCP tools are in the `write` approval tier). To allow the Librarian's tools, put them in `~/.omp/agent/config.yml`:
+
+```yaml
+tools:
+  approval:
+    mcp__npi-librarian__library_search: allow
+    mcp__npi-librarian__library_get: allow
+    mcp__npi-librarian__library_lookup: allow
+    mcp__npi-librarian__library_align: allow
+    mcp__npi-librarian__library_add: allow
+    mcp__npi-librarian__library_edit: allow
+```
+
+(or run `npi` with `--approval-mode yolo`). The app's own Academic sessions do not need this.

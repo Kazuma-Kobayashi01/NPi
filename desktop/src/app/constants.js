@@ -66,6 +66,7 @@
     "railWidth": 0,
     "treeWidth": 0,
     "termWidth": 0,
+    "libraryWidth": 0,
     "defaultSide": "rail",
     "terminalAutoOpen": false,
     "terminalHeight": 240,

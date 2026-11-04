@@ -10,7 +10,7 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// The panels that run without the main window's state: (kind, width, height).
-const KINDS: [(&str, f64, f64); 3] = [("librarian", 1120.0, 740.0), ("reader", 1180.0, 780.0), ("stats", 760.0, 660.0)];
+const KINDS: [(&str, f64, f64); 3] = [("librarian", 1400.0, 880.0), ("reader", 1360.0, 880.0), ("stats", 760.0, 660.0)];
 pub const LABEL_PREFIX: &str = "panel-";
 
 /// Percent-encodes `s` for a query value.
@@ -39,6 +39,18 @@ fn label_for(kind: &str, project: &str) -> String {
     }
 }
 
+/// `(width, height)` in points, cut to 94% of the width and 90% of the height of the main window's screen.
+fn fit_to_screen(app: &AppHandle, width: f64, height: f64) -> (f64, f64) {
+    let monitor = app
+        .get_webview_window("main")
+        .and_then(|w| w.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let Some(m) = monitor else { return (width, height) };
+    let scale = m.scale_factor().max(1.0);
+    let (mw, mh) = (f64::from(m.size().width) / scale, f64::from(m.size().height) / scale);
+    (width.min(mw * 0.94), height.min(mh * 0.9))
+}
+
 /// Opens the panel window of `kind`, or brings the one already open forward.
 #[tauri::command]
 pub fn open_panel_window(
@@ -48,6 +60,7 @@ pub fn open_panel_window(
     profile: Option<String>,
     title: Option<String>,
     anchor: Option<i64>,
+    path: Option<String>,
 ) -> Result<(), String> {
     let &(_, width, height) = KINDS
         .iter()
@@ -64,6 +77,10 @@ pub fn open_panel_window(
             // A citation's evidence: the open reader goes to it.
             let _ = tauri::Emitter::emit_to(&app, label.as_str(), "reader://goto", anchor);
         }
+        if let Some(path) = &path {
+            // A file of the Librarian: the open reader shows that paper.
+            let _ = tauri::Emitter::emit_to(&app, label.as_str(), "reader://open", path);
+        }
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -77,10 +94,15 @@ pub fn open_panel_window(
     if let Some(anchor) = anchor.filter(|a| *a > 0) {
         url.push_str(&format!("&anchor={anchor}"));
     }
+    if let Some(path) = path.as_deref().filter(|p| p.len() <= 1024) {
+        url.push_str(&format!("&path={}", encode(path)));
+    }
     let title = title.unwrap_or_else(|| match project.is_empty() {
         true => kind.clone(),
         false => format!("{kind} · {project}"),
     });
+    // As large as asked, but never more than most of the screen the user is on.
+    let (width, height) = fit_to_screen(&app, width, height);
     let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .title(title)
         .inner_size(width, height)

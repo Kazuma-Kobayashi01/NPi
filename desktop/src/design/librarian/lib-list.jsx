@@ -1,6 +1,6 @@
 /* librarian/lib-list.jsx — the middle column: search, sort and the rows. */
 
-function LibList({ entries, shown, selectedId, onSelect, query, onQuery, sort, onSort }) {
+function LibList({ entries, shown, selection, onRowDown, wasDrag, onClick, onStep, onAll, query, onQuery, sort, onSort }) {
   const T = window.OMP_I18N.t;
   const L = window.OMP_LIBRARIAN;
   const { Icon } = window;
@@ -21,16 +21,28 @@ function LibList({ entries, shown, selectedId, onSelect, query, onQuery, sort, o
           <span className="mono">{sort.dir === "asc" ? "↑" : "↓"}</span>
         </button>
       </div>
-      <div className="lb-rows" role="listbox" aria-label={T("References")}>
+      <div className="lb-rows" role="listbox" aria-multiselectable="true" aria-label={T("References")} tabIndex={0}
+        onKeyDown={ev => {
+          if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); onStep(ev.key === "ArrowDown" ? 1 : -1, ev.shiftKey); }
+          if ((ev.metaKey || ev.ctrlKey) && ev.key === "a") { ev.preventDefault(); onAll(); }
+        }}>
         {shown.map(e => {
           const d = L.display(e);
+          const on = selection.includes(e.id);
           return (
-            <button key={e.id} type="button" role="option" aria-selected={e.id === selectedId}
-              className={`lb-row${e.id === selectedId ? " on" : ""}`} onClick={() => onSelect(e.id)}>
+            <button key={e.id} type="button" role="option" aria-selected={on} data-ref={e.id}
+              className={`lb-row${on ? " on" : ""}`} onPointerDown={ev => onRowDown(ev, e.id)}
+              onClick={ev => { if (!wasDrag()) onClick(e.id, { toggle: ev.metaKey || ev.ctrlKey, range: ev.shiftKey }); }}>
               <span className="lb-row-title">{d.title}</span>
               <span className="lb-row-meta">
                 {[d.authors, d.year, d.container].filter(Boolean).join(" · ")}
               </span>
+              {((e.attachments ?? []).length > 0 || L.incomplete(e)) && (
+                <span className="lb-row-marks">
+                  {(e.attachments ?? []).length > 0 && <span className="lb-mark">PDF</span>}
+                  {L.incomplete(e) && <span className="lb-mark warn">{T("incomplete")}</span>}
+                </span>
+              )}
             </button>
           );
         })}
@@ -42,7 +54,10 @@ function LibList({ entries, shown, selectedId, onSelect, query, onQuery, sort, o
           </div>
         )}
       </div>
-      <div className="lb-list-foot mono">{T("{shown} of {total}", { shown: shown.length, total: entries.length })}</div>
+      <div className="lb-list-foot mono">
+        {T("{shown} of {total}", { shown: shown.length, total: entries.length })}
+        {selection.length > 1 && ` · ${T("{n} selected", { n: selection.length })}`}
+      </div>
     </section>
   );
 }

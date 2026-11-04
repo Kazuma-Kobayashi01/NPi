@@ -246,7 +246,7 @@ fn discover(project: &Path, text: bool) -> Vec<Found> {
 
 /// `rel` as an indexed file of `project`: plain components, under an indexed folder, no symlink on
 /// the way, and a file.
-fn safe_file(project: &Path, rel: &str) -> Result<PathBuf, String> {
+pub(super) fn safe_file(project: &Path, rel: &str) -> Result<PathBuf, String> {
     let rel_path = Path::new(rel);
     let parts: Vec<&str> = rel_path
         .components()

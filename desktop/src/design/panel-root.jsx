@@ -4,13 +4,13 @@
    so they run without the main window's state. */
 
 function PanelRoot() {
-  const { kind, project, profile, anchor } = window.OMP_PANEL;
+  const { kind, project, profile, anchor, path } = window.OMP_PANEL;
   const close = React.useCallback(() => { window.__TAURI__.window.getCurrentWindow().close(); }, []);
   // The same theme as the main window: the tweaks live in the shared localStorage.
   const [t] = window.useTweaks(window.TWEAK_DEFAULTS);
   window.useThemeEffect(t);
   if (kind === "librarian") return <LibrarianWindow bridge={window.OMP_BRIDGE} project={project} onClose={close} />;
-  if (kind === "reader") return <ReaderWindow bridge={window.OMP_BRIDGE} project={project} anchor={anchor} onClose={close} />;
+  if (kind === "reader") return <ReaderWindow bridge={window.OMP_BRIDGE} project={project} anchor={anchor} path={path} onClose={close} />;
   if (kind === "stats") return <UsageStatsPanel onClose={close} profileLabel={profile ?? "default"} />;
   return null;
 }

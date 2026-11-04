@@ -76,6 +76,16 @@ pub const DESKTOP_RICH_OUTPUT_HINT: &str = "\
 - Use these formats rather than executable HTML or JavaScript; rendering libraries are local and the webview's network policy remains strict.
 ";
 
+/// Appended to the prompt of an Academic session in an Academic project, whose library tools are built in.
+pub const ACADEMIC_LIBRARY_HINT: &str = "\
+# Reference library of this project
+- The tools below are already connected as plain names (library_search, library_get, library_lookup, library_align, library_add, library_edit, library_check, research_*). Do not look for an MCP server and do not ask the user to connect one.
+- Find: library_search {query}, then library_get {citekey}. A citekey looks like smith2020graph; copy it from a search result, never invent one. Cite as [@citekey].
+- Add a paper: library_add {doi} (Crossref fills the record). Fix metadata: library_align {citekey} previews the differences with Crossref; the same call with apply:true writes them (blank fields only; overwrite:true also replaces differing values); all:true does the first 20 incomplete references. A `mismatch` means Crossref's record is another paper: check the DOI, do not force it.
+- Change a field, tag or note: library_edit {citekey, set:{...}, tags_add:[...], note_append:'...'}. Nothing is ever deleted; the earlier version is kept in .npi-academic/agent-edits.jsonl.
+- A tool error says what to do next. Read it before retrying and never repeat an identical call.
+";
+
 pub const CHAT_COMPACTION_OVERLAY: &str = "\
 compaction:
   thresholdPercent: 85

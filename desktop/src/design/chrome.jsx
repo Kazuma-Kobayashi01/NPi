@@ -100,7 +100,7 @@ function WindowChrome({
 // The tool buttons that used to sit in the footer status bar.
 
 // ── Toolbar: the two code-mode tools, then everything else under "More" ──
-function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, academic = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen, copilot = false }) {
+function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = false, academic = false, onPanel, panelOpen, onBrowser, browserOpen, browserHint, onSubagents, subagentsOpen, onTree, treeOpen, onSideChat, sideChatOpen, copilot = false, onLibrarian, onReader, onLibrary, libraryOpen }) {
   return (
     <div className="chrome-toolbar">
       {!chat && !academic && <button className={`chrome-btn ${terminalOpen ? "on" : ""}`} aria-pressed={!!terminalOpen}
@@ -130,6 +130,15 @@ function ChromeToolbar({ onTerminal, terminalOpen, onChanges, moreItems, chat = 
         <button className={`chrome-btn ${sideChatOpen ? "on" : ""}`} aria-pressed={!!sideChatOpen} title={_CH_T(copilot ? "Academic Copilot (this project's files)" : "SideChat (temporary scratchpad)")} onClick={onSideChat}>
           <Icon name="thinking" size={15} />
         </button>
+      )}
+      {academic && onLibrarian && (
+        <button className="chrome-btn" title={_CH_T("Librarian")} onClick={onLibrarian}><Icon name="layers" size={15} /></button>
+      )}
+      {academic && onReader && (
+        <button className="chrome-btn" title={_CH_T("Reader")} onClick={onReader}><Icon name="file" size={15} /></button>
+      )}
+      {academic && onLibrary && (
+        <button className={`chrome-btn ${libraryOpen ? "on" : ""}`} aria-pressed={!!libraryOpen} title={_CH_T("Library column")} onClick={onLibrary}><Icon name="sidebar" size={15} /></button>
       )}
       <MoreMenu items={moreItems} />
       {onPanel && (

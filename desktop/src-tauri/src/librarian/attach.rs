@@ -119,6 +119,16 @@ pub fn stage(project: &Path, source: &Path) -> Result<Staged, String> {
     Ok(Staged { hash, name })
 }
 
+/// The file under `papers/` with content `hash`, as a project-relative path: an attachment renamed by hand.
+pub fn find_by_hash(project: &Path, hash: &str) -> Option<String> {
+    let dir = project.join(PAPERS);
+    std::fs::read_dir(&dir).ok()?.flatten().find_map(|e| {
+        let meta = std::fs::symlink_metadata(e.path()).ok()?;
+        let same = meta.is_file() && hex(&Sha256::digest(std::fs::read(e.path()).ok()?)) == hash;
+        same.then(|| format!("{PAPERS}/{}", e.file_name().to_string_lossy()))
+    })
+}
+
 /// Removes staged PDFs older than [`INBOX_KEEP`].
 fn sweep(dir: &Path) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
@@ -260,6 +270,27 @@ impl Library {
             > 0)
     }
 
+    /// The recorded `(reference, hash)` of an attachment.
+    pub fn attachment_owner(&self, attachment: i64) -> Result<(i64, String), String> {
+        self.conn
+            .query_row("SELECT ref_id, hash FROM attachments WHERE id = ?1", [attachment], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(|_| "no such attachment".to_string())
+    }
+
+    /// Points an attachment at where its file is now.
+    pub fn relink(&self, attachment: i64, path: &str, hash: &str) -> Result<(), String> {
+        let rel = Path::new(path);
+        let inside_papers = rel.starts_with(PAPERS)
+            && rel.components().all(|c| matches!(c, std::path::Component::Normal(_)));
+        if !inside_papers || !hash_valid(hash) {
+            return Err("an attachment is a file under papers/".into());
+        }
+        self.conn
+            .execute("UPDATE attachments SET path = ?2, hash = ?3 WHERE id = ?1", params![attachment, path, hash])
+            .map_err(sql)?;
+        Ok(())
+    }
+
     /// The recorded path of an attachment of a live reference.
     pub fn attachment_path(&self, attachment: i64) -> Result<Option<String>, String> {
         self.conn
@@ -292,6 +323,28 @@ mod tests {
     use crate::pdf_text::tiny_pdf;
     use crate::test_support::TempDir;
     use serde_json::json;
+
+    #[test]
+    fn a_renamed_attachment_is_found_by_its_content_and_relinked() {
+        let dir = TempDir::new("librarian", "relink");
+        let project = dir.path().join("p");
+        let lib = Library::open(&project).unwrap();
+        let papers = project.join(PAPERS);
+        std::fs::create_dir_all(&papers).unwrap();
+        std::fs::write(papers.join("a.pdf"), tiny_pdf("hello")).unwrap();
+        let hash = hex(&Sha256::digest(std::fs::read(papers.join("a.pdf")).unwrap()));
+        let entry = lib.add(&json!({ "title": "T" }), "manual").unwrap();
+        lib.attach(entry.id, "papers/a.pdf", &hash, "pdf").unwrap();
+        let id = lib.get(entry.id).unwrap().unwrap().attachments[0].id;
+        std::fs::rename(papers.join("a.pdf"), papers.join("renamed.pdf")).unwrap();
+        assert_eq!(find_by_hash(&project, &hash).as_deref(), Some("papers/renamed.pdf"));
+        assert_eq!(find_by_hash(&project, &"0".repeat(64)), None);
+        assert_eq!(lib.attachment_owner(id).unwrap(), (entry.id, hash.clone()));
+        lib.relink(id, "papers/renamed.pdf", &hash).unwrap();
+        assert_eq!(lib.attachment_path(id).unwrap().as_deref(), Some("papers/renamed.pdf"));
+        assert!(lib.relink(id, "../x.pdf", &hash).is_err());
+        assert!(lib.attachment_owner(999).is_err());
+    }
 
     #[test]
     fn a_pdf_is_staged_confirmed_named_and_not_taken_twice() {

@@ -26,6 +26,7 @@ const _PW_UI = {
   rail: { tweak: "railWidth", label: "resize ambient rail", edge: "left" },
   tree: { tweak: "treeWidth", label: "resize conversation tree", edge: "left" },
   term: { tweak: "termWidth", label: "resize terminal", edge: "left" },
+  library: { tweak: "libraryWidth", label: "resize library", edge: "left" },
 };
 const _PW_RESET = { browserWidth: 0 };
 for (const { tweak } of Object.values(_PW_UI)) _PW_RESET[tweak] = 0;

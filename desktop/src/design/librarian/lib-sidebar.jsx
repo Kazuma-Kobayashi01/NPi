@@ -1,7 +1,7 @@
 /* librarian/lib-sidebar.jsx — the left column of the Librarian window: the
    whole library, the manual groups (add / rename / remove) and the tags. */
 
-function LibSidebar({ total, groups, tags, scope, onScope, onGroupAdd, onGroupRename, onGroupRemove }) {
+function LibSidebar({ dropGroup, total, smart, groups, tags, scope, onScope, onGroupAdd, onGroupRename, onGroupRemove }) {
   const T = window.OMP_I18N.t;
   const { Icon } = window;
   const [edit, setEdit] = React.useState(null);   // { id | null (new), draft }
@@ -14,9 +14,10 @@ function LibSidebar({ total, groups, tags, scope, onScope, onGroupAdd, onGroupRe
     const res = edit.id === null ? await onGroupAdd(name) : await onGroupRename(edit.id, name);
     if (res?.ok === false) setError(res.error); else { setEdit(null); setError(""); }
   };
-  const isAll = scope.group === null && scope.tag === null;
-  const row = (on, onClick, label, count, extra) => (
-    <div className={`lb-nav${on ? " on" : ""}`}>
+  const isAll = scope.group === null && scope.tag === null && !scope.smart;
+  const SMART = [["incomplete", T("Missing metadata")], ["nofile", T("No PDF")], ["duplicates", T("Possible duplicates")], ["suggestions", T("Suggestions waiting")]];
+  const row = (on, onClick, label, count, extra, groupId) => (
+    <div className={`lb-nav${on ? " on" : ""}${groupId && dropGroup === groupId ? " drop" : ""}`} data-group={groupId || undefined}>
       <button type="button" className="lb-nav-main" onClick={onClick}>
         <span className="lb-nav-label">{label}</span><span className="lb-nav-count">{count}</span>
       </button>
@@ -27,6 +28,9 @@ function LibSidebar({ total, groups, tags, scope, onScope, onGroupAdd, onGroupRe
   return (
     <nav className="lb-side" aria-label={T("Librarian")}>
       {row(isAll, () => onScope({ group: null, tag: null }), T("All references"), total)}
+      {SMART.filter(([id]) => smart[id] > 0 || scope.smart === id).map(([id, label]) => (
+        <React.Fragment key={id}>{row(scope.smart === id, () => onScope({ group: null, tag: null, smart: id }), label, smart[id])}</React.Fragment>
+      ))}
       <div className="lb-side-head">
         <span>{T("Groups")}</span>
         <button type="button" className="btn icon ghost" title={T("New group")} onClick={() => { setEdit({ id: null, draft: "" }); setError(""); }}>
@@ -45,7 +49,7 @@ function LibSidebar({ total, groups, tags, scope, onScope, onGroupAdd, onGroupRe
             onClick={() => { if (armed === g.id) { setArmed(null); onGroupRemove(g.id); } else setArmed(g.id); }}>
             {armed === g.id ? <span className="mono">{T("Delete?")}</span> : <Icon name="trash" size={10} />}
           </button>
-        </span>))}
+        </span>, g.id))}
       {edit?.id === null && (
         <input className="lb-input" autoFocus maxLength={60} placeholder={T("Group name")} value={edit.draft}
           onChange={e => setEdit({ id: null, draft: e.target.value })} onBlur={commit}

@@ -178,6 +178,72 @@ impl Library {
         Ok(())
     }
 
+    /// Merges reference `other` into `keep`: fields `keep` lacks come from `other`, and tags, groups,
+    /// files, pending suggestions and notes move over; `other` then goes to the trash, so a wrong
+    /// merge can be undone by restoring it (its files stay with `keep`).
+    pub fn merge(&self, keep: i64, other: i64) -> Result<Entry, String> {
+        if keep == other {
+            return Err("pick two different references".to_string());
+        }
+        let first = self.get(keep)?.ok_or("no such reference")?;
+        let second = self.get(other)?.ok_or("no such reference")?;
+        let mut csl = first.csl.clone();
+        if let (Some(into), Some(from)) = (csl.as_object_mut(), second.csl.as_object()) {
+            for (key, value) in from {
+                let lacking = into.get(key).is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty()));
+                if lacking {
+                    into.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        let mut tags = first.tags.clone();
+        tags.extend(second.tags.iter().cloned());
+        let notes = match (first.notes.trim(), second.notes.trim()) {
+            (a, "") => a.to_string(),
+            ("", b) => b.to_string(),
+            (a, b) if a == b => a.to_string(),
+            (a, b) => format!("{a}\n\n{b}"),
+        };
+        let tx = self.conn.unchecked_transaction().map_err(sql)?;
+        self.update(keep, &csl)?;
+        self.set_meta(keep, &tags, &notes)?;
+        tx.execute("INSERT OR IGNORE INTO group_refs (group_id, ref_id) SELECT group_id, ?1 FROM group_refs WHERE ref_id = ?2", params![keep, other]).map_err(sql)?;
+        tx.execute("DELETE FROM group_refs WHERE ref_id = ?1", params![other]).map_err(sql)?;
+        tx.execute("DELETE FROM attachments WHERE ref_id = ?2 AND hash IN (SELECT hash FROM attachments WHERE ref_id = ?1)", params![keep, other]).map_err(sql)?;
+        tx.execute("UPDATE attachments SET ref_id = ?1 WHERE ref_id = ?2", params![keep, other]).map_err(sql)?;
+        tx.execute("UPDATE suggestions SET ref_id = ?1 WHERE ref_id = ?2 AND status = 'pending'", params![keep, other]).map_err(sql)?;
+        self.remove(other)?;
+        tx.commit().map_err(sql)?;
+        self.get(keep)?.ok_or_else(|| "library: row vanished".to_string())
+    }
+
+    /// Renames a reference's citekey. Letters, digits and `_ - : .` only; a key in use, by a removed
+    /// reference too, is refused, because a draft may still cite it.
+    pub fn set_citekey(&self, id: i64, key: &str) -> Result<Entry, String> {
+        let key = key.trim();
+        let plain = !key.is_empty() && key.len() <= 80 && key.chars().all(|c| c.is_alphanumeric() || "_-:.".contains(c));
+        if !plain {
+            return Err("a citation key is letters, digits and _ - : . only".to_string());
+        }
+        let entry = self.get(id)?.ok_or("no such reference")?;
+        if entry.citekey == key {
+            return Ok(entry);
+        }
+        let taken: bool = self
+            .conn
+            .query_row("SELECT 1 FROM refs WHERE citekey = ?1", [key], |_| Ok(true))
+            .optional()
+            .map_err(sql)?
+            .unwrap_or(false);
+        if taken {
+            return Err(format!("{key} is already in use"));
+        }
+        self.conn
+            .execute("UPDATE refs SET citekey = ?2, updated_at = ?3 WHERE id = ?1", params![id, key, now()])
+            .map_err(sql)?;
+        self.get(id)?.ok_or_else(|| "library: row vanished".to_string())
+    }
+
     /// Replaces a reference's tags and notes.
     pub fn set_meta(&self, ref_id: i64, tags: &[String], notes: &str) -> Result<Entry, String> {
         if notes.len() > NOTES_MAX_BYTES {
@@ -232,6 +298,44 @@ mod tests {
 
     fn add(l: &Library, title: &str) -> Entry {
         l.add(&json!({ "type": "book", "title": title, "author": [{ "family": "Lee" }], "issued": { "date-parts": [[2020]] } }), "manual").unwrap()
+    }
+
+    #[test]
+    fn merging_fills_blanks_moves_everything_and_keeps_the_other_in_the_trash() {
+        let l = lib();
+        let keep = l.add(&json!({ "type": "book", "title": "One", "volume": "1" }), "manual").unwrap();
+        let other = l.add(&json!({ "type": "book", "title": "One again", "volume": "9", "DOI": "10.1/x", "publisher": "P" }), "manual").unwrap();
+        let g = l.add_group("G").unwrap();
+        l.set_member(other.id, g.id, true).unwrap();
+        l.set_meta(keep.id, &["a".to_string()], "first").unwrap();
+        l.set_meta(other.id, &["A".to_string(), "b".to_string()], "second").unwrap();
+        l.attach(other.id, "papers/x.pdf", &"b".repeat(64), "pdf").unwrap();
+        let merged = l.merge(keep.id, other.id).unwrap();
+        assert_eq!(merged.csl["title"], "One", "what the kept reference has stays");
+        assert_eq!(merged.csl["volume"], "1");
+        assert_eq!(merged.csl["DOI"], "10.1/x", "what it lacked comes over");
+        assert_eq!(merged.tags.len(), 2, "tags are unioned, case-insensitively");
+        assert_eq!(merged.notes, "first\n\nsecond");
+        assert_eq!(merged.groups, [g.id]);
+        assert_eq!(merged.attachments.len(), 1);
+        assert_eq!(l.list().unwrap().len(), 1);
+        assert_eq!(l.trashed().unwrap()[0].id, other.id, "the other one can be restored");
+        assert!(l.merge(keep.id, keep.id).is_err());
+        assert!(l.merge(keep.id, other.id).is_err(), "it is gone");
+    }
+
+    #[test]
+    fn a_citekey_changes_only_to_a_free_plain_key() {
+        let l = lib();
+        let a = add(&l, "A title");
+        let b = add(&l, "B title");
+        assert_eq!(l.set_citekey(a.id, "smith2020").unwrap().citekey, "smith2020");
+        assert!(l.set_citekey(b.id, "smith2020").is_err(), "in use");
+        assert!(l.set_citekey(b.id, "has space").is_err());
+        assert!(l.set_citekey(b.id, "").is_err());
+        assert!(l.set_citekey(a.id, "smith2020").is_ok(), "its own key is fine");
+        l.remove(a.id).unwrap();
+        assert!(l.set_citekey(b.id, "smith2020").is_err(), "a removed reference keeps its key");
     }
 
     #[test]

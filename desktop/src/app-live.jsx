@@ -88,6 +88,8 @@ function App() {
   // matching chat bubble; clicking scrolls to it.
   const [hoveredMsgIdx, setHoveredMsgIdx] = React.useState(null);
   const [sideChatOpen, setSideChatOpen] = React.useState(false);
+  // Academic: the literature column at the far right (design/librarian/library-dock.jsx); shown by default, closable.
+  const [libraryOpen, setLibraryOpen] = React.useState(true);
   const handleMinimapClick = (idx) => {
     const el = document.querySelector(`[data-msg-idx="${idx}"]`);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1026,6 +1028,7 @@ function App() {
   const termShown = !showHome && !browserFull && t.appMode !== "chat" && _TERM_entryOf(terminal.state, planKey).open;
   // Columns after the chat, left to right: the side panel (rail /
   // browser), the subagent pane, sidechat pane, the conversation tree, the terminal; a new one opens at the far right.
+  const libraryShown = appModeName === "academic" && !!copilotProject && libraryOpen && !browserFull;
   const stageCols = ["minmax(0, 1fr)"];
   if (!browserFull) {
     if (side === "browser") stageCols.push("auto");
@@ -1035,6 +1038,7 @@ function App() {
     if (treeShown) stageCols.push("var(--w-tree, min(540px, 50%))");
   }
   if (termShown) stageCols.push("var(--w-term, 480px)");
+  if (libraryShown) stageCols.push("var(--w-library, 320px)");
   const stageStyle = { gridTemplateColumns: stageCols.join(" ") };
   // The grid line each handle sits at: the column it is the left edge of.
   const hasSide = !browserFull && (side === "browser" || !!sideRail);
@@ -1042,9 +1046,10 @@ function App() {
   const sidechatCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + 1;
   const treeCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (sideChatShown ? 1 : 0) + 1;
   const termCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (sideChatShown ? 1 : 0) + (treeShown ? 1 : 0) + 1;
+  const libraryCol = 1 + (hasSide ? 1 : 0) + (splitShown ? 1 : 0) + (sideChatShown ? 1 : 0) + (treeShown ? 1 : 0) + (termShown ? 1 : 0) + 1;
   const panes = usePaneWidths({
     tweaks: t, setTweak, workspaceRef,
-    open: [showSidebar && "sidebar", splitShown && "split", sideChatShown && "sidechat", sideRail && "rail", treeShown && "tree", termShown && "term"].filter(Boolean),
+    open: [showSidebar && "sidebar", splitShown && "split", sideChatShown && "sidechat", sideRail && "rail", treeShown && "tree", termShown && "term", libraryShown && "library"].filter(Boolean),
     reserve: side === "browser" && !browserFull ? _AL_BROWSER_MIN : 0,
   });
 
@@ -1102,10 +1107,6 @@ function App() {
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
     // Academic keeps the top bar to the research tools; these two move in here.
     ...(appModeName === "academic" ? [
-      ...(copilotProject ? [
-        { label: window.OMP_I18N.t("Librarian"), icon: "tag", onClick: () => openLibrarian() },
-        { label: window.OMP_I18N.t("Reader"), icon: "file", onClick: () => openReader() },
-      ] : []),
       { label: window.OMP_I18N.t("Terminal"), icon: "terminal", hint: keyHint("desktop.terminal.toggle"), on: _TERM_entryOf(terminal.state, planKey).open, onClick: () => terminal.toggle(planKey) },
       { label: window.OMP_I18N.t("Subagents"), icon: "agent", on: showSplit, onClick: subagentUi.togglePane },
     ] : []),
@@ -1172,6 +1173,10 @@ function App() {
                 onSideChat={() => setSideChatOpen(o => !o)}
                 sideChatOpen={sideChatOpen}
                 copilot={!!copilotProject}
+                onLibrarian={copilotProject ? openLibrarian : null}
+                onReader={copilotProject ? openReader : null}
+                onLibrary={copilotProject ? () => setLibraryOpen(o => !o) : null}
+                libraryOpen={libraryShown}
               />
             }
           />
@@ -1405,6 +1410,20 @@ function App() {
                 favorites={t.favoriteModels}
                 onManageModels={() => openSettings("models")}
               />
+              {libraryShown && <ResizeHandle className="at-library" style={{ gridColumn: libraryCol }} {...panes.handle("library")} />}
+              {libraryShown && (
+                <div className="libdock-slot" style={{ gridColumn: libraryCol }}>
+                  <LibraryDock
+                    key={copilotProject}
+                    bridge={bridge}
+                    project={window.OMP_PROJECT_NAV.basename(copilotProject)}
+                    onInsert={text => setPromptInsert({ text, append: true, nonce: Date.now() })}
+                    onOpenLibrarian={openLibrarian}
+                    onOpenReader={openReader}
+                    onClose={() => setLibraryOpen(false)}
+                  />
+                </div>
+              )}
             </div>
           </div>
           {showSidebar && <ResizeHandle className="at-sidebar" {...panes.handle("sidebar")} />}

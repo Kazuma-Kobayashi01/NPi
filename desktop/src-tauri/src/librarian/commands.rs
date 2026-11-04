@@ -2,13 +2,13 @@
 //! Academic space; anything else is refused before a database is opened.
 
 use super::{
-    add_user_style, cite_draft, export, format as format_entries, import, styles, Entry, Format, Formatted, Group,
+    add_user_style, cite_draft, export, format as format_entries, import, import_any, styles, Entry, Format, Formatted, Group,
     Cited, ImportReport, IndexOptions, IndexReport, IndexStatus, Library, StyleInfo, Trashed,
 };
 use super::{attach, check_citations, lookup, pdf_meta};
 use crate::academic_space::AcademicSpace;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::State;
 
@@ -54,6 +54,52 @@ pub async fn library_search(space: Space<'_>, project: String, query: String) ->
     .await?
 }
 
+/// Compares one reference with Crossref (`tools::library_align`): a preview, or with `apply` the blank
+/// fields filled (`overwrite` also replaces differing ones). The user's own click in the Librarian window.
+#[tauri::command]
+pub async fn library_align(space: Space<'_>, project: String, citekey: String, apply: bool, overwrite: bool) -> Result<Value, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let args = serde_json::json!({ "citekey": citekey, "apply": apply, "overwrite": overwrite });
+        let text = super::tools::LibraryTools::new(dir)
+            .call("library_align", &args, &super::tools::Crossref)
+            .ok_or("no such tool")??;
+        serde_json::from_str(&text).map_err(|e| e.to_string())
+    })
+    .await?
+}
+
+/// Merges reference `other` into `keep`; `other` goes to the trash.
+#[tauri::command]
+pub async fn library_merge(space: Space<'_>, project: String, keep: i64, other: i64) -> Result<Entry, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let mut entry = Library::open(&dir)?.merge(keep, other)?;
+        attach::mark_missing(&dir, std::slice::from_mut(&mut entry));
+        Ok(entry)
+    })
+    .await?
+}
+
+/// Renames a reference's citation key.
+#[tauri::command]
+pub async fn library_citekey(space: Space<'_>, project: String, id: i64, key: String) -> Result<Entry, String> {
+    with_library(&space, &project, move |lib| lib.set_citekey(id, &key)).await
+}
+
+/// Registers this app as the project's `npi-librarian` MCP server in `<project>/.mcp.json`, where
+/// `npi` in a terminal (and any MCP client) finds it. The user's own action in the Librarian window.
+#[tauri::command]
+pub async fn library_mcp_register(space: Space<'_>, project: String) -> Result<Value, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let path = super::mcp::register(&dir, &exe)?;
+        Ok(serde_json::json!({ "path": path.to_string_lossy(), "command": exe.to_string_lossy(), "args": ["--npi-mcp-librarian", dir.to_string_lossy()] }))
+    })
+    .await?
+}
+
 #[tauri::command]
 pub async fn library_add(space: Space<'_>, project: String, csl: Value) -> Result<Entry, String> {
     with_library(&space, &project, move |lib| lib.add(&csl, "manual")).await
@@ -85,6 +131,12 @@ pub async fn library_import(
     with_library(&space, &project, move |lib| import(lib, format, &text)).await
 }
 
+/// Adds what a pasted text holds, whichever of the known formats it is in.
+#[tauri::command]
+pub async fn library_import_text(space: Space<'_>, project: String, text: String) -> Result<ImportReport, String> {
+    with_library(&space, &project, move |lib| import_any(lib, &text)).await
+}
+
 fn export_text(lib: &Library, format: Format, ids: Option<&[i64]>) -> Result<String, String> {
     let mut entries = lib.list()?;
     if let Some(ids) = ids {
@@ -105,6 +157,12 @@ pub async fn library_export(
         export_text(lib, format, ids.as_deref())
     })
     .await
+}
+
+/// The references (all, or those in `ids`) as BibTeX, RIS or CSL-JSON text, for the clipboard.
+#[tauri::command]
+pub async fn library_export_text(space: Space<'_>, project: String, format: Format, ids: Option<Vec<i64>>) -> Result<String, String> {
+    with_library(&space, &project, move |lib| export_text(lib, format, ids.as_deref())).await
 }
 
 /// Asks where to save, then writes the export there. `None` when the dialog is cancelled.
@@ -148,20 +206,11 @@ pub async fn library_export_save(
     .await?
 }
 
-/// The format a file name says it is in.
-fn format_of(path: &std::path::Path) -> Option<Format> {
-    match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
-        "ris" => Some(Format::Ris),
-        "bib" | "bibtex" => Some(Format::Bibtex),
-        "json" => Some(Format::CslJson),
-        _ => None,
-    }
-}
-
 /// Largest import file read.
 const MAX_IMPORT_BYTES: u64 = 16 * 1024 * 1024;
 
-/// Asks for a `.ris`, `.bib` or `.json` file and imports it. `None` when the dialog is cancelled.
+/// Asks for a reference file and imports it, whichever format its content turns out to be in. `None`
+/// when the dialog is cancelled.
 #[tauri::command]
 pub async fn library_import_pick(
     app: tauri::AppHandle,
@@ -174,7 +223,7 @@ pub async fn library_import_pick(
     app.dialog()
         .file()
         .set_title("Import references")
-        .add_filter("References", &["ris", "bib", "bibtex", "json"])
+        .add_filter("References", &["ris", "bib", "bibtex", "json", "nbib", "ciw", "txt", "xml"])
         .pick_file(move |picked| {
             let _ = tx.send(picked);
         });
@@ -185,13 +234,12 @@ pub async fn library_import_pick(
         let path = picked
             .into_path()
             .map_err(|e| format!("invalid picked path: {e}"))?;
-        let format = format_of(&path).ok_or("that file is not .ris, .bib or .json")?;
         if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > MAX_IMPORT_BYTES {
             return Err("the file is too large".to_string());
         }
         let text =
             std::fs::read_to_string(&path).map_err(|e| format!("could not read the file: {e}"))?;
-        import(&Library::open(&project_dir)?, format, &text).map(Some)
+        import_any(&Library::open(&project_dir)?, &text).map(Some)
     })
     .await?
 }
@@ -418,49 +466,58 @@ pub struct PdfDraft {
     pub scanned: bool,
 }
 
-/// Asks for a PDF, stages a copy and reads page 1 for a draft record. Nothing enters the
-/// library or `papers/` yet. `None` when the dialog is cancelled.
+/// Asks for PDFs and returns their paths; the window then takes them one draft at a time, like dropped
+/// ones. Nothing is read or added yet. Empty when the dialog is cancelled.
 #[tauri::command]
-pub async fn library_pdf_pick(
-    app: tauri::AppHandle,
-    space: Space<'_>,
-    project: String,
-) -> Result<Option<PdfDraft>, String> {
+pub async fn library_pdf_pick(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let dir = project_of(&space, &project)?;
     let (tx, rx) = std::sync::mpsc::channel();
     app.dialog()
         .file()
-        .set_title("Add a PDF")
+        .set_title("Add PDFs")
         .add_filter("PDF", &["pdf"])
-        .pick_file(move |picked| {
+        .pick_files(move |picked| {
             let _ = tx.send(picked);
         });
     crate::off_ipc(move || {
-        let Some(picked) = rx.recv().map_err(|e| format!("channel error: {e}"))? else {
-            return Ok(None);
-        };
-        let path = picked
-            .into_path()
-            .map_err(|e| format!("invalid picked path: {e}"))?;
-        let staged = attach::stage(&dir, &path)?;
-        let (guess, scanned) = match crate::pdf_text::first_page(&path)? {
-            crate::pdf_text::Extracted::Text(text) => (pdf_meta::guess(&text), false),
-            crate::pdf_text::Extracted::Scanned => (pdf_meta::guess(""), true),
-        };
-        let mut csl = guess.csl;
-        if csl.get("title").is_none() {
-            csl["title"] = Value::String(staged.name.clone());
-        }
-        Ok(Some(PdfDraft {
-            csl,
-            guessed: guess.guessed,
-            hash: staged.hash,
-            name: staged.name,
-            scanned,
-        }))
+        let picked = rx.recv().map_err(|e| format!("channel error: {e}"))?.unwrap_or_default();
+        picked
+            .into_iter()
+            .map(|p| p.into_path().map(|p| p.to_string_lossy().into_owned()).map_err(|e| format!("invalid picked path: {e}")))
+            .collect()
     })
     .await?
+}
+
+/// A PDF dropped on the Librarian window or picked in its dialog: staged, and page 1 read for a draft
+/// record; nothing enters the library or `papers/` yet. The path comes from the OS's drop event or
+/// dialog; it must be a `.pdf` file, and is only read.
+#[tauri::command]
+pub async fn library_pdf_dropped(space: Space<'_>, project: String, path: String) -> Result<PdfDraft, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let path = std::path::PathBuf::from(path);
+        let is_pdf = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+        if !is_pdf || !path.is_file() {
+            return Err("only a PDF file can be added".to_string());
+        }
+        pdf_draft(&dir, &path)
+    })
+    .await?
+}
+
+/// Stages `path` in the project's inbox and fills a draft from its first page.
+fn pdf_draft(dir: &Path, path: &Path) -> Result<PdfDraft, String> {
+    let staged = attach::stage(dir, path)?;
+    let (guess, scanned) = match crate::pdf_text::first_page(path)? {
+        crate::pdf_text::Extracted::Text(text) => (pdf_meta::guess(&text), false),
+        crate::pdf_text::Extracted::Scanned => (pdf_meta::guess(""), true),
+    };
+    let mut csl = guess.csl;
+    if csl.get("title").is_none() {
+        csl["title"] = Value::String(staged.name.clone());
+    }
+    Ok(PdfDraft { csl, guessed: guess.guessed, hash: staged.hash, name: staged.name, scanned })
 }
 
 /// The outcome of adding a confirmed PDF draft.
@@ -586,7 +643,58 @@ pub async fn library_attachment_remove(
     with_library(&space, &project, move |lib| lib.detach(id)).await
 }
 
-/// Looks a reference up in Crossref by DOI, else by title (and first author's family name).
+/// Finds the file of a missing attachment: first by its content under `papers/` (a rename by hand),
+/// else the user picks it, and it is copied back to `papers/`. `None` when the dialog is cancelled.
+#[tauri::command]
+pub async fn library_attachment_locate(
+    app: tauri::AppHandle,
+    space: Space<'_>,
+    project: String,
+    id: i64,
+) -> Result<Option<Entry>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let dir = project_of(&space, &project)?;
+    let found_dir = dir.clone();
+    let found = crate::off_ipc(move || {
+        let lib = Library::open(&found_dir)?;
+        let (ref_id, hash) = lib.attachment_owner(id)?;
+        let Some(rel) = attach::find_by_hash(&found_dir, &hash) else { return Ok(None) };
+        lib.relink(id, &rel, &hash)?;
+        let mut entry = lib.get(ref_id)?.ok_or("library: row vanished")?;
+        attach::mark_missing(&found_dir, std::slice::from_mut(&mut entry));
+        Ok::<_, String>(Some(entry))
+    })
+    .await??;
+    if found.is_some() {
+        return Ok(found);
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .set_title("Locate the PDF")
+        .add_filter("PDF", &["pdf"])
+        .pick_file(move |picked| {
+            let _ = tx.send(picked);
+        });
+    crate::off_ipc(move || {
+        let Some(picked) = rx.recv().map_err(|e| format!("channel error: {e}"))? else {
+            return Ok(None);
+        };
+        let path = picked.into_path().map_err(|e| format!("invalid picked path: {e}"))?;
+        let staged = attach::stage(&dir, &path)?;
+        let lib = Library::open(&dir)?;
+        let (ref_id, _) = lib.attachment_owner(id)?;
+        let mut entry = lib.get(ref_id)?.ok_or("library: row vanished")?;
+        let rel = attach::finalize(&dir, &staged.hash, &attach::paper_name(&entry.csl, &staged.name))?;
+        lib.relink(id, &rel, &staged.hash)?;
+        entry = lib.get(ref_id)?.ok_or("library: row vanished")?;
+        attach::mark_missing(&dir, std::slice::from_mut(&mut entry));
+        Ok(Some(entry))
+    })
+    .await?
+}
+
+/// Looks a reference up in Crossref, then OpenAlex, by DOI, else by title (and first author's family name).
 /// Only runs when the user asks; sends nothing but those strings.
 #[tauri::command]
 pub async fn library_lookup(
@@ -727,6 +835,26 @@ pub async fn research_page(space: Space<'_>, project: String, paper_id: i64, pag
     crate::off_ipc(move || Library::open(&dir)?.paper_page(paper_id, page)).await?
 }
 
+/// The bytes of an indexed PDF of the project's `papers/` folder, for the reader's PDF view. The
+/// webview names the paper by id; the path comes from the project's own index and stays inside the project.
+#[tauri::command]
+pub async fn research_pdf(space: Space<'_>, project: String, paper_id: i64) -> Result<tauri::ipc::Response, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let (rel, kind) = Library::open(&dir)?.paper_file(paper_id)?;
+        if kind != "pdf" || !rel.starts_with("papers/") {
+            return Err("not a PDF of this project".to_string());
+        }
+        let path = super::research::safe_file(&dir, &rel)?;
+        let len = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+        if len > crate::pdf_text::MAX_PDF_BYTES {
+            return Err("the PDF is too large to open".to_string());
+        }
+        std::fs::read(&path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
+    })
+    .await?
+}
+
 /// Where an anchor lies (its paper, page and block): the jump from a citation to its evidence.
 #[tauri::command]
 pub async fn research_anchor(space: Space<'_>, project: String, anchor_id: i64) -> Result<Option<super::Target>, String> {
@@ -813,12 +941,4 @@ mod tests {
         assert_ne!(Library::path(&a), Library::path(&b));
     }
 
-    #[test]
-    fn the_extension_names_the_format() {
-        assert_eq!(format_of(Path::new("a/refs.RIS")), Some(Format::Ris));
-        assert_eq!(format_of(Path::new("refs.bib")), Some(Format::Bibtex));
-        assert_eq!(format_of(Path::new("refs.json")), Some(Format::CslJson));
-        assert_eq!(format_of(Path::new("refs.txt")), None);
-        assert_eq!(format_of(Path::new("refs")), None);
-    }
 }

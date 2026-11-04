@@ -159,7 +159,7 @@ pub fn guess(text: &str) -> Guess {
                 title = format!("{title} {next}");
             }
         }
-        csl.insert("title".into(), Value::String(title));
+        csl.insert("title".into(), Value::String(super::csl::clean_markup(&title)));
         guessed.push("title");
         let after = i + 1 + usize::from(csl["title"].as_str().is_some_and(|t| t.len() > lines[i].len()));
         if let Some(authors) = lines.get(after).filter(|l| looks_like_authors(l)) {

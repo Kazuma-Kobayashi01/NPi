@@ -35,6 +35,8 @@ const MAX_WRITE_BYTES: usize = 256 * 1024;
 const SNIPPET_CHARS: usize = 300;
 /// PDFs extracted for the first time by one search; the rest wait for the next call.
 const MAX_FRESH_PDFS: usize = 4;
+/// Most pages one `research_ocr` call reads (a page takes a second or two).
+const MAX_OCR_CALL_PAGES: usize = 6;
 
 /// The tools registered with omp (`set_host_tools`).
 pub fn tool_definitions() -> Value {
@@ -187,6 +189,21 @@ pub fn tool_definitions() -> Value {
             "loadMode": "essential"
         },
         {
+            "name": "research_ocr",
+            "label": "OCR pages",
+            "description": "Read pages of a scanned PDF (or pages without a text layer) with OCR on this computer and return the recognised text per page. Use it when research_read or research_search reports that a PDF has no text. At most 6 pages per call (give `pages`, 1-based; default page 1); call again for more. The text is a recognition and may contain mistakes, especially numbers, formulas and non-Latin scripts: say so, and do not quote it as the paper's own words without checking the page. It does not change the project; research_search indexes a scanned PDF (with OCR) by itself, after which it can be searched and cited.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Project-relative path of the PDF, for example papers/scan.pdf" },
+                    "pages": { "type": "array", "items": { "type": "integer" }, "description": "1-based pages to read, at most 6." }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
             "name": "library_search",
             "label": "Search reference library",
             "description": "Search this project's reference library (the user's catalogued papers) by title, authors, year, venue, DOI, citekey, tags, notes or abstract. Returns citekey, authors, year, title and venue per reference. Use it, not memory, to know which references exist. A reference that is not in the library is unverified: say so.",
@@ -266,6 +283,35 @@ impl HostTools for CopilotHost {
     }
 }
 
+/// The built-in tools of an Academic session whose folder is an Academic project: everything the
+/// Copilot has for that project plus the library tools that reach Crossref or change the library
+/// (`librarian/tools.rs`), under plain names and bound to the project, so the model passes no project
+/// and the user answers no approval prompt. Nothing here deletes anything.
+pub struct AcademicHost {
+    copilot: CopilotHost,
+    tools: crate::librarian::tools::LibraryTools,
+}
+
+impl AcademicHost {
+    pub fn new(root: PathBuf) -> Self {
+        Self { copilot: CopilotHost::new(root.clone()), tools: crate::librarian::tools::LibraryTools::new(root) }
+    }
+}
+
+impl HostTools for AcademicHost {
+    fn definitions(&self) -> Value {
+        let mut all = tool_definitions().as_array().cloned().unwrap_or_default();
+        all.extend(crate::librarian::tools::LibraryTools::definitions());
+        Value::Array(all)
+    }
+    fn call(&self, id: &str, tool: &str, args: &Value) -> Value {
+        match self.tools.call(tool, args, &crate::librarian::tools::Crossref) {
+            Some(outcome) => frame(id, outcome),
+            None => self.copilot.call(id, tool, args),
+        }
+    }
+}
+
 /// The main chat's read-only view of the Academic library: it lists the
 /// projects and searches or reads one by name, with the same limits as the
 /// Copilot's tools (`CopilotHost`), and can write nothing.
@@ -327,6 +373,22 @@ impl HostTools for ResearchHub {
                         "project": { "type": "string" },
                         "path": { "type": "string" },
                         "from_line": { "type": "integer" }
+                    },
+                    "required": ["project", "path"],
+                    "additionalProperties": false
+                },
+                "loadMode": "essential"
+            },
+            {
+                "name": "academic_ocr",
+                "label": "OCR pages",
+                "description": "Read pages of a scanned PDF of one Academic project with OCR on this computer and return the recognised text per page (at most 6 pages per call). Use it when academic_read or academic_search says a PDF has no text. The text may contain mistakes, especially numbers and formulas: say so.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project": { "type": "string" },
+                        "path": { "type": "string", "description": "Project-relative path of the PDF, for example papers/scan.pdf" },
+                        "pages": { "type": "array", "items": { "type": "integer" } }
                     },
                     "required": ["project", "path"],
                     "additionalProperties": false
@@ -396,6 +458,7 @@ impl HostTools for ResearchHub {
             }
             "academic_search" => self.with_project(args, CopilotHost::search),
             "academic_read" => self.with_project(args, CopilotHost::read),
+            "academic_ocr" => self.with_project(args, CopilotHost::ocr),
             "academic_library_search" => self.with_project(args, CopilotHost::library_search),
             "academic_library_get" => self.with_project(args, CopilotHost::library_get),
             "academic_library_check" => self.with_project(args, CopilotHost::library_check),
@@ -437,6 +500,7 @@ impl CopilotHost {
             "research_read" => self.read(args),
             "research_save" => self.save(args),
             "research_check_quote" => self.check_quote(args),
+            "research_ocr" => self.ocr(args),
             "research_summarize" => self.summarize(args),
             "research_summaries" => self.summaries(args),
             "research_compare" => self.compare(args),
@@ -575,6 +639,41 @@ impl CopilotHost {
         }
     }
 
+    /// OCR of a few pages of a PDF of this project, returned as text (nothing is stored).
+    fn ocr(&self, args: &Value) -> ToolResult {
+        let rel = self.rel_of(args.get("path").and_then(Value::as_str).unwrap_or(""))?;
+        if !is_pdf(Path::new(&rel)) {
+            return Err(format!("{rel} is not a PDF"));
+        }
+        let pages: Vec<u32> = match args.get("pages") {
+            None | Some(Value::Null) => vec![1],
+            Some(v) => v
+                .as_array()
+                .ok_or("pages is a list of 1-based integers")?
+                .iter()
+                .map(|n| n.as_u64().and_then(|n| u32::try_from(n).ok()).filter(|n| *n >= 1).ok_or("pages is a list of 1-based integers"))
+                .collect::<Result<_, _>>()?,
+        };
+        if pages.is_empty() || pages.len() > MAX_OCR_CALL_PAGES {
+            return Err(format!("give 1 to {MAX_OCR_CALL_PAGES} pages per call"));
+        }
+        let path = self.root.join(&rel);
+        let len = std::fs::metadata(&path).map_err(|e| format!("{rel}: {e}"))?.len();
+        if len > crate::pdf_text::MAX_PDF_BYTES {
+            return Err(format!("{rel} is too large to read"));
+        }
+        let bytes = std::fs::read(&path).map_err(|e| format!("{rel}: {e}"))?;
+        let (read, count) = crate::ocr::recognize(&bytes, Some(&pages))?;
+        if read.is_empty() {
+            return Ok(format!("OCR found no text on the requested pages of {rel} ({count} pages in all)."));
+        }
+        let mut out = format!("OCR of {rel} ({count} pages in all; recognised text, may contain mistakes):\n");
+        for (page, text) in read {
+            out.push_str(&format!("\n[p.{page}]\n{text}\n"));
+        }
+        Ok(crate::text::prefix_within(&out, MAX_READ_CHARS).to_string())
+    }
+
     fn summarize(&self, args: &Value) -> ToolResult {
         use crate::librarian::{FactIn, Library};
         let get = |k: &str| args.get(k).and_then(Value::as_str);
@@ -639,7 +738,7 @@ impl CopilotHost {
             .iter()
             .find(|e| e.citekey == key)
             .map(|e| crate::librarian::render_get(e, style))
-            .ok_or_else(|| format!("no reference with the citekey {key:?}; use library_search"))
+            .ok_or_else(|| crate::librarian::tools::no_such_citekey(&entries, key))
     }
 
     fn library_check(&self, args: &Value) -> ToolResult {
@@ -1030,13 +1129,43 @@ mod tests {
             names,
             [
                 "research_search", "research_read", "research_save", "research_check_quote", "research_summarize",
-                "research_summaries", "research_compare", "research_check_number", "research_check_table", "library_search",
+                "research_summaries", "research_compare", "research_check_number", "research_check_table", "research_ocr", "library_search",
                 "library_get", "library_check", "library_suggest"
             ]
         );
         assert!(names
             .iter()
             .all(|n| n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')));
+    }
+
+    #[test]
+    fn an_academic_session_has_the_copilots_tools_and_the_library_ones_once_each() {
+        let (_d, h) = host("academic-host");
+        let academic = AcademicHost::new(h.root.clone());
+        let names: Vec<String> = academic.definitions().as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap().to_string()).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "no name twice");
+        for n in ["library_search", "library_lookup", "library_align", "library_add", "library_edit", "research_save"] {
+            assert!(names.iter().any(|x| x == n), "{n}");
+        }
+        assert!(!names.iter().any(|n| n.contains("delete") || n.contains("remove")), "nothing deletes");
+        // A library tool is answered here, a Copilot tool by the Copilot.
+        assert!(text_of(&academic.call("1", "library_edit", &json!({ "citekey": "nope" }))).contains("library_search"));
+        assert!(text_of(&academic.call("2", "research_search", &json!({ "query": "x" }))).len() > 0);
+    }
+
+    #[test]
+    fn ocr_takes_only_a_few_pdf_pages_of_the_project() {
+        let (_d, h) = host("ocr-args");
+        std::fs::write(h.root.join("notes/n.md"), "x").unwrap();
+        std::fs::write(h.root.join("papers/a.pdf"), crate::pdf_text::pages_pdf(&["One"])).unwrap();
+        let err = |args: Value| text_of(&h.call("1", "research_ocr", &args));
+        assert!(err(json!({ "path": "notes/n.md" })).contains("not a PDF"));
+        assert!(err(json!({ "path": "papers/a.pdf", "pages": [1, 2, 3, 4, 5, 6, 7] })).contains("1 to 6 pages"));
+        assert!(err(json!({ "path": "papers/a.pdf", "pages": [0] })).contains("1-based"));
+        assert!(err(json!({ "path": "../x.pdf" })).len() > 0);
     }
 
     fn with_library(h: &CopilotHost) {
@@ -1326,7 +1455,7 @@ mod tests {
         assert_eq!(
             names,
             [
-                "academic_projects", "academic_search", "academic_read", "academic_library_search",
+                "academic_projects", "academic_search", "academic_read", "academic_ocr", "academic_library_search",
                 "academic_library_get", "academic_library_check"
             ]
         );

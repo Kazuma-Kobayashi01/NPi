@@ -1,0 +1,23 @@
+/* The literature column of an Academic project (design/librarian/library-dock.jsx), far right of the stage. */
+.libdock { width: 100%; height: 100%; min-width: 0; min-height: 0; contain: size layout; display: flex; flex-direction: column; background: var(--bg-window); border-left: 1px solid var(--line); overflow: hidden; }
+.libdock-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-elevated); }
+.libdock-title { font-weight: 600; font-size: var(--d-text-sm); }
+.libdock-count { color: var(--fg-4); font-size: var(--d-text-xs); }
+.libdock-gap { flex: 1; }
+.libdock-tools { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.libdock-tools .lb-input { margin: 0; width: 100%; }
+.libdock-tools .lb-select { width: 100%; }
+.libdock-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 12px; }
+.libdock-row { margin: 1px 6px; border-radius: var(--r-2); }
+.libdock-row:hover, .libdock-row.on { background: var(--bg-hover, color-mix(in oklab, var(--fg-1) 7%, transparent)); }
+.libdock-main { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 7px 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.libdock-ref { font-size: var(--d-text-sm); line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.libdock-meta { color: var(--fg-3); font-size: var(--d-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libdock-more { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.libdock-more .libdock-meta { white-space: normal; }
+.libdock-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.libdock-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.libdock-actions .btn { font-size: 11px; }
+.libdock-key { color: var(--fg-4); font-size: 11px; user-select: text; }
+
+.libdock-slot { grid-row: 1; min-width: 0; min-height: 0; }

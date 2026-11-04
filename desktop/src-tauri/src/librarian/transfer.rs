@@ -1,6 +1,6 @@
 //! Moving references in and out of a library as text: RIS, BibTeX or CSL-JSON.
 
-use super::{bibtex, csl, ris, Entry, Library};
+use super::{bibtex, csl, ris, tagged, Entry, Library};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -66,20 +66,64 @@ pub fn parse(format: Format, text: &str) -> Result<Vec<Value>, String> {
     Ok(records)
 }
 
-/// Adds every record of `text` that is not already in the library; the ones
-/// that are come back as duplicates, for the user to decide.
-pub fn import(library: &Library, format: Format, text: &str) -> Result<ImportReport, String> {
+/// Adds every record that is not already in the library; the ones that are
+/// come back as duplicates, for the user to decide.
+fn add_records(library: &Library, records: Vec<Value>, source: &str) -> Result<ImportReport, String> {
     let mut report = ImportReport::default();
-    for record in parse(format, text)? {
+    for record in records {
         match library.duplicate_of(&record)? {
             Some(existing) => report.duplicates.push(Duplicate {
                 title: csl::fields(&record).title,
                 of: existing.id,
             }),
-            None => report.added.push(library.add(&record, format.source())?),
+            None => report.added.push(library.add(&record, source)?),
         }
     }
     Ok(report)
+}
+
+/// Adds what `text` holds, in `format`, that the library lacks.
+pub fn import(library: &Library, format: Format, text: &str) -> Result<ImportReport, String> {
+    add_records(library, parse(format, text)?, format.source())
+}
+
+/// What a text is, judged by its content: files often carry the wrong extension (`.txt`), and pasted
+/// text has none. `None` when it is none of the formats read here.
+fn sniff(text: &str) -> Option<&'static str> {
+    let head = text.trim_start_matches('\u{feff}').trim_start();
+    let starts = |tag: &str| head.lines().take(40).any(|l| l.starts_with(tag));
+    if head.starts_with('[') || head.starts_with('{') {
+        Some("csl-json")
+    } else if head.starts_with('<') {
+        head.contains("<record>").then_some("endnote")
+    } else if starts("PMID- ") {
+        Some("nbib")
+    } else if starts("TY  - ") {
+        Some("ris")
+    } else if head.lines().next().is_some_and(|l| l.starts_with("FN ") || l.starts_with("PT ")) {
+        Some("wos")
+    } else if head.lines().any(|l| l.trim_start().starts_with('@')) {
+        Some("bibtex")
+    } else {
+        None
+    }
+}
+
+/// Imports a text in whichever format it turns out to be in (`sniff`).
+pub fn import_any(library: &Library, text: &str) -> Result<ImportReport, String> {
+    let kind = sniff(text).ok_or("that is not BibTeX, RIS, CSL-JSON, PubMed, Web of Science or EndNote XML text")?;
+    let records = match kind {
+        "csl-json" => parse(Format::CslJson, text)?,
+        "ris" => parse(Format::Ris, text)?,
+        "bibtex" => parse(Format::Bibtex, text)?,
+        "nbib" => tagged::parse_nbib(text),
+        "wos" => tagged::parse_wos(text),
+        _ => tagged::parse_endnote(text),
+    };
+    if records.is_empty() {
+        return Err("no references found in that text".to_string());
+    }
+    add_records(library, records, kind)
 }
 
 /// `entries` as text, each under its library citekey.
@@ -145,6 +189,25 @@ mod tests {
         let lib = Library::open(dir.path()).unwrap();
         let report = import(&lib, Format::Bibtex, &format!("{BIB}{BIB}")).unwrap();
         assert_eq!((report.added.len(), report.duplicates.len()), (2, 2));
+    }
+
+    #[test]
+    fn a_text_is_imported_by_what_it_is_not_by_its_name() {
+        let dir = TempDir::new("librarian", "sniff");
+        let lib = Library::open(dir.path()).unwrap();
+        for (text, source) in [
+            (BIB, "bibtex"),
+            ("TY  - JOUR\nTI  - Ris one\nER  - \n", "ris"),
+            ("PMID- 1\nTI  - Pubmed one\nDP  - 2020\n", "nbib"),
+            ("PT J\nTI Wos one\nPY 2020\nER\n", "wos"),
+            ("<xml><record><titles><title>Endnote one</title></titles></record></xml>", "endnote"),
+            ("[{\"title\":\"Csl one\"}]", "csl-json"),
+        ] {
+            assert_eq!(sniff(text), Some(source));
+            assert!(!import_any(&lib, text).unwrap().added.is_empty(), "{source}");
+        }
+        assert!(import_any(&lib, "just some words").is_err());
+        assert!(import_any(&lib, "<html></html>").is_err());
     }
 
     #[test]

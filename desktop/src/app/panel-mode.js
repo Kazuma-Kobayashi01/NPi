@@ -9,7 +9,7 @@
 (function () {
   const q = new URLSearchParams(location.search);
   const kind = q.get("panel");
-  window.OMP_PANEL = kind ? { kind, project: q.get("project") || "", profile: q.get("profile") || null, anchor: Number(q.get("anchor")) || null } : null;
+  window.OMP_PANEL = kind ? { kind, project: q.get("project") || "", profile: q.get("profile") || null, anchor: Number(q.get("anchor")) || null, path: q.get("path") || null } : null;
   if (window.OMP_PANEL) document.documentElement.classList.add("panel-mode");
 
   /** Opens (or focuses) the secondary window of `kind`; resolves to whether it opened. */
@@ -17,7 +17,7 @@
     const invoke = window.__TAURI__?.core?.invoke;
     if (!invoke) return false;
     try {
-      await invoke("open_panel_window", { kind, project: opts?.project ?? null, profile: opts?.profile ?? null, title: opts?.title ?? null, anchor: opts?.anchor ?? null });
+      await invoke("open_panel_window", { kind, project: opts?.project ?? null, profile: opts?.profile ?? null, title: opts?.title ?? null, anchor: opts?.anchor ?? null, path: opts?.path ?? null });
       return true;
     } catch (e) {
       console.error("[panel] open failed:", e);

@@ -150,6 +150,15 @@ impl Library {
         Ok(PageView { paper_id, page, page_count, blocks, truncated })
     }
 
+    /// The project-relative path and kind (`pdf` / `text`) of an indexed paper.
+    pub fn paper_file(&self, paper_id: i64) -> Result<(String, String), String> {
+        self.conn
+            .query_row("SELECT path, kind FROM papers WHERE id = ?1", params![paper_id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()
+            .map_err(sql)?
+            .ok_or_else(|| "no such paper".to_string())
+    }
+
     /// Where an anchor (a citation's evidence) lies: its paper, page and block.
     pub fn anchor_target(&self, anchor_id: i64) -> Result<Option<Target>, String> {
         self.conn

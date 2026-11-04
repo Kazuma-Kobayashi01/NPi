@@ -3,7 +3,7 @@
    applies at once. The parent re-keys it by id and update time, so a saved or
    switched reference starts from what is stored. */
 
-function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, onLookup, onAttach, onOpenAttachment, onRemoveAttachment, onAttachDuplicate, onDiscardDraft, onSuggestion }) {
+function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpenLink, onCopyKey, onLocateAttachment, onSave, onMember, onDelete, onCite, onLookup, onAttach, onRename, onOpenAttachment, onReadAttachment, onRemoveAttachment, onAttachDuplicate, onDiscardDraft, onSuggestion }) {
   const T = window.OMP_I18N.t;
   const L = window.OMP_LIBRARIAN;
   const isDraft = Boolean(draft);
@@ -21,13 +21,33 @@ function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, o
   const save = async () => {
     setState("saving");
     const res = await onSave(entry, L.fromForm(entry.csl, form), L.parseTags(tags), notes);
-    if (res?.ok === false) setState(res.error ?? T("could not save")); else setState("");
+    if (res?.ok === false) { setState(res.error ?? T("could not save")); return false; }
+    setState("");
+    return true;
   };
+  // What the window asks before the selection moves away or the window closes: edits are saved, not lost.
+  // A draft is not added unasked; the window keeps it open instead.
+  React.useEffect(() => {
+    if (!apiRef) return undefined;
+    apiRef.current = { flush: async () => (isDraft || !dirty ? true : save()) };
+    return () => { apiRef.current = null; };
+  });
   const copy = async kind => { if (await onCite([entry.id], kind)) setState("copied"); };
-  const field = (key, label, props = {}) => (
-    <label className={`lb-field${guess.has(key) ? " lb-guess" : ""}`}><span>{T(label)}{guess.has(key) && <em> · {T("check")}</em>}</span>
-      <input value={form[key]} onChange={set(key)} {...props} /></label>
-  );
+  const [key, setKey] = React.useState(entry.citekey);
+  const commitKey = async () => {
+    if (key.trim() === entry.citekey) return setKey(entry.citekey);
+    const res = await onRename(entry, key);
+    if (res?.ok === false) setKey(entry.citekey);
+  };
+  const field = (key, label, props = {}) => {
+    const link = key === "doi" || key === "url" ? L.linkUrl(key, form[key]) : null;
+    return (
+      <label className={`lb-field${guess.has(key) ? " lb-guess" : ""}`}>
+        <span>{T(label)}{guess.has(key) && <em> · {T("check")}</em>}
+          {link && <button type="button" className="lb-field-link" title={link} onClick={e => { e.preventDefault(); onOpenLink?.(link); }}>{T("Open")}</button>}</span>
+        <input value={form[key]} onChange={set(key)} {...props} /></label>
+    );
+  };
 
   const runLookup = async () => {
     setLookup({ busy: true });
@@ -45,17 +65,24 @@ function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, o
   const applyLookup = () => { setForm(f => L.applyLookup(f, lookup.candidates[lookup.picked], [...lookup.keys])); setLookup(null); };
 
   return (
-    <section className="lb-detail" aria-label={T("Reference")}>
+    <section className="lb-detail" aria-label={T("Reference")}
+      onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); if (dirty) save(); } }}>
       <div className="lb-detail-scroll">
         {isDraft && (
           <div className="lb-draft" role="status">
-            <strong>{T("New from a PDF")}</strong>
-            <span>{draft.scanned
-              ? T("This PDF has no text layer, so nothing could be read from it. Fill the fields in by hand.")
-              : T("Read from page 1 of {name}. Check the marked fields before adding.", { name: draft.name })}</span>
+            <strong>{draft.blank ? T("New reference") : T("New from a PDF")}</strong>
+            <span>{draft.blank
+              ? T("Give a DOI or a title and use Look up online, or fill the fields in. Nothing is added until you press Add to library.")
+              : draft.scanned
+                ? T("This PDF has no text layer, so nothing could be read from it. Fill the fields in by hand.")
+                : T("Read from page 1 of {name}. Check the marked fields before adding.", { name: draft.name })}</span>
             {draft.duplicateOf && (
               <span className="lb-draft-dup">{T("Already in the library as {key}.", { key: draft.duplicateOf.citekey })}{" "}
-                <button type="button" className="btn ghost" onClick={() => onAttachDuplicate(draft.duplicateOf)}>{T("Attach the PDF to it")}</button></span>
+                <button type="button" className="btn ghost" onClick={() => onAttachDuplicate(draft.duplicateOf)}>{draft.blank ? T("Open it") : T("Attach the PDF to it")}</button></span>
+            )}
+            {waiting > 0 && (
+              <span className="lb-draft-dup">{T("PDFs waiting after this one: {n}.", { n: waiting })}{" "}
+                <button type="button" className="btn ghost" onClick={onSkipWaiting}>{T("Skip them")}</button></span>
             )}
           </div>
         )}
@@ -74,10 +101,10 @@ function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, o
         )}
         <div className="lb-lookup-bar">
           <button type="button" className="btn ghost" disabled={lookup?.busy} onClick={runLookup}
-            title={T("Sends the DOI, or the title and first author's family name, to Crossref. Nothing else leaves the app.")}>
+            title={T("Sends the DOI, or the title and first author's family name, to Crossref and, when it has no answer, OpenAlex. Nothing else leaves the app.")}>
             {lookup?.busy ? T("Looking up…") : T("Look up online…")}
           </button>
-          <span className="lb-state">{T("Only when you click · Crossref")}</span>
+          <span className="lb-state">{T("Only when you click · Crossref, OpenAlex")}</span>
         </div>
         {lookup?.error && <div className="lb-lookup lb-lookup-error" role="alert">{lookup.error}<button type="button" className="btn ghost" onClick={() => setLookup(null)}>{T("Close")}</button></div>}
         {lookup?.candidates && (
@@ -133,8 +160,10 @@ function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, o
 
         {!isDraft && (
           <>
-            <div className="lb-field"><span>{T("Citation key")}</span>
-              <code className="lb-key">{entry.citekey}</code></div>
+            <label className="lb-field"><span>{T("Citation key")}
+              <button type="button" className="lb-field-link" title={T("Copies how a Markdown draft cites it")} onClick={e => { e.preventDefault(); onCopyKey(entry); }}>{L.citeMarker([entry.citekey])}</button></span>
+              <input className="lb-key-input" value={key} spellCheck={false} onChange={e => setKey(e.target.value)} onBlur={commitKey}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} /></label>
             <div className="lb-field"><span>{T("Files")}</span>
               <ul className="lb-files">
                 {entry.attachments.map(a => (
@@ -143,6 +172,8 @@ function LibDetail({ entry, groups, draft, onSave, onMember, onDelete, onCite, o
                       {a.path.split("/").pop()}
                     </button>
                     {a.missing && <em>{T("missing")}</em>}
+                    {a.missing && <button type="button" className="btn ghost" title={T("Looks for it under papers/ by its content, else asks where it is")} onClick={() => onLocateAttachment(a)}>{T("Locate…")}</button>}
+                    {!a.missing && <button type="button" className="btn ghost" title={T("Opens it in the reader")} onClick={() => onReadAttachment(a)}>{T("Read")}</button>}
                     <button type="button" className="btn ghost" title={T("Removes the link; the file stays in the project")} onClick={() => onRemoveAttachment(a)}>{T("Unlink")}</button>
                   </li>
                 ))}

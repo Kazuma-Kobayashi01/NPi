@@ -23,7 +23,7 @@
   position: absolute; top: 0; bottom: 0; left: -3px; z-index: 4;
   width: 6px; cursor: col-resize; touch-action: none; outline: none;
 }
-.pane-resize.at-split, .pane-resize.at-side, .pane-resize.at-term { grid-row: 1; }
+.pane-resize.at-split, .pane-resize.at-side, .pane-resize.at-term, .pane-resize.at-library { grid-row: 1; }
 .pane-resize.at-sidebar { left: calc(var(--w-sidebar, 220px) - 3px); }
 
 /* ── Session column ─────────────────────────────────────────────────── */

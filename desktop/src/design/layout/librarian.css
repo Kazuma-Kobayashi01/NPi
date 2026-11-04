@@ -1,7 +1,9 @@
 /* ── Librarian window (design/librarian/) ─────────────────────────────────
    Opens in the Settings overlay frame (.st-overlay/.st-modal); theme tokens only. */
-.lb-modal { width: min(1180px, 100%); height: min(760px, 100%); }
-.lb-head-tools { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+.lb-modal { width: min(1360px, 100%); height: min(860px, 100%); }
+.lb-head-tools { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 400; }
+.lb-head-gap { flex: 1; }
+.cm-current { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; color: var(--fg-3); }
 .lb-notice { padding: 6px 16px; font-size: var(--d-text-xs); color: var(--fg-2); background: var(--accent-soft); border-bottom: 1px solid var(--line); cursor: pointer; }
 .lb-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(260px, 1fr) minmax(320px, 1.1fr); }
 .lb-body > * { min-height: 0; min-width: 0; }
@@ -52,6 +54,8 @@
 .lb-field input, .lb-field textarea, .lb-field select { width: 100%; box-sizing: border-box; }
 .lb-field > span { color: var(--fg-4); font-size: var(--d-text-xs); }
 .lb-field textarea { resize: vertical; line-height: 1.45; }
+.lb-field-link { margin-left: 8px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+.lb-field-link:hover { text-decoration: underline; }
 .lb-field-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .lb-field-row > .lb-field { min-width: 0; }
 .lb-key { font-family: var(--font-mono); font-size: var(--d-text-sm); color: var(--fg-2); user-select: all; }
@@ -154,3 +158,75 @@
 .rd-cell.not_reported, .rd-cell.not_comparable { color: var(--fg-3); }
 .rd-del { margin-left: 12px; font-size: 11px; }
 .rd-badge.ocr { background: color-mix(in oklab, #d9a441 24%, transparent); color: #c2891f; }
+
+/* The reader's PDF view (librarian/pdf-pane.jsx). */
+.rd-pdf { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.rd-pdf-bar { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: var(--d-text-sm); color: var(--fg-2); }
+.rd-pdf-gap { flex: 1; }
+.rd-pdf-page-input { width: 44px; text-align: center; padding: 2px 4px; border: 1px solid var(--line); border-radius: var(--r-2); background: transparent; color: inherit; font: inherit; }
+.rd-pdf-zoom { min-width: 44px; text-align: center; }
+.rd-pdf-scroll { flex: 1; min-height: 0; overflow: auto; padding: 14px 24px 40px; background: color-mix(in oklab, var(--bg-elevated) 80%, #000 20%); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.rd-pdf-page { position: relative; flex: none; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35); }
+.rd-pdf-page canvas { display: block; }
+.rd-pdf-text { position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial; -webkit-text-size-adjust: none; text-size-adjust: none; transform-origin: 0 0; }
+.rd-pdf-text :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.rd-pdf-text span.markedContent { top: 0; height: 0; }
+.rd-pdf-text ::selection { background: rgba(0, 100, 255, 0.3); }
+.rd-pdf-text .rd-pdf-mark { background: rgba(255, 213, 0, 0.45); border-radius: 2px; }
+.rd-pdf-text .endOfContent { display: block; position: absolute; inset: 100% 0 0; user-select: none; }
+
+/* "Copy as…" (librarian/copy-menu.jsx). */
+.cm-root { position: relative; display: inline-flex; }
+.cm-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 440px; max-width: 80vw; display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line-bright); border-radius: 12px; background: var(--bg-elevated); box-shadow: var(--shadow-window, 0 10px 30px rgba(0, 0, 0, 0.4)); font-weight: 400; }
+.cm-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cm-scope { gap: 14px; font-size: var(--d-text-xs); color: var(--fg-2); }
+.cm-scope label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.cm-search { margin: 0 !important; width: 100%; }
+.cm-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-2); }
+.cm-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cm-item:last-child { border-bottom: 0; }
+.cm-item:hover { background: var(--bg-hover, color-mix(in oklab, var(--fg-1) 7%, transparent)); }
+.cm-item-name { flex: 1; min-width: 0; font-size: var(--d-text-sm); }
+.cm-item-style { color: var(--fg-3); font-size: var(--d-text-xs); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-label { color: var(--fg-3); font-size: var(--d-text-xs); }
+.cm-recent .btn { font-size: 11px; }
+.cm-note { padding: 8px 10px; border-radius: var(--r-2); background: var(--accent-soft); color: var(--fg-1); font-size: var(--d-text-xs); line-height: 1.55; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.cm-style .lb-select { flex: 1; min-width: 0; }
+.cm-hint { margin: 0; color: var(--fg-4); font-size: 11px; line-height: 1.5; }
+
+/* The head of the Librarian: the buttons keep one line each and the title gives way, not the other way round. */
+.lb-modal .st-modal-title { flex: 0 1 auto; max-width: 220px; }
+.lb-head-tools .btn, .lb-head-tools .lb-select, .cm-root .btn { white-space: nowrap; flex: none; }
+.lb-head-tools { flex-wrap: nowrap; overflow: visible; }
+/* A narrower window drops the style name beside "Copy as…" before anything is cut off. */
+@media (max-width: 1240px) { .cm-current { display: none; } }
+@media (max-width: 1040px) { .lb-head-tools .btn:not(.on) { padding-left: 6px; padding-right: 6px; } .lb-modal .st-modal-title { max-width: 120px; } }
+
+/* Marks on a row, several selected, the drop target, the Crossref comparison. */
+.lb-row { position: relative; }
+.lb-row-marks { display: flex; gap: 4px; margin-top: 3px; }
+.lb-mark { padding: 0 6px; border-radius: 8px; font-size: 10px; line-height: 15px; color: var(--fg-3); background: color-mix(in oklab, var(--fg-1) 9%, transparent); }
+.lb-mark.warn { color: #c2891f; background: color-mix(in oklab, #d9a441 20%, transparent); }
+.lb-batch-title { margin: 0 0 8px; font-size: 15px; }
+.lb-batch-list { margin: 0 0 14px; padding-left: 16px; color: var(--fg-2); font-size: var(--d-text-xs); line-height: 1.6; max-height: 220px; overflow-y: auto; }
+.lb-merge-row { display: flex; align-items: center; gap: 6px; }
+.lb-key-input { font-family: var(--font-mono, ui-monospace, monospace); }
+.lb-drop { position: absolute; inset: 56px 12px 12px; z-index: 20; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--accent); border-radius: 14px; background: color-mix(in oklab, var(--bg-elevated) 80%, transparent); color: var(--fg-1); font-size: 16px; pointer-events: none; }
+.lb-align { max-height: 46%; display: flex; flex-direction: column; }
+.lb-align-list { flex: 1; min-height: 0; overflow-y: auto; }
+.lb-align-row { display: block !important; padding: 6px 0; border-top: 1px solid var(--line); }
+.lb-align-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.lb-align-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--d-text-sm); }
+.lb-align .lb-lookup-table { width: 100%; margin-top: 4px; }
+.lb-align .lb-lookup-table th { width: 200px; text-align: left; font-weight: 400; color: var(--fg-3); }
+.lb-detail-empty { text-align: center; padding: 24px; }
+
+.lb-import { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line-1, var(--border)); }
+.lb-import-head { display: flex; align-items: center; gap: 8px; }
+.lb-import-head strong { flex: 1; font-weight: 600; }
+.lb-import textarea { width: 100%; box-sizing: border-box; min-height: 92px; resize: vertical; font-family: var(--font-mono, monospace); font-size: var(--d-text-xs); }
+.lb-import-foot { display: flex; align-items: center; gap: 8px; }
+.lb-nav.drop { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.lb-ghost { position: fixed; z-index: 50; max-width: 260px; padding: 4px 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
+  border-radius: 6px; background: var(--bg-3, #333); color: var(--fg-1); box-shadow: 0 4px 14px rgba(0,0,0,.35); font-size: var(--d-text-xs); }
+.lb-row { user-select: none; }

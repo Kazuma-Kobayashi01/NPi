@@ -337,7 +337,9 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
                     }
                     // The Copilot's tools run here, in Rust; the page never sees the call.
                     if let (Some(host), Some("host_tool_call"), Some(frame)) = (&host, frame_type, parsed.as_ref()) {
-                        answer_host_call(host.as_ref(), frame, &stdin);
+                        // On its own thread: a slow tool (OCR of a few pages) must not hold up this tab's event stream.
+                        let (host, frame, stdin) = (Arc::clone(host), frame.clone(), Arc::clone(&stdin));
+                        std::thread::spawn(move || answer_host_call(host.as_ref(), &frame, &stdin));
                         continue;
                     }
                     // A rule-covered approval prompt is answered directly on

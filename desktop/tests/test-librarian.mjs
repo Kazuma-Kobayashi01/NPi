@@ -100,4 +100,53 @@ check("a PDF draft is an unsaved entry and names the form fields its rules guess
   assert.equal(L.guessedFields(undefined).size, 0);
 });
 
+
+check("pasted identifiers, links and citation markers", () => {
+  assert.deepEqual(L.parseIdentifiers("10.1038/nature14539\nhttps://doi.org/10.1234/ab.c.\ndoi:10.1038/NATURE14539"), ["10.1038/nature14539", "10.1234/ab.c"]);
+  assert.deepEqual(L.parseIdentifiers("arXiv:1706.03762v5, https://arxiv.org/abs/2101.00001"), ["10.48550/arXiv.1706.03762", "10.48550/arXiv.2101.00001"]);
+  assert.equal(L.parseIdentifiers("@article{a, title={x}}"), null);
+  assert.equal(L.parseIdentifiers("10.1/x and more words"), null);
+  assert.equal(L.parseIdentifiers("  "), null);
+  assert.equal(L.linkUrl("doi", "https://dx.doi.org/10.1/x"), "https://doi.org/10.1/x");
+  assert.equal(L.linkUrl("doi", "doi:10.1/x"), "https://doi.org/10.1/x");
+  assert.equal(L.linkUrl("url", "javascript:alert(1)"), null);
+  assert.equal(L.linkUrl("url", "https://a.test/x"), "https://a.test/x");
+  assert.equal(L.linkUrl("doi", ""), null);
+  assert.equal(L.citeMarker(["a"]), "[@a]");
+  assert.equal(L.citeMarker(["a", "b"]), "[@a; @b]");
+});
+check("markup, built-in filters and the list selection", () => {
+  assert.equal(L.plainText("Λ<sub>σ</sub>(φ) = Bu|<i>∂Ω</i> &amp; more"), "Λσ(φ) = Bu|∂Ω & more");
+  assert.equal(L.display({ csl: { title: "A <jats:italic>b</jats:italic>" } }).title, "A b");
+  const e = (id, csl, extra = {}) => ({ id, csl, createdAt: id, attachments: [], suggestions: [], tags: [], groups: [], ...extra });
+  const full = { title: "One", DOI: "10.1/a", "container-title": "J", issued: { "date-parts": [[2020]] } };
+  const list = [
+    e(1, full, { attachments: [{ id: 1 }] }),
+    e(2, { ...full, title: "Other", DOI: "10.1/A" }),
+    e(3, { title: "Same  Title!", issued: { "date-parts": [[2019]] } }),
+    e(4, { title: "same title", issued: { "date-parts": [[2019]] } }, { suggestions: [{ id: 1 }] }),
+    e(5, { title: "same title", issued: { "date-parts": [[2021]] } }),
+  ];
+  assert.equal(L.incomplete(list[0]), false);
+  assert.equal(L.incomplete(list[2]), true);
+  assert.deepEqual([...L.duplicateIds(list)].sort(), [1, 2, 3, 4], "a DOI in another case, a title in other punctuation; another year is not a duplicate");
+  assert.deepEqual(L.smartCounts(list), { incomplete: 3, nofile: 4, duplicates: 4, suggestions: 1 });
+  assert.deepEqual(L.visible(list, { smart: "nofile" }).map(x => x.id), [2, 3, 4, 5]);
+  assert.deepEqual(L.visible(list, { smart: "duplicates", query: "other" }).map(x => x.id), [2]);
+
+  const order = [10, 20, 30, 40];
+  let s = L.clickSelect({ ids: [], anchor: null }, 20, order);
+  assert.deepEqual(s, { ids: [20], anchor: 20 });
+  s = L.clickSelect(s, 40, order, { range: true });
+  assert.deepEqual(s.ids, [20, 30, 40], "shift takes the range");
+  s = L.clickSelect(s, 30, order, { toggle: true });
+  assert.deepEqual(s.ids, [20, 40], "cmd toggles one");
+  assert.deepEqual(L.clickSelect({ ids: [1], anchor: 99 }, 20, order, { range: true }).ids, [20], "an anchor no longer shown starts over");
+  assert.equal(L.stepSelect(order, 20, 1), 30);
+  assert.equal(L.stepSelect(order, 40, 1), 40);
+  assert.equal(L.stepSelect(order, 10, -1), 10);
+  assert.equal(L.stepSelect(order, 99, 1), 10);
+  assert.equal(L.stepSelect([], 1, 1), null);
+});
+
 console.log(`test-librarian: ${n} checks passed`);

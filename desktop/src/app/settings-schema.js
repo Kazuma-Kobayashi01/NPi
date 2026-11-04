@@ -90,7 +90,7 @@
           { options: opts(["rail", "tree", "browser"]) }),
         tweak("sidebar", "toggle", "Project sidebar", "The list of projects and their tabs on the left. `Ctrl+B` toggles it.", "projects"),
         custom("widths", "Column widths", "Drag a column edge to resize it, double-click the edge to reset one.", "width resize pane sidebar rail tree split browser",
-          { keys: ["sidebarWidth", "railWidth", "treeWidth", "termWidth", "splitWidth", "browserWidth"] }),
+          { keys: ["sidebarWidth", "railWidth", "treeWidth", "termWidth", "libraryWidth", "splitWidth", "browserWidth"] }),
       ] },
     ] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "How tool calls, workflow pipelines and thinking show up in the transcript.", groups: [

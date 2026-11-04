@@ -66,6 +66,36 @@ pub fn fields(csl: &Value) -> Fields {
     }
 }
 
+/// `text` without the inline markup publishers and PDF extraction leave in titles and abstracts
+/// (`<i>`, `<sub>`, `<jats:p>`, `<mml:mi>`) and with the common character references decoded. Only tags
+/// are removed: a `<` that does not open one ("p < 0.05") stays.
+pub fn clean_markup(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('<') {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + 1..];
+        let name = after.strip_prefix('/').unwrap_or(after);
+        let is_tag = name.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+        match after.find('>').filter(|end| is_tag && !after[..*end].contains('<')) {
+            Some(end) => rest = &after[end + 1..],
+            None => {
+                out.push('<');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    let decoded = out
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&");
+    decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// A DOI as compared: lower case, without a `doi:` or resolver prefix.
 pub fn normalize_doi(doi: &str) -> String {
     let doi = doi.trim().to_lowercase();
@@ -124,6 +154,15 @@ pub fn date_parts(year: i32) -> Value {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn markup_goes_and_plain_text_stays() {
+        use super::clean_markup;
+        assert_eq!(clean_markup("Λ<sub>σ</sub> and <i>x</i> &amp; y"), "Λσ and x & y");
+        assert_eq!(clean_markup("<jats:p>An  abstract.</jats:p>"), "An abstract.");
+        assert_eq!(clean_markup("p < 0.05 and q > 1"), "p < 0.05 and q > 1");
+        assert_eq!(clean_markup("a <b"), "a <b");
+    }
+
     use super::*;
 
     #[test]

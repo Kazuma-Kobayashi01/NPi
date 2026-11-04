@@ -39,14 +39,22 @@
     return Number.isInteger(n) ? n : null;
   };
 
+  const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+  /** A title as a publisher's metadata or a PDF's Markdown left it (`Λ<sub>σ</sub>`, `<i>…</i>`, `&amp;`): plain text. */
+  const plainText = value => String(value ?? "")
+    .replace(/<\/?(?:sub|sup|i|b|em|strong|span|scp|u|mml:[a-z]+|jats:[a-z]+)(?:\s[^>]*)?>/gi, "")
+    .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, name) => ENTITIES[name])
+    .replace(/\s+/g, " ").trim();
+
   /** The list row of an entry: authors as "Vaswani, Shazeer et al.". */
   function display(entry) {
     const csl = entry.csl ?? {};
     const names = (csl.author ?? []).map(personName).filter(Boolean);
     const authors = names.length > 2 ? `${names[0]} et al.` : names.join(", ");
     return {
-      title: text(csl.title) || "(untitled)", authors, year: yearOf(csl),
-      container: text(csl["container-title"]), kind: text(csl.type) || "document",
+      title: plainText(csl.title) || "(untitled)", authors, year: yearOf(csl),
+      container: plainText(csl["container-title"]), kind: text(csl.type) || "document",
     };
   }
 
@@ -69,12 +77,75 @@
     return terms.every(t => hay.includes(t));
   }
 
-  /** `scope`: { group: id | null, tag: string | null }; `query` as typed. */
-  function visible(entries, { group = null, tag = null, query = "" } = {}) {
+  /** A reference that lacks what a citation needs: a DOI or URL, a venue, or a year. */
+  const incomplete = entry => {
+    const csl = entry.csl ?? {};
+    return !(text(csl.DOI) || text(csl.URL)) || !text(csl["container-title"]) || yearOf(csl) === null;
+  };
+
+  /** A title reduced to its words, so punctuation, case and markup do not hide a duplicate. */
+  const titleKey = csl => plainText(csl?.title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+  /** Ids of the references that share a DOI, or a title and year, with another one. */
+  function duplicateIds(entries) {
+    const seen = new Map();
+    const out = new Set();
+    const note = (key, id) => {
+      if (seen.has(key)) { out.add(id); out.add(seen.get(key)); } else seen.set(key, id);
+    };
+    for (const e of entries) {
+      const doi = text(e.csl?.DOI).toLowerCase();
+      if (doi) note(`doi:${doi}`, e.id);
+      const title = titleKey(e.csl);
+      if (title) note(`title:${title}|${yearOf(e.csl) ?? ""}`, e.id);
+    }
+    return out;
+  }
+
+  /** The built-in filters of the sidebar: `id → (entry, duplicates) → bool`. */
+  const SMART = {
+    incomplete: e => incomplete(e),
+    nofile: e => (e.attachments ?? []).length === 0,
+    duplicates: (e, dups) => dups.has(e.id),
+    suggestions: e => (e.suggestions ?? []).length > 0,
+  };
+
+  /** How many references each built-in filter holds. */
+  function smartCounts(entries) {
+    const dups = duplicateIds(entries);
+    return Object.fromEntries(Object.entries(SMART).map(([id, test]) => [id, entries.filter(e => test(e, dups)).length]));
+  }
+
+  /** `scope`: { group: id | null, tag: string | null, smart: a SMART id | undefined }; `query` as typed. */
+  function visible(entries, { group = null, tag = null, smart = null, query = "" } = {}) {
+    const dups = smart === "duplicates" ? duplicateIds(entries) : null;
     return entries.filter(e =>
       (group === null || (e.groups ?? []).includes(group)) &&
       (tag === null || (e.tags ?? []).some(t => fold(t) === fold(tag))) &&
+      (smart === null || (SMART[smart]?.(e, dups) ?? true)) &&
       matches(e, query));
+  }
+
+  /** The selection after a click on `id` in the list `order` (ids as shown): a plain click selects it alone, Cmd/Ctrl
+   *  toggles it, Shift takes the range from `anchor`. Returns `{ ids, anchor }`. */
+  function clickSelect({ ids, anchor }, id, order, { toggle = false, range = false } = {}) {
+    if (range && anchor !== null && order.includes(anchor) && order.includes(id)) {
+      const [a, b] = [order.indexOf(anchor), order.indexOf(id)].sort((x, y) => x - y);
+      return { ids: order.slice(a, b + 1), anchor };
+    }
+    if (toggle) {
+      const next = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id];
+      return { ids: next, anchor: id };
+    }
+    return { ids: [id], anchor: id };
+  }
+
+  /** The id `delta` rows away from `id` in `order`, kept inside the list; the first row when `id` is not in it. */
+  function stepSelect(order, id, delta) {
+    if (order.length === 0) return null;
+    const at = order.indexOf(id);
+    if (at < 0) return order[0];
+    return order[Math.max(0, Math.min(order.length - 1, at + delta))];
   }
 
   const COMPARE = {
@@ -178,9 +249,36 @@
   const GUESS_FORM = { title: "title", author: "authors", issued: "year", DOI: "doi", URL: "url" };
   const guessedFields = draft => new Set((draft?.guessed ?? []).map(g => GUESS_FORM[g]).filter(Boolean));
 
+  /** The DOIs in pasted text, or null when it holds anything else (then it is a reference file's text).
+   *  Takes doi.org links and `doi:`; an arXiv id or link is given as its DOI (10.48550/arXiv.…). */
+  function parseIdentifiers(text) {
+    const out = [];
+    for (const token of String(text ?? "").split(/[\s,;]+/).filter(Boolean)) {
+      const doi = token.match(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:)?(10\.\d{4,9}\/\S+)$/i);
+      const arxiv = token.match(/^(?:https?:\/\/arxiv\.org\/(?:abs|pdf)\/|arxiv:)?(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?$/i);
+      if (!doi && !arxiv) return null;
+      const id = doi ? doi[1].replace(/[.)]+$/, "") : `10.48550/arXiv.${arxiv[1]}`;
+      if (!out.some(x => x.toLowerCase() === id.toLowerCase())) out.push(id);
+    }
+    return out.length > 0 ? out : null;
+  }
+
+  /** The page of a form's DOI or URL field, or null when it is not one a browser should open. */
+  function linkUrl(key, value) {
+    const v = String(value ?? "").trim();
+    if (!v) return null;
+    if (key === "doi") return `https://doi.org/${v.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:/i, "")}`;
+    return /^https?:\/\//i.test(v) ? v : null;
+  }
+
+  /** `[@a; @b]`: how a draft cites these keys (library_cite_draft reads this form). */
+  function citeMarker(keys) {
+    return `[${keys.map(k => `@${k}`).join("; ")}]`;
+  }
+
   window.OMP_LIBRARIAN = {
     lookupDiff, applyLookup, draftEntry, guessedFields, FORM_LABELS,
-    TYPES, SORT_KEYS, display, matches, visible, sorted, tagCounts,
+    TYPES, SORT_KEYS, display, matches, visible, sorted, tagCounts, plainText, incomplete, duplicateIds, smartCounts, clickSelect, stepSelect, parseIdentifiers, linkUrl, citeMarker,
     toForm, fromForm, formChanged, parseTags, parsePerson, plainCitation, personText,
   };
 })();

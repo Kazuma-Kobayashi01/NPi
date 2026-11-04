@@ -5,7 +5,10 @@
    Everything is read through `bridge.research` (librarian/reader.rs); it changes nothing but the
    index, which "Index project" refreshes. */
 
-function ReaderWindow({ bridge, project, anchor, onClose }) {
+/** A heading as the PDF's Markdown left it (`Λ<sub>σ</sub>`, `<i>…</i>`): the tags dropped, subscripts and superscripts kept as text. */
+const plainHeading = text => String(text ?? "").replace(/<\/?(?:sub|sup|i|b|em|strong|span)[^>]*>/gi, "").replace(/\s+/g, " ").trim();
+
+function ReaderWindow({ bridge, project, anchor, path, onClose }) {
   const T = window.OMP_I18N.t;
   const { Icon } = window;
   const [status, setStatus] = React.useState(null);
@@ -19,7 +22,8 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
   const [hits, setHits] = React.useState(null);   // null = not searching
   const [notice, setNotice] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [tab, setTab] = React.useState("original");      // original | summary
+  const [tab, setTab] = React.useState("pdf");      // pdf | text | summary
+  const [jump, setJump] = React.useState({ page: 1, quote: null, nonce: 0 });
   const [summaries, setSummaries] = React.useState([]);
   const [comparisons, setComparisons] = React.useState([]);
   const [showTables, setShowTables] = React.useState(false);
@@ -40,7 +44,8 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
 
   const openPaper = React.useCallback(async (id, wantPage, blockId, list) => {
     const row = (list ?? papers).find(p => p.id === id);
-    setPaperId(id); setMark(blockId ?? null); setHits(null); setShowTables(false); setTab(t => (blockId != null ? "original" : t));
+    setPaperId(id); setMark(blockId ?? null); setHits(null); setShowTables(false);
+    setTab(t => (t === "summary" && blockId == null ? t : row?.kind === "pdf" ? "pdf" : "text"));
     const [secs, sums] = await Promise.all([call("sections", { paperId: id }), call("summaries", { paperId: id })]);
     setSections(secs.ok ? secs.value : []);
     setSummaries(sums.ok ? sums.value : []);
@@ -48,6 +53,9 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
     const res = await call("page", { paperId: id, page: target });
     if (!res.ok) return setNotice(res.error);
     setPage(target); setView(res.value);
+    // The passage of the block to show, for the PDF view to mark on its page.
+    const quote = blockId != null ? res.value.blocks.find(b => b.id === blockId)?.text ?? null : null;
+    setJump({ page: target ?? 1, quote, nonce: Date.now() });
   }, [call, papers]);
 
   const goAnchor = React.useCallback(async (anchorId, list) => {
@@ -58,12 +66,27 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
     await openPaper(res.value.paperId, res.value.page ?? 1, res.value.blockId, list);
   }, [call, openPaper, T]);
 
+  /** Opens the file at `rel`; one the index has not reached yet is indexed first. */
+  const openPath = React.useCallback(async (rel, list) => {
+    const known = list.find(p => p.path === rel);
+    if (known) return openPaper(known.id, 1, null, list);
+    setBusy(true);
+    const res = await call("index", { text: false });
+    setBusy(false);
+    if (!res.ok) return setNotice(res.error);
+    const fresh = await loadPapers();
+    const row = fresh.find(p => p.path === rel);
+    if (row) return openPaper(row.id, 1, null, fresh);
+    return setNotice(T("{path} could not be read", { path: rel }));
+  }, [call, loadPapers, openPaper, T]);
+
   React.useEffect(() => {
     let live = true;
     (async () => {
       const list = await loadPapers();
       if (!live) return;
       if (anchor) await goAnchor(anchor, list);
+      else if (path) await openPath(path, list);
       else if (list.length) await openPaper(list[0].id, 1, null, list);
     })();
     return () => { live = false; };
@@ -76,8 +99,22 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
     return () => off();
   }, [goAnchor]);
 
+  // A file the Librarian asks to read in this already open window.
   React.useEffect(() => {
-    const onKey = e => { if (e.key === "Escape" && !hits) { e.preventDefault(); onClose(); } };
+    let off = () => {};
+    window.__TAURI__?.event?.listen("reader://open", ev => {
+      if (ev.payload) openPath(ev.payload, papers);
+    }).then(un => { off = un; }).catch(() => {});
+    return () => off();
+  }, [papers, openPath]);
+
+  // Esc leaves the search. The window itself closes the way a window does (Cmd+W, the red button);
+  // only the overlay form inside the main window closes on Esc.
+  React.useEffect(() => {
+    const onKey = e => {
+      if (e.key !== "Escape") return;
+      if (hits) { e.preventDefault(); setHits(null); setQuery(""); } else if (!window.OMP_PANEL) { e.preventDefault(); onClose(); }
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, hits]);
@@ -154,7 +191,7 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
                   {papers.map(p => (
                     <div key={p.id}>
                       <button type="button" className={`rd-paper${p.id === paperId ? " on" : ""}`} onClick={() => openPaper(p.id, 1, null)}>
-                        <span className="rd-paper-title">{p.title || p.path}</span>
+                        <span className="rd-paper-title">{plainHeading(p.title) || p.path}</span>
                         <span className="rd-paper-meta">
                           {p.parseStatus !== "ok" && <span className={`rd-badge ${p.parseStatus}`} title={p.parseNote}>{p.parseStatus === "ocr" ? "OCR" : p.parseStatus}</span>}
                           {p.staleAnchors > 0 && <span className="rd-badge stale">{T("stale")}</span>}
@@ -163,7 +200,7 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
                       </button>
                       {p.id === paperId && sections.map(s => (
                         <button key={s.id} type="button" className="rd-section" style={{ paddingLeft: 22 + Math.min(s.level, 4) * 10 }}
-                          onClick={() => s.page && openPaper(p.id, s.page, null)} title={s.heading}>{s.heading}</button>
+                          onClick={() => s.page && openPaper(p.id, s.page, null)} title={plainHeading(s.heading)}>{plainHeading(s.heading)}</button>
                       ))}
                     </div>
                   ))}
@@ -176,13 +213,14 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
               ) : paper && view ? (
                 <>
                   <div className="rd-bar">
-                    <strong className="rd-bar-title">{paper.title || paper.path}</strong>
+                    <strong className="rd-bar-title">{plainHeading(paper.title) || paper.path}</strong>
                     {paper.parseStatus === "scanned" && <span className="rd-badge scanned">{T("No text layer")}</span>}
                     <span className="mode-seg rd-tabs" role="tablist">
-                      <button type="button" role="tab" aria-selected={tab === "original"} className={tab === "original" ? "on" : ""} onClick={() => setTab("original")}>{T("Original")}</button>
+                      {paper.kind === "pdf" && <button type="button" role="tab" aria-selected={tab === "pdf"} className={tab === "pdf" ? "on" : ""} onClick={() => setTab("pdf")}>PDF</button>}
+                      <button type="button" role="tab" aria-selected={tab === "text"} className={tab === "text" ? "on" : ""} onClick={() => setTab("text")}>{T("Text")}</button>
                       <button type="button" role="tab" aria-selected={tab === "summary"} className={tab === "summary" ? "on" : ""} onClick={() => setTab("summary")}>{T("Summary")}{summaries.length ? ` (${summaries.length})` : ""}</button>
                     </span>
-                    {tab === "original" && paper.kind === "pdf" && (
+                    {tab === "text" && paper.kind === "pdf" && (
                       <span className="rd-pager">
                         <button type="button" className="btn icon ghost" onClick={() => goPage(-1)} disabled={(page ?? 1) <= 1} aria-label={T("Previous page")}>‹</button>
                         <span>{page} / {Math.max(paper.pageCount, 1)}</span>
@@ -193,11 +231,13 @@ function ReaderWindow({ bridge, project, anchor, onClose }) {
                   {paper.parseStatus === "ocr" && <div className="lb-notice" title={paper.parseNote}>{T("The text of this paper was recognised by OCR and may contain mistakes: check numbers and quotes against the page.")}</div>}
                   {tab === "summary" ? (
                     <ReaderSummaries summaries={summaries} onGo={goAnchor} onPage={(p, id) => openPaper(paper.id, p, id)} />
+                  ) : tab === "pdf" && paper.kind === "pdf" ? (
+                    <PdfPane key={paper.id} bridge={bridge} project={project} paperId={paper.id} page={jump.page} quote={jump.quote} nonce={jump.nonce} onPage={setPage} />
                   ) : (
                     <div className="rd-page">
                       {view.blocks.length === 0 && <div className="rd-none">{paper.parseNote || T("No text on this page")}</div>}
                       {view.blocks.map(b => b.kind === "heading"
-                        ? <h4 key={b.id} data-block={b.id} className={`rd-h${mark === b.id ? " rd-mark" : ""}`}>{b.text}</h4>
+                        ? <h4 key={b.id} data-block={b.id} className={`rd-h${mark === b.id ? " rd-mark" : ""}`}>{plainHeading(b.text)}</h4>
                         : <p key={b.id} data-block={b.id} className={`rd-p${mark === b.id ? " rd-mark" : ""}${b.anchorId ? " has-anchor" : ""}`}>{b.text}</p>)}
                       {view.truncated && <div className="rd-none">{T("Only the first blocks are shown")}</div>}
                     </div>
@@ -229,7 +269,7 @@ function ReaderSummaries({ summaries, onGo, onPage }) {
       <p className="rd-hint">{T("A summary never replaces the paper: numbers, formulas and quotes go back to the original page.")}</p>
       {summaries.map(sm => (
         <article key={sm.id} className="rd-summary">
-          <h4 className="rd-h">{sm.level === "paper" ? T("Paper summary") : sm.heading}
+          <h4 className="rd-h">{sm.level === "paper" ? T("Paper summary") : plainHeading(sm.heading)}
             {sm.stale && <span className="rd-badge stale">{T("stale: the file changed")}</span>}</h4>
           <p className="rd-p">{sm.body}</p>
           {sm.facts.length > 0 && (
