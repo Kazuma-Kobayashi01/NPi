@@ -90,6 +90,30 @@ impl ChatSpace {
         std::fs::write(self.config.join(PROFILE_FILE), json).map_err(|e| format!("profile: {e}"))
     }
 
+    /// Adds one fact (one line) to the memory file; refused when it would pass the size cap.
+    pub fn remember(&self, fact: &str) -> Result<(), String> {
+        let fact = fact.split_whitespace().collect::<Vec<_>>().join(" ");
+        if fact.is_empty() {
+            return Err("nothing to remember".to_string());
+        }
+        let line = format!("- {}", crate::text::prefix_within(&fact, 500));
+        let path = self.memory_path();
+        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+        if text.lines().any(|l| l.trim() == line) {
+            return Ok(());
+        }
+        if !text.is_empty() && !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(&line);
+        text.push('\n');
+        if text.len() > MAX_BYTES {
+            return Err("the memory is full; ask the user to tidy it in Settings".to_string());
+        }
+        self.ensure_dir()?;
+        std::fs::write(&path, text).map_err(|e| format!("memory: {e}"))
+    }
+
     pub fn memory_path(&self) -> PathBuf {
         self.dir.join(MEMORY_FILE)
     }
@@ -132,7 +156,7 @@ impl ChatSpace {
         let memory_path = self.memory_path();
         out.push_str(&format!(
             "Memory: notes about the user that persist across chats live in {}. When the user asks \
-             you to remember something, add it to that file (keep it short, one line per fact).",
+             you to remember something, call the remember tool with one short fact.",
             memory_path.display()
         ));
         let memory = self.memory();
@@ -200,7 +224,7 @@ fn compose(base: &str, instructions: &str, memory: &str, memory_path: &Path) -> 
     }
     out.push_str(&format!(
         "\n\nMemory: notes about the user that persist across chats live in {}. When the user asks \
-         you to remember something, add it to that file (keep it short, one line per fact).",
+         you to remember something, call the remember tool with one short fact.",
         memory_path.display()
     ));
     let memory = memory.trim();

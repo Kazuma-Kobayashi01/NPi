@@ -12,7 +12,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 const SCHEMA_V1: &str = "
 CREATE TABLE refs (
@@ -165,7 +165,7 @@ impl Library {
             let old: i64 = Connection::open(&path)
                 .and_then(|c| c.query_row("PRAGMA user_version", [], |r| r.get(0)))
                 .map_err(sql)?;
-            if (1..=4).contains(&old) {
+            if (1..=5).contains(&old) {
                 std::fs::copy(&path, path.with_extension(format!("db.bak-v{old}")))
                     .map_err(|e| format!("library backup: {e}"))?;
             }
@@ -213,6 +213,13 @@ impl Library {
             conn.execute_batch(&format!(
                 "BEGIN; {} PRAGMA user_version = 5; COMMIT;",
                 super::research::SCHEMA_V5
+            ))
+            .map_err(sql)?;
+        }
+        if version < 6 {
+            conn.execute_batch(&format!(
+                "BEGIN; {} PRAGMA user_version = 6; COMMIT;",
+                super::summaries::SCHEMA_V6
             ))
             .map_err(sql)?;
         }

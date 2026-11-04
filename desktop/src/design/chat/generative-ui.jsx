@@ -28,23 +28,33 @@ function GenerativeUiImage({ component: c }) {
       {c.attribution || "Source"}
     </a>
     : null;
+  const credit = source || (c.attribution && <span className="gui-image-credit">{c.attribution}</span>);
+  // With a description the card reads as picture on the left, explanation on the right.
+  const side = Boolean(c.description);
 
   if (image.status === "error") {
-    return <div className="gui-image-card is-error" role="group" aria-label={c.alt || c.title || "Image"}>
+    const failed = <>
       <span className="chip danger">Image unavailable</span>
       <span className="md-image-error-msg">{image.error}</span>
       <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>Retry image</button>
-      {source || (c.attribution && <span className="gui-image-credit">{c.attribution}</span>)}
+    </>;
+    if (!side) return <div className="gui-image-card is-error" role="group" aria-label={c.alt || c.title || "Image"}>{failed}{credit}</div>;
+    return <div className="gui-image-card gui-image-side" role="group" aria-label={c.alt || c.title || "Image"}>
+      <div className="gui-image-media is-error">{failed}</div>
+      <div className="gui-image-body">
+        {c.title && <h4 className="gui-image-title">{c.title}</h4>}
+        <p className="gui-image-desc">{c.description}</p>
+        {credit}
+      </div>
     </div>;
   }
 
-  if (!image.displayUrl) {
-    return <div className="gui-image-loading" role="status">
-      <span className="pulse-dot" /> Loading {c.alt || "image"}…
-    </div>;
-  }
+  const loading = <div className="gui-image-loading" role="status">
+    <span className="pulse-dot" /> Loading {c.alt || "image"}…
+  </div>;
+  if (!image.displayUrl && !side) return loading;
 
-  return <div className="gui-image-card">
+  const picture = image.displayUrl ? <>
     <img className="md-inline-img gui-image-img" src={image.displayUrl} alt={c.alt || ""}
       title={c.title || c.alt || ""} onLoad={image.onLoad} onError={image.onError} />
     {image.displayKind === "thumbnail" && (
@@ -56,8 +66,22 @@ function GenerativeUiImage({ component: c }) {
     {image.status === "full-error" && (
       <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>Retry full image</button>
     )}
+  </> : loading;
+
+  if (side) {
+    return <div className="gui-image-card gui-image-side">
+      <div className="gui-image-media">{picture}</div>
+      <div className="gui-image-body">
+        {c.title && <h4 className="gui-image-title">{c.title}</h4>}
+        <p className="gui-image-desc">{c.description}</p>
+        {credit}
+      </div>
+    </div>;
+  }
+  return <div className="gui-image-card">
+    {picture}
     {c.title && <span className="md-image-caption">{c.title}</span>}
-    {source || (c.attribution && <span className="gui-image-credit">{c.attribution}</span>)}
+    {credit}
   </div>;
 }
 

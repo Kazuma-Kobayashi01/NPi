@@ -45,3 +45,7 @@ Web Push to a paired phone (`remote-access.md`, `remote/push*.rs`) is a differen
 ## Unverified
 
 The OS prompt, the banner and the click-to-focus have only been checked by reading the API and by the unit tests of the rules; they need a packaged build. An ad-hoc signed bundle may be asked or shown differently by macOS than a notarized one: if the prompt does not appear, enable NPi Desktop in System Settings → Notifications by hand.
+
+## Signing a local build
+
+`tauri build` under `devstore run` cannot see the login keychain (its `HOME` is the SDK volume), so a build with `tauri.localsign.conf.json` fails with "The specified item could not be found in the keychain". Build as usual (ad-hoc), then sign outside `devstore run`: `codesign --force --deep --options runtime --sign "NPi Desktop Local" "<the .app>"`. The designated requirement becomes `identifier "dev.npi.desktop" and certificate leaf = H"…"`, the same for every build, so the notification permission is kept. The script must use `/usr/bin/openssl`: a conda or Homebrew openssl 3 writes a PKCS#12 that `security import` rejects.

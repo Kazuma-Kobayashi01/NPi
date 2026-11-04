@@ -41,6 +41,19 @@ pub async fn library_list(space: Space<'_>, project: String) -> Result<Vec<Entry
     .await?
 }
 
+/// Ids of the references matching `query` in the project's full-text index (Chinese short words
+/// included), best first; `null` while the project has no index (the window then filters by substring).
+#[tauri::command]
+pub async fn library_search(space: Space<'_>, project: String, query: String) -> Result<Option<Vec<i64>>, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let lib = Library::open(&dir)?;
+        let entries = lib.list()?;
+        lib.search_library(&entries, &query, 200)
+    })
+    .await?
+}
+
 #[tauri::command]
 pub async fn library_add(space: Space<'_>, project: String, csl: Value) -> Result<Entry, String> {
     with_library(&space, &project, move |lib| lib.add(&csl, "manual")).await
@@ -691,6 +704,63 @@ pub async fn research_index(
 pub async fn research_index_status(space: Space<'_>, project: String) -> Result<IndexStatus, String> {
     let dir = project_of(&space, &project)?;
     crate::off_ipc(move || Library::open(&dir)?.index_status(&dir)).await?
+}
+
+/// The project's indexed files (papers first) for the reader window.
+#[tauri::command]
+pub async fn research_papers(space: Space<'_>, project: String) -> Result<Vec<super::PaperRow>, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.papers_list()).await?
+}
+
+/// One paper's sections, in reading order.
+#[tauri::command]
+pub async fn research_sections(space: Space<'_>, project: String, paper_id: i64) -> Result<Vec<super::SectionRow>, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.paper_sections(paper_id)).await?
+}
+
+/// One page of a paper (all of a text file when `page` is none).
+#[tauri::command]
+pub async fn research_page(space: Space<'_>, project: String, paper_id: i64, page: Option<i64>) -> Result<super::PageView, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.paper_page(paper_id, page)).await?
+}
+
+/// Where an anchor lies (its paper, page and block): the jump from a citation to its evidence.
+#[tauri::command]
+pub async fn research_anchor(space: Space<'_>, project: String, anchor_id: i64) -> Result<Option<super::Target>, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.anchor_target(anchor_id)).await?
+}
+
+/// The summaries saved for one paper (each marked stale when the file changed since).
+#[tauri::command]
+pub async fn research_summaries(space: Space<'_>, project: String, paper_id: i64) -> Result<Vec<super::SummaryRow>, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.summaries_for(paper_id)).await?
+}
+
+/// The comparison tables saved in the project, newest first.
+#[tauri::command]
+pub async fn research_comparisons(space: Space<'_>, project: String) -> Result<Vec<super::Comparison>, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.comparisons()).await?
+}
+
+/// Removes one comparison table (the user's own action in the reader).
+#[tauri::command]
+pub async fn research_comparison_delete(space: Space<'_>, project: String, id: i64) -> Result<(), String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || Library::open(&dir)?.delete_comparison(id)).await?
+}
+
+/// Full-text search over the project's indexed blocks (Chinese short words included).
+#[tauri::command]
+pub async fn research_search(space: Space<'_>, project: String, query: String, limit: Option<usize>) -> Result<Vec<super::research::Hit>, String> {
+    let dir = project_of(&space, &project)?;
+    let limit = limit.unwrap_or(40).clamp(1, 100);
+    crate::off_ipc(move || Library::open(&dir)?.search_blocks(&query, None, limit)).await?
 }
 
 #[cfg(test)]

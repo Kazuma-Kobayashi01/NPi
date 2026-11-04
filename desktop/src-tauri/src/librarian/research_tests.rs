@@ -29,7 +29,7 @@ fn fts5_is_compiled_in() {
 }
 
 #[test]
-fn a_v4_library_migrates_to_v5_keeping_its_data_and_a_backup() {
+fn a_v4_library_migrates_to_the_current_schema_keeping_its_data_and_a_backup() {
     let d = TempDir::new("research", "migrate");
     let root = project(&d, "p");
     let lib = Library::open(&root).unwrap();
@@ -40,13 +40,13 @@ fn a_v4_library_migrates_to_v5_keeping_its_data_and_a_backup() {
     let conn = Connection::open(Library::path(&root)).unwrap();
     conn.execute_batch(
         "DROP TABLE search_fts; DROP TABLE search_units; DROP TABLE research_meta; DROP TABLE anchors;
-         DROP TABLE blocks; DROP TABLE sections; DROP TABLE papers; PRAGMA user_version = 4;",
+         DROP TABLE blocks; DROP TABLE sections; DROP TABLE papers; DROP TABLE summaries; DROP TABLE artifacts; PRAGMA user_version = 4;",
     )
     .unwrap();
     drop(conn);
     let lib = Library::open(&root).unwrap();
     let version: i64 = lib.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
     let back = lib.get(entry.id).unwrap().unwrap();
     assert_eq!((back.csl["title"].as_str(), back.notes.as_str(), back.tags.len()), (Some("Kept"), "my note", 1));
     assert!(lib.index_status(&root).unwrap().problems.is_empty());
@@ -312,4 +312,30 @@ fn blocks_are_typed_and_long_paragraphs_are_cut() {
     let long = "word. ".repeat(900);
     let pieces = split_long(&long);
     assert!(pieces.len() > 2 && pieces.iter().all(|p| p.chars().count() <= MAX_BLOCK_CHARS));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_scanned_pdf_is_read_by_ocr_and_marked_as_such() {
+    let d = TempDir::new("research", "ocr");
+    let root = project(&d, "p");
+    let Some(pdf) = crate::ocr::fixture::scanned_pdf(d.path()) else {
+        eprintln!("skipped: no tools to make a scanned PDF");
+        return;
+    };
+    write(&root, "papers/scan.pdf", &pdf);
+    let lib = Library::open(&root).unwrap();
+    let report = lib.index_project(&root, IndexOptions::default()).unwrap();
+    assert_eq!(report.ocr, ["papers/scan.pdf"]);
+    assert!(report.scanned.is_empty());
+    let hits = lib.search_blocks("attention", Some("papers"), 5).unwrap();
+    assert!(!hits.is_empty(), "the recognised text is searchable");
+    let quality: String = lib
+        .conn
+        .query_row("SELECT locator_quality FROM anchors LIMIT 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(quality, "ocr");
+    let status = lib.index_status(&root).unwrap();
+    assert_eq!(status.ocr, ["papers/scan.pdf"]);
+    assert!(matches!(lib.check_quote(&root, "papers/scan.pdf", Some(1), "all you need").unwrap(), QuoteCheck::Matched { .. }));
 }

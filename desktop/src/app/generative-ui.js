@@ -36,7 +36,7 @@
     "line-chart": ["type", "id", "title", "unit", "data", "visibleWhen"],
     "pie-chart": ["type", "id", "title", "unit", "data", "visibleWhen"],
     divider: ["type", "id", "label", "visibleWhen"],
-    image: ["type", "id", "src", "thumbnail", "alt", "title", "sourceUrl", "attribution", "visibleWhen"],
+    image: ["type", "id", "src", "thumbnail", "alt", "title", "sourceUrl", "attribution", "description", "visibleWhen"],
     // Interactive components
     button: ["type", "id", "label"],
     input: ["type", "id", "label", "default", "required", "minLength", "maxLength", "placeholder", "visibleWhen"],
@@ -279,6 +279,7 @@
         if (c.title !== undefined) c.title = text(c.title, 160, "image.title");
         if (c.sourceUrl !== undefined) c.sourceUrl = imageRef(c.sourceUrl, "image.sourceUrl", normalizeHttps);
         if (c.attribution !== undefined) c.attribution = text(c.attribution, 200, "image.attribution");
+        if (c.description !== undefined) c.description = text(c.description, 1200, "image.description");
       } else if (c.type === "button") {
         buttons++;
         c.label = text(c.label, 120, "button label");

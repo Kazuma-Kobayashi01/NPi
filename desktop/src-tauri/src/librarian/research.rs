@@ -138,8 +138,10 @@ pub struct IndexReport {
     pub removed: usize,
     /// PDFs not parsed yet because of `max_new_pdfs`.
     pub waiting: usize,
-    /// PDFs without a text layer (they need OCR; nothing was guessed).
+    /// PDFs without a text layer that OCR could not read either (nothing was guessed).
     pub scanned: Vec<String>,
+    /// PDFs whose text (all or some pages) was recognised by OCR: usable, but check against the page.
+    pub ocr: Vec<String>,
     /// Files that could not be read, with the reason.
     pub failed: Vec<String>,
 }
@@ -154,6 +156,7 @@ pub struct IndexStatus {
     pub anchors: usize,
     pub stale_anchors: usize,
     pub scanned: Vec<String>,
+    pub ocr: Vec<String>,
     pub partial: Vec<String>,
     pub failed: Vec<String>,
     /// Indexed files that changed or vanished since (re-index to refresh them).
@@ -292,6 +295,8 @@ struct Raw {
 }
 
 struct Parsed {
+    /// Pages whose text was recognised by OCR rather than read from the PDF.
+    ocr_pages: Vec<u32>,
     status: &'static str,
     note: String,
     page_count: u32,
@@ -304,7 +309,7 @@ struct Parsed {
 
 impl Parsed {
     fn empty(status: &'static str, note: String) -> Self {
-        Self { status, note, page_count: 0, title: String::new(), authors: String::new(), year: None, doi: None, blocks: Vec::new() }
+        Self { ocr_pages: Vec::new(), status, note, page_count: 0, title: String::new(), authors: String::new(), year: None, doi: None, blocks: Vec::new() }
     }
 }
 
@@ -392,13 +397,51 @@ fn blocks_of(md: &str, page: Option<u32>, out: &mut Vec<Raw>) {
     flush(&mut lines, &mut table, page, out);
 }
 
+/// What OCR adds to a PDF: the recognised pages, or why none were (the file keeps its status then).
+fn ocr_pages_of(bytes: &[u8], wanted: Option<&[u32]>) -> Result<(Vec<(u32, String)>, u32), String> {
+    crate::ocr::recognize(bytes, wanted)
+}
+
 fn parse_pdf(bytes: &[u8]) -> Parsed {
     match crate::pdf_text::pages(bytes) {
         Err(e) => Parsed::empty("failed", e),
-        Ok(crate::pdf_text::Paged::Scanned) => {
-            Parsed::empty("scanned", "no text layer; OCR is not available".into())
-        }
-        Ok(crate::pdf_text::Paged::Pages { pages, ocr_pages, page_count }) => {
+        Ok(crate::pdf_text::Paged::Scanned) => match ocr_pages_of(bytes, None) {
+            Ok((pages, count)) if !pages.is_empty() => {
+                let mut blocks = Vec::new();
+                for (page, text) in &pages {
+                    blocks_of(text, Some(*page), &mut blocks);
+                }
+                let guess = super::pdf_meta::guess(&pages[0].1);
+                let f = csl::fields(&guess.csl);
+                let list: Vec<u32> = pages.iter().map(|(p, _)| *p).collect();
+                Parsed {
+                    ocr_pages: list,
+                    status: "ocr",
+                    note: "no text layer: the text was recognised by OCR and may contain mistakes; check it against the page".into(),
+                    page_count: count,
+                    title: f.title,
+                    authors: String::new(),
+                    year: f.year,
+                    doi: f.doi,
+                    blocks,
+                }
+            }
+            Ok(_) => Parsed::empty("scanned", "no text layer, and OCR found no text".into()),
+            Err(e) => Parsed::empty("scanned", format!("no text layer; OCR is not available ({e})")),
+        },
+        Ok(crate::pdf_text::Paged::Pages { mut pages, ocr_pages, page_count }) => {
+            let mut recognised: Vec<u32> = Vec::new();
+            let mut failed_ocr = String::new();
+            if !ocr_pages.is_empty() {
+                match ocr_pages_of(bytes, Some(&ocr_pages)) {
+                    Ok((read, _)) => {
+                        recognised = read.iter().map(|(p, _)| *p).collect();
+                        pages.extend(read);
+                        pages.sort_by_key(|(p, _)| *p);
+                    }
+                    Err(e) => failed_ocr = e,
+                }
+            }
             let mut blocks = Vec::new();
             for (page, md) in &pages {
                 blocks_of(md, Some(*page), &mut blocks);
@@ -411,13 +454,18 @@ fn parse_pdf(bytes: &[u8]) -> Parsed {
                 .and_then(|a| a.as_array())
                 .map(|a| a.iter().map(csl::person_text).filter(|n| !n.is_empty()).collect::<Vec<_>>().join("; "))
                 .unwrap_or_default();
+            let missing: Vec<u32> = ocr_pages.iter().copied().filter(|p| !recognised.contains(p)).collect();
             let (status, note) = if ocr_pages.is_empty() {
                 ("ok", String::new())
+            } else if missing.is_empty() {
+                let list: Vec<String> = recognised.iter().map(u32::to_string).collect();
+                ("ocr", format!("pages without a text layer were recognised by OCR and may contain mistakes: {}", list.join(", ")))
             } else {
-                let list: Vec<String> = ocr_pages.iter().map(u32::to_string).collect();
-                ("partial", format!("pages without a reliable text layer, not indexed: {}", list.join(", ")))
+                let list: Vec<String> = missing.iter().map(u32::to_string).collect();
+                let why = if failed_ocr.is_empty() { String::new() } else { format!(" (OCR: {failed_ocr})") };
+                ("partial", format!("pages without a reliable text layer, not indexed: {}{why}", list.join(", ")))
             };
-            Parsed { status, note, page_count, title: f.title, authors, year: f.year, doi: f.doi, blocks }
+            Parsed { ocr_pages: recognised, status, note, page_count, title: f.title, authors, year: f.year, doi: f.doi, blocks }
         }
     }
 }
@@ -504,6 +552,7 @@ impl Library {
             };
             match parsed.status {
                 "scanned" => report.scanned.push(file.rel.clone()),
+                "ocr" => report.ocr.push(file.rel.clone()),
                 "failed" => report.failed.push(format!("{}: {}", file.rel, parsed.note)),
                 _ => {}
             }
@@ -574,7 +623,7 @@ impl Library {
             .map_err(sql)?;
             tx.last_insert_rowid()
         };
-        let quality = if file.pdf { "page" } else { "block" };
+        let base_quality = if file.pdf { "page" } else { "block" };
         let (mut section, mut heading, mut ordinal, mut sections) = (None::<i64>, String::new(), 0i64, 0i64);
         for b in &p.blocks {
             if b.kind == "heading" {
@@ -594,6 +643,7 @@ impl Library {
             )
             .map_err(sql)?;
             let block_id = tx.last_insert_rowid();
+            let quality = if b.page.is_some_and(|pg| p.ocr_pages.contains(&pg)) { "ocr" } else { base_quality };
             tx.execute(
                 "INSERT INTO anchors (paper_id, block_id, file_hash, page, exact_quote, quote_hash, locator_quality, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -780,6 +830,7 @@ impl Library {
             indexed.insert(path.clone());
             match parse.as_str() {
                 "scanned" => status.scanned.push(path.clone()),
+                "ocr" => status.ocr.push(path.clone()),
                 "partial" => status.partial.push(path.clone()),
                 "failed" => status.failed.push(path.clone()),
                 _ => {}
@@ -910,7 +961,7 @@ impl Library {
         {
             return Ok(QuoteCheck::Stale);
         }
-        if status != "ok" && status != "partial" {
+        if status != "ok" && status != "partial" && status != "ocr" {
             return Ok(QuoteCheck::Unreadable { status });
         }
         let page = if kind == "pdf" {

@@ -26,6 +26,15 @@ const RETRY_MIN_BUDGET: Duration = Duration::from_secs(2);
 const CONNECT_TIMEOUT_CAP: Duration = Duration::from_secs(10);
 const DOH_TIMEOUT_CAP: Duration = Duration::from_secs(10);
 
+/// The longest `Retry-After` honoured; a host asking for more is given up on.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(4);
+/// Pause before retrying a rate-limited request that sent no `Retry-After`; doubles per attempt.
+const RATE_LIMIT_BACKOFF: Duration = Duration::from_millis(800);
+/// Retries of a 429/503 (other transient failures keep their single retry).
+const RATE_LIMIT_RETRIES: u8 = 2;
+/// Requests to one host start at least this far apart, so a gallery does not hit it in one burst.
+const HOST_SPACING: Duration = Duration::from_millis(250);
+
 const CLOUDFLARE_DOH_HOST: &str = "cloudflare-dns.com";
 const CLOUDFLARE_BOOTSTRAP_IPS: &[IpAddr] = &[
     IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
@@ -53,6 +62,8 @@ enum FetchErrorKind {
 pub(super) struct FetchError {
     kind: FetchErrorKind,
     message: String,
+    /// The server's `Retry-After` on a 429/503, capped at [`MAX_RETRY_AFTER`].
+    retry_after: Option<Duration>,
 }
 
 impl FetchError {
@@ -60,6 +71,7 @@ impl FetchError {
         Self {
             kind: FetchErrorKind::Cancelled,
             message: "image request cancelled".to_string(),
+            retry_after: None,
         }
     }
 
@@ -67,6 +79,7 @@ impl FetchError {
         Self {
             kind: FetchErrorKind::Fatal,
             message: message.into(),
+            retry_after: None,
         }
     }
 
@@ -74,7 +87,13 @@ impl FetchError {
         Self {
             kind: FetchErrorKind::Transient,
             message: message.into(),
+            retry_after: None,
         }
+    }
+
+    /// A 429 or 503: the host is asking for fewer or slower requests.
+    fn is_rate_limited(&self) -> bool {
+        self.message.ends_with("429 Too Many Requests") || self.message.ends_with("503 Service Unavailable")
     }
 
     pub(super) fn is_cancelled(&self) -> bool {
@@ -342,6 +361,39 @@ fn describe_body_error(error: &reqwest::Error) -> FetchError {
     }
 }
 
+/// The `Retry-After` header as whole seconds (the HTTP-date form is not used), within [`MAX_RETRY_AFTER`].
+fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let secs: u64 = headers.get(reqwest::header::RETRY_AFTER)?.to_str().ok()?.trim().parse().ok()?;
+    Some(Duration::from_secs(secs).min(MAX_RETRY_AFTER))
+}
+
+/// The wait before the retry after `attempt` failures of `error`: the host's own hint, else a doubling backoff with a little jitter.
+fn retry_delay(error: &FetchError, attempt: u8) -> Duration {
+    if let Some(hint) = error.retry_after {
+        return hint;
+    }
+    let base = RATE_LIMIT_BACKOFF * 2u32.pow(u32::from(attempt.saturating_sub(1)));
+    let jitter = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::from(d.subsec_millis()) % 250);
+    base + Duration::from_millis(jitter)
+}
+
+/// When the next request to `host` may start, and the slot it takes.
+fn host_slot(host: &str) -> Instant {
+    static NEXT: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Instant>>> =
+        std::sync::OnceLock::new();
+    let mut map = NEXT
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let now = Instant::now();
+    map.retain(|_, at| *at + Duration::from_secs(30) > now);
+    let start = map.get(host).map_or(now, |at| (*at).max(now));
+    map.insert(host.to_string(), start + HOST_SPACING);
+    start
+}
+
 fn http_status_error(status: reqwest::StatusCode) -> FetchError {
     let code = status.as_u16();
     let retryable = code == 408 || code == 425 || code == 429 || (500..=599).contains(&code);
@@ -485,29 +537,49 @@ async fn query_cloudflare_doh_record(
     parse_doh_answers(&body, port).map_err(FetchError::fatal)
 }
 
-/// Fetch one public HTTPS image. Transient failures get a single retry;
-/// validation failures and cancellation never do.
+/// Fetch one public HTTPS image. Transient failures get a single retry; a 429
+/// or 503 gets up to [`RATE_LIMIT_RETRIES`], after the host's `Retry-After` or
+/// a growing pause. Validation failures and cancellation never retry. Requests
+/// to one host start [`HOST_SPACING`] apart.
 pub(super) async fn fetch_public_https_image(
     url_str: &str,
     token: &CancelToken,
     deadline: Instant,
 ) -> Result<FetchedImage, FetchError> {
+    let host = Url::parse(url_str)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_ascii_lowercase))
+        .unwrap_or_default();
     let mut attempt = 0u8;
     loop {
         if token.is_cancelled() {
             return Err(FetchError::cancelled());
         }
+        let wait = host_slot(&host).saturating_duration_since(Instant::now());
+        if !wait.is_zero() {
+            with_cancel(token, tokio::time::sleep(wait))
+                .await
+                .map_err(|_| FetchError::cancelled())?;
+        }
         match fetch_once(url_str, token, deadline).await {
             Ok(image) => return Ok(image),
             Err(error) => {
+                let limited = error.is_rate_limited();
+                let allowed = if limited { RATE_LIMIT_RETRIES } else { 1 };
+                attempt += 1;
+                let delay = if limited { retry_delay(&error, attempt) } else { Duration::ZERO };
                 let budget_left = deadline.saturating_duration_since(Instant::now());
                 if error.kind != FetchErrorKind::Transient
-                    || attempt >= 1
-                    || budget_left <= RETRY_MIN_BUDGET
+                    || attempt > allowed
+                    || budget_left <= RETRY_MIN_BUDGET + delay
                 {
                     return Err(error);
                 }
-                attempt += 1;
+                if !delay.is_zero() {
+                    with_cancel(token, tokio::time::sleep(delay))
+                        .await
+                        .map_err(|_| FetchError::cancelled())?;
+                }
             }
         }
     }
@@ -553,7 +625,9 @@ async fn read_image_response(
 ) -> Result<FetchedImage, FetchError> {
     let status = response.status();
     if !status.is_success() {
-        return Err(http_status_error(status));
+        let mut error = http_status_error(status);
+        error.retry_after = retry_after(response.headers());
+        return Err(error);
     }
     if let Some(length) = response.content_length() {
         if length > MAX_IMAGE_BYTES {
@@ -882,6 +956,34 @@ mod tests {
     }
 
     #[test]
+    fn retry_after_is_whole_seconds_within_the_cap() {
+        let mut h = reqwest::header::HeaderMap::new();
+        h.insert(reqwest::header::RETRY_AFTER, "2".parse().unwrap());
+        assert_eq!(retry_after(&h), Some(Duration::from_secs(2)));
+        h.insert(reqwest::header::RETRY_AFTER, "600".parse().unwrap());
+        assert_eq!(retry_after(&h), Some(MAX_RETRY_AFTER));
+        h.insert(reqwest::header::RETRY_AFTER, "Wed, 21 Oct 2026 07:28:00 GMT".parse().unwrap());
+        assert_eq!(retry_after(&h), None);
+    }
+
+    #[test]
+    fn the_rate_limit_pause_follows_the_hint_else_doubles() {
+        let mut e = http_status_error(reqwest::StatusCode::TOO_MANY_REQUESTS);
+        assert!(retry_delay(&e, 1) >= RATE_LIMIT_BACKOFF);
+        assert!(retry_delay(&e, 2) >= RATE_LIMIT_BACKOFF * 2);
+        e.retry_after = Some(Duration::from_secs(1));
+        assert_eq!(retry_delay(&e, 2), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn requests_to_one_host_are_spaced() {
+        let first = host_slot("spacing.test");
+        let second = host_slot("spacing.test");
+        assert!(second >= first + HOST_SPACING);
+        assert!(host_slot("other.test") <= second);
+    }
+
+    #[test]
     fn retry_classification_separates_transient_from_validation() {
         assert_eq!(
             http_status_error(reqwest::StatusCode::SERVICE_UNAVAILABLE).kind,
@@ -896,6 +998,8 @@ mod tests {
             FetchErrorKind::Fatal
         );
         assert_eq!(FetchError::fatal("bad").kind, FetchErrorKind::Fatal);
+        assert!(http_status_error(reqwest::StatusCode::TOO_MANY_REQUESTS).is_rate_limited());
+        assert!(!http_status_error(reqwest::StatusCode::BAD_GATEWAY).is_rate_limited());
         assert!(FetchError::cancelled().is_cancelled());
     }
 }

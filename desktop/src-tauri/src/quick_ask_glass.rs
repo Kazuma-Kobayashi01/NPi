@@ -1,26 +1,24 @@
-//! The quick-ask bar's backdrop on macOS: the system's Liquid Glass
-//! (`NSGlassEffectView`, macOS 26 and later) behind the transparent webview,
-//! or an `NSVisualEffectView` HUD material on older systems. The classes are
-//! looked up by name at run time, so this builds against any SDK and does
-//! nothing where neither exists. Everything runs on the main thread.
+//! The quick-ask bar's blur on macOS: an `NSVisualEffectView` behind the
+//! transparent webview, which blurs what is behind the window (a page cannot).
+//! The look of the glass itself is drawn by the page (`quickask.css`); this is
+//! only the frosted substrate. The class is looked up by name at run time, so
+//! this builds against any SDK and does nothing where it is missing.
+//! Everything runs on the main thread.
 
 use objc2::runtime::{AnyClass, AnyObject};
 use objc2::msg_send;
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
-/// What backs the bar: `glass`, `vibrancy`, or nothing (the page paints its own background).
+/// What backs the bar: a blur view, or nothing (the page paints its own background).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backdrop {
-    Glass,
     Vibrancy,
     None,
 }
 
 /// Which backdrop this system can give.
 pub fn available() -> Backdrop {
-    if AnyClass::get(c"NSGlassEffectView").is_some() {
-        Backdrop::Glass
-    } else if AnyClass::get(c"NSVisualEffectView").is_some() {
+    if AnyClass::get(c"NSVisualEffectView").is_some() {
         Backdrop::Vibrancy
     } else {
         Backdrop::None
@@ -49,19 +47,12 @@ pub fn apply(ns_window: *mut std::ffi::c_void, width: f64, height: f64, inset: f
             return;
         }
         let view: *mut AnyObject = match kind {
-            Backdrop::Glass => {
-                let Some(class) = AnyClass::get(c"NSGlassEffectView") else { return };
-                let view: *mut AnyObject = msg_send![class, alloc];
-                let view: *mut AnyObject = msg_send![view, initWithFrame: frame];
-                let _: () = msg_send![view, setCornerRadius: radius];
-                view
-            }
-            _ => {
+            Backdrop::Vibrancy | Backdrop::None => {
                 let Some(class) = AnyClass::get(c"NSVisualEffectView") else { return };
                 let view: *mut AnyObject = msg_send![class, alloc];
                 let view: *mut AnyObject = msg_send![view, initWithFrame: frame];
-                // HUD window material, behind the window, always active; rounded through its layer.
-                let _: () = msg_send![view, setMaterial: 13_isize];
+                // Popover material (follows the system appearance), behind the window, always active; rounded through its layer.
+                let _: () = msg_send![view, setMaterial: 6_isize];
                 let _: () = msg_send![view, setBlendingMode: 0_isize];
                 let _: () = msg_send![view, setState: 1_isize];
                 let _: () = msg_send![view, setWantsLayer: true];
@@ -76,6 +67,8 @@ pub fn apply(ns_window: *mut std::ffi::c_void, width: f64, height: f64, inset: f
         if view.is_null() {
             return;
         }
+        // Stays pinned to the top (flexible bottom margin) when the window grows for the menu.
+        let _: () = msg_send![view, setAutoresizingMask: 32_usize];
         // NSWindowBelow = -1: behind the webview, which stays transparent above it.
         let none: *mut AnyObject = std::ptr::null_mut();
         let _: () = msg_send![content, addSubview: view, positioned: -1_isize, relativeTo: none];
@@ -94,7 +87,7 @@ mod tests {
 
     #[test]
     fn this_system_names_a_backdrop_it_can_give() {
-        // Glass on macOS 26+, a visual-effect view before it; never panics either way.
+        // A visual-effect view where there is one; never panics either way.
         let _ = available();
     }
 }

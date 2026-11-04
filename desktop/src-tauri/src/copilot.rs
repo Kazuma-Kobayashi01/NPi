@@ -103,6 +103,90 @@ pub fn tool_definitions() -> Value {
             "loadMode": "essential"
         },
         {
+            "name": "research_summarize",
+            "label": "Save summary",
+            "description": "Save your summary of a paper (level \"paper\", L2) or of one of its sections (level \"section\", L1, naming the heading exactly as research_read shows it). Search or read the paper first so it is indexed. Give `facts`: short claims each with the exact `quote` and 1-based `page` it rests on; a quote is checked against the page and stored as matched or unverified, a fact without a quote is stored as your reading. Say in `coverage` what you did not read (tables, failed pages). A summary never replaces the paper: numbers, formulas and direct quotes go back to it, and a changed file marks the summary stale.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Project-relative path of the paper." },
+                    "level": { "type": "string", "enum": ["paper", "section"] },
+                    "section": { "type": "string", "description": "The section heading, for level section." },
+                    "summary": { "type": "string", "description": "The summary text, at most 4000 characters: problem, method, results, limits." },
+                    "facts": { "type": "array", "items": { "type": "object", "properties": { "text": { "type": "string" }, "quote": { "type": "string" }, "page": { "type": "integer" } }, "required": ["text"], "additionalProperties": false } },
+                    "coverage": { "type": "string", "description": "What the summary does not cover." }
+                },
+                "required": ["path", "level", "summary"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "research_summaries",
+            "label": "Read summaries",
+            "description": "The summaries already saved for a paper, with each fact's status (matched, unverified, model) and whether the summary is stale because the file changed. Look here before summarizing again.",
+            "parameters": {
+                "type": "object",
+                "properties": { "path": { "type": "string", "description": "Project-relative path of the paper." } },
+                "required": ["path"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "research_compare",
+            "label": "Save comparison table",
+            "description": "Save a comparison of papers as a table the user can open in the reader. `columns` are {key, label}; each row is {label, cells} where cells maps a column key to {value, path, page, quote, kind}. Give path, page and the exact quote for every value taken from a paper: it is checked and shown as matched or unverified; a cell without them is shown as your reading. Use kind \"not_reported\" when the paper does not say, and \"not_comparable\" when the papers measure different things: never fill such a cell with a plausible value.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" },
+                    "question": { "type": "string", "description": "The question the table answers." },
+                    "columns": { "type": "array", "items": { "type": "object", "properties": { "key": { "type": "string" }, "label": { "type": "string" } }, "required": ["key"], "additionalProperties": false } },
+                    "rows": { "type": "array", "items": { "type": "object", "properties": { "label": { "type": "string" }, "cells": { "type": "object" } }, "required": ["label", "cells"], "additionalProperties": false } }
+                },
+                "required": ["title", "columns", "rows"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "research_check_number",
+            "label": "Check number",
+            "description": "Deterministically check that a number is on a page of a paper (or in a text file), as the paper spells it: thousand separators, full-width digits, the minus sign and a percent sign are ignored, and the number must stand alone. Optionally require a `unit` right after it and a `context` word in the same passage. Answers matched with the passages, or not found. It does not judge what the number means.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" },
+                    "page": { "type": "integer", "description": "1-based page of a PDF; omit for a text file." },
+                    "value": { "type": "string", "description": "The number, for example 91.2 or 1,024." },
+                    "unit": { "type": "string", "description": "A unit that must follow the number, for example % or ms." },
+                    "context": { "type": "string", "description": "A word that must be in the same passage, for example accuracy." }
+                },
+                "required": ["path", "value"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
+            "name": "research_check_table",
+            "label": "Check table cell",
+            "description": "Find a Markdown table on a page, locate the row (first column contains `row`) and the column (header contains `column`), and compare the cell with `value` as numbers when both are numbers. Answers matched, mismatch (with the cell's actual text) or not found.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" },
+                    "page": { "type": "integer" },
+                    "row": { "type": "string" },
+                    "column": { "type": "string" },
+                    "value": { "type": "string" }
+                },
+                "required": ["path", "row", "column", "value"],
+                "additionalProperties": false
+            },
+            "loadMode": "essential"
+        },
+        {
             "name": "library_search",
             "label": "Search reference library",
             "description": "Search this project's reference library (the user's catalogued papers) by title, authors, year, venue, DOI, citekey, tags, notes or abstract. Returns citekey, authors, year, title and venue per reference. Use it, not memory, to know which references exist. A reference that is not in the library is unverified: say so.",
@@ -321,7 +405,7 @@ impl HostTools for ResearchHub {
     }
 }
 
-fn frame(id: &str, outcome: ToolResult) -> Value {
+pub(crate) fn frame(id: &str, outcome: ToolResult) -> Value {
     let (text, is_error) = match outcome {
         Ok(t) => (t, false),
         Err(e) => (e, true),
@@ -339,7 +423,7 @@ pub struct CopilotHost {
     root: PathBuf,
 }
 
-type ToolResult = Result<String, String>;
+pub(crate) type ToolResult = Result<String, String>;
 
 impl CopilotHost {
     pub const fn new(root: PathBuf) -> Self {
@@ -353,6 +437,11 @@ impl CopilotHost {
             "research_read" => self.read(args),
             "research_save" => self.save(args),
             "research_check_quote" => self.check_quote(args),
+            "research_summarize" => self.summarize(args),
+            "research_summaries" => self.summaries(args),
+            "research_compare" => self.compare(args),
+            "research_check_number" => self.check_number(args),
+            "research_check_table" => self.check_table(args),
             "library_search" => self.library_search(args),
             "library_get" => self.library_get(args),
             "library_check" => self.library_check(args),
@@ -460,6 +549,86 @@ impl CopilotHost {
             QuoteCheck::Stale => format!("stale: {rel} changed or is gone since it was indexed, so the indexed text cannot vouch for it. Search the project again to re-index it."),
             QuoteCheck::Unreadable { status } => format!("{rel} has no searchable text (parse status: {status}), so the quote cannot be checked."),
         })
+    }
+
+    /// The project-relative form of a path the tool was given (it must stay inside the project's readable folders).
+    fn rel_of(&self, path: &str) -> Result<String, String> {
+        let real = self.resolve(path, READ_DIRS)?;
+        Ok(real
+            .strip_prefix(&self.root)
+            .map_err(|_| "the path leaves the project".to_string())?
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/"))
+    }
+
+    fn page_arg(args: &Value) -> Result<Option<u32>, String> {
+        match args.get("page") {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => v
+                .as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .filter(|n| *n >= 1)
+                .map(Some)
+                .ok_or_else(|| "page is a 1-based integer".to_string()),
+        }
+    }
+
+    fn summarize(&self, args: &Value) -> ToolResult {
+        use crate::librarian::{FactIn, Library};
+        let get = |k: &str| args.get(k).and_then(Value::as_str);
+        let rel = self.rel_of(get("path").unwrap_or(""))?;
+        let facts: Vec<FactIn> = match args.get("facts") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(v) => serde_json::from_value(v.clone()).map_err(|e| format!("facts: {e}"))?,
+        };
+        let lib = Library::open(&self.root)?;
+        let counts = lib.save_summary(&self.root, &rel, get("level").unwrap_or(""), get("section"), get("summary").unwrap_or(""), &facts, get("coverage").unwrap_or(""))?;
+        Ok(format!(
+            "saved. Facts: {} matched the page, {} could not be matched (shown as unverified), {} are your reading. The summary is marked stale if {rel} changes.",
+            counts["matched"], counts["unverified"], counts["model"]
+        ))
+    }
+
+    fn summaries(&self, args: &Value) -> ToolResult {
+        use crate::librarian::Library;
+        let rel = self.rel_of(args.get("path").and_then(Value::as_str).unwrap_or(""))?;
+        let lib = Library::open(&self.root)?;
+        let paper = lib.papers_list()?.into_iter().find(|p| p.path == rel).ok_or_else(|| format!("{rel}: not indexed"))?;
+        let rows = lib.summaries_for(paper.id)?;
+        if rows.is_empty() {
+            return Ok(format!("no summary of {rel} yet."));
+        }
+        serde_json::to_string(&rows).map_err(|e| e.to_string())
+    }
+
+    fn compare(&self, args: &Value) -> ToolResult {
+        use crate::librarian::Library;
+        let lib = Library::open(&self.root)?;
+        let get = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
+        let r = lib.save_comparison(&self.root, get("title"), get("question"), args.get("columns").unwrap_or(&Value::Null), args.get("rows").unwrap_or(&Value::Null))?;
+        Ok(format!(
+            "saved comparison {}: {} cells matched the papers, {} could not be matched (unverified), {} are your reading, {} gaps (not reported / not comparable).",
+            r["id"], r["matched"], r["unverified"], r["model"], r["gaps"]
+        ))
+    }
+
+    fn check_number(&self, args: &Value) -> ToolResult {
+        use crate::librarian::Library;
+        let get = |k: &str| args.get(k).and_then(Value::as_str);
+        let rel = self.rel_of(get("path").unwrap_or(""))?;
+        let lib = Library::open(&self.root)?;
+        let r = lib.check_number(&rel, Self::page_arg(args)?, get("value").unwrap_or(""), get("unit"), get("context"))?;
+        Ok(r.to_string())
+    }
+
+    fn check_table(&self, args: &Value) -> ToolResult {
+        use crate::librarian::Library;
+        let get = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
+        let rel = self.rel_of(get("path"))?;
+        let lib = Library::open(&self.root)?;
+        Ok(lib.check_table_cell(&rel, Self::page_arg(args)?, get("row"), get("column"), get("value"))?.to_string())
     }
 
     fn library_get(&self, args: &Value) -> ToolResult {
@@ -860,7 +1029,8 @@ mod tests {
         assert_eq!(
             names,
             [
-                "research_search", "research_read", "research_save", "research_check_quote", "library_search",
+                "research_search", "research_read", "research_save", "research_check_quote", "research_summarize",
+                "research_summaries", "research_compare", "research_check_number", "research_check_table", "library_search",
                 "library_get", "library_check", "library_suggest"
             ]
         );

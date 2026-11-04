@@ -26,3 +26,21 @@ body.wc-dragging, body.wc-dragging * { user-select: none !important; -webkit-use
 .wc-zoomed { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; transform: none !important; }
 
 .st-modal-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── A secondary OS window (app/panel-mode.js) ─────────────────────────────
+   The panel fills the window; the native title bar (overlay style, as the
+   main window) carries the traffic lights, so the head leaves them room and
+   only drags. */
+html.panel-mode, html.panel-mode body, html.panel-mode #root { height: 100%; }
+html.panel-mode .bridge-scrim,
+html.panel-mode .st-overlay { position: fixed; inset: 0; display: block; padding: 0 !important; background: var(--bg-elevated); backdrop-filter: none; }
+html.panel-mode .stats-panel,
+html.panel-mode .st-modal {
+  width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important;
+  border: 0; border-radius: 0; box-shadow: none; transform: none !important;
+}
+html.panel-mode .wc-lights { display: none; }
+html.panel-mode [data-wc-head] { padding-left: 84px; min-height: 44px; }
+/* The head's title text is not a drag target for Tauri's drag region; let the click reach the head. */
+html.panel-mode [data-wc-head] > .st-modal-title,
+html.panel-mode [data-wc-head] > .mono { pointer-events: none; }

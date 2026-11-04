@@ -82,7 +82,29 @@ function LibrarianWindow({ bridge, project, onClose }) {
   }, [onClose]);
 
   const replace = updated => setEntries(list => list.map(e => (e.id === updated.id ? updated : e)));
-  const shown = React.useMemo(() => L.sorted(L.visible(entries, { ...scope, query }), sort.key, sort.dir), [entries, scope, query, sort]);
+  // Full-text matches (the project's FTS5 index: short Chinese words, ranked) come first; the substring
+  // filter still finds what the index does not (a fragment inside a word), and stands alone when the
+  // project has no index yet.
+  const [ranked, setRanked] = React.useState(null);
+  React.useEffect(() => {
+    const q = query.trim();
+    if (!q) { setRanked(null); return undefined; }
+    let live = true;
+    const timer = setTimeout(async () => {
+      const res = await call("search", { query: q });
+      if (live) setRanked(res.ok && Array.isArray(res.value) ? res.value : null);
+    }, 160);
+    return () => { live = false; clearTimeout(timer); };
+  }, [query, call, entries]);
+  const shown = React.useMemo(() => {
+    const plain = L.visible(entries, { ...scope, query });
+    if (!ranked || !query.trim()) return L.sorted(plain, sort.key, sort.dir);
+    const inScope = new Map(L.visible(entries, { ...scope, query: "" }).map(e => [e.id, e]));
+    const byRank = ranked.map(id => inScope.get(id)).filter(Boolean);
+    const seen = new Set(byRank.map(e => e.id));
+    // Ranked hits keep the index's order; sorting columns still apply to the substring-only rest.
+    return [...byRank, ...L.sorted(plain.filter(e => !seen.has(e.id)), sort.key, sort.dir)];
+  }, [entries, scope, query, sort, ranked]);
   const tags = React.useMemo(() => L.tagCounts(entries), [entries]);
   const selected = entries.find(e => e.id === selectedId) ?? null;
 

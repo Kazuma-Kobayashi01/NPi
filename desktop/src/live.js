@@ -3165,6 +3165,7 @@
    *  built-in tree while the next `openSession` spawned into the ticked
    *  profile - and `resumeSession` must match whatever was listed. */
   function _activeProfileId() {
+    if (window.OMP_PANEL) return window.OMP_PANEL.profile;
     return _resolveProfile(sessionRegistry.get(activeSessionId), _noTabProfile(), profiles);
   }
 
@@ -4944,9 +4945,17 @@
      *  `library_<name>` with `project` (its folder name) and `args`. Resolves to
      *  `{ ok, value | error }`. Only the listed names go through. */
     library(name, project, args) {
-      const NAMES = ["list", "add", "update", "remove", "import", "export", "export_save", "import_pick", "groups", "group_add", "group_rename", "group_remove", "member", "meta", "styles", "format", "style_add_pick", "cite_draft", "pdf_pick", "add_pdf", "attach_pdf", "attach_pick", "attachment_open", "attachment_remove", "lookup", "suggestion_resolve", "check_draft_pick", "trash", "restore"];
+      const NAMES = ["list", "search", "add", "update", "remove", "import", "export", "export_save", "import_pick", "groups", "group_add", "group_rename", "group_remove", "member", "meta", "styles", "format", "style_add_pick", "cite_draft", "pdf_pick", "add_pdf", "attach_pdf", "attach_pick", "attachment_open", "attachment_remove", "lookup", "suggestion_resolve", "check_draft_pick", "trash", "restore"];
       if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown library command: ${name}` });
       return _invokeResult(`library_${name}`, { project, ...(args ?? {}) });
+    },
+
+    /** A Research Core command of one Academic project (librarian/commands.rs): `research_<name>` with
+     *  `project` (its folder name) and `args`. Resolves to `{ ok, value | error }`. Only the listed names go through. */
+    research(name, project, args) {
+      const NAMES = ["papers", "sections", "page", "anchor", "search", "index", "index_status", "summaries", "comparisons", "comparison_delete"];
+      if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown research command: ${name}` });
+      return _invokeResult(`research_${name}`, { project, ...(args ?? {}) });
     },
 
     /** List project-relative file/dir paths matching `query`, for the
@@ -5053,7 +5062,11 @@
   };
 
   // ── Connect to Tauri IPC ──────────────────────────────────────────────────
-  if (window.__TAURI__) {
+  // A secondary window (app/panel-mode.js) only calls commands: the tabs,
+  // listeners and close guard below belong to the main window.
+  if (window.__TAURI__ && window.OMP_PANEL) {
+    document.documentElement.classList.add("tauri-native");
+  } else if (window.__TAURI__) {
     document.documentElement.classList.add("tauri-native");
     window.__TAURI__.event.listen("computer-use://state", event => {
       const { sessionId, state: computerState } = event.payload;
@@ -5079,6 +5092,10 @@
         await window.OMP_BRIDGE.send(text);
       } catch (error) { console.error("[live] quick ask failed:", error); }
     }).catch(error => console.error("[live] quick ask listener failed:", error));
+    // Chat's offer to continue as Code or Academic (chat_handoff.rs): the page shows it as a card.
+    window.__TAURI__.event.listen("chat://handoff", event => {
+      window.dispatchEvent(new CustomEvent("npi:handoff", { detail: event.payload }));
+    }).catch(error => console.error("[live] handoff listener failed:", error));
     window.__TAURI__.event.listen("computer-use://error", event => {
       const { sessionId, error } = event.payload;
       computerStates.set(sessionId, { state: computerStates.get(sessionId)?.state ?? null, error });

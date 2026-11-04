@@ -172,6 +172,18 @@ function App() {
     return () => window.removeEventListener("npi:show-chat", show);
   }, [setTweak]);
 
+  // Chat's hand-off offers (chat_handoff.rs), one per tab; the card is above the composer.
+  const [handoffs, setHandoffs] = React.useState({});
+  React.useEffect(() => {
+    const onOffer = e => {
+      const d = e.detail;
+      if (d?.sessionId && typeof d.prompt === "string") setHandoffs(m => ({ ...m, [d.sessionId]: d }));
+    };
+    window.addEventListener("npi:handoff", onOffer);
+    return () => window.removeEventListener("npi:handoff", onOffer);
+  }, []);
+  const dropHandoff = id => setHandoffs(m => { const { [id]: _gone, ...rest } = m; return rest; });
+
   // Chat and Code live apart: a chat is a tab in the Chat folder (chat_space.rs),
   // everything else is a code project. Each mode remembers the tab it had open.
   const isChat = t.appMode === "chat";
@@ -372,6 +384,19 @@ function App() {
   // the tab's earlier ones; later blocks follow the modes again.
   const handleCollapseAll = (collapsed) => setCollapseOverrides(m => updateEntry(m, planKey, NO_COLLAPSE_OVERRIDES,
     () => _collapseOverridesForAll(messages, collapsed, { hidden: window.OMP_TURN_STATUS.isHidden, work: foldModes.work })));
+  // Librarian and usage stats are secondary OS windows; the in-app overlay is
+  // the fallback where there is no desktop shell (src-tauri/src/panel_window.rs).
+  const openLibrarian = async () => {
+    const ok = await window.OMP_OPEN_PANEL("librarian", { project: window.OMP_PROJECT_NAV.basename(copilotProject), profile: activeProfileId });
+    if (!ok) setLibrarianOpen(true);
+  };
+  const openReader = async () => {
+    await window.OMP_OPEN_PANEL("reader", { project: window.OMP_PROJECT_NAV.basename(copilotProject), profile: activeProfileId, title: `Reader · ${window.OMP_PROJECT_NAV.basename(copilotProject)}` });
+  };
+  const openStats = async () => {
+    const ok = await window.OMP_OPEN_PANEL("stats", { profile: activeProfileId, title: `Usage · ${activeProfileLabel}` });
+    if (!ok) setStatsOpen(true);
+  };
   const openSettings = section => setStab(s => window.OMP_SETTINGS_TAB.open(s, section));
   const closeSettings = () => setStab(window.OMP_SETTINGS_TAB.close);
   // Another omp tab shown (opened, picked, restored) leaves the settings tab.
@@ -774,6 +799,23 @@ function App() {
     }
   };
 
+  // The card's button: the folder the user picks, a tab of the offered mode on
+  // it, the model's brief in that tab's prompt box (never sent for them).
+  const handleAcceptHandoff = async offer => {
+    if (!bridge) return;
+    const path = await bridge.pickFolder(offer.target === "academic" ? "academic" : undefined);
+    if (!path) return;
+    try {
+      setTweak("appMode", offer.target);
+      const id = await bridge.openSession(path);
+      setHome(false);
+      setPromptInsert({ text: offer.prompt, sessionId: id, nonce: Date.now() });
+      dropHandoff(offer.sessionId);
+    } catch (err) {
+      console.error("[app] hand-off failed:", err);
+    }
+  };
+
   // Close tab → kills that session's omp process; bridge updates tab list.
   // Guarded: with `confirmBusyClose` a working tab asks first (live.js).
   // Rewind: back to before a message, its text returned to the prompt box.
@@ -885,6 +927,9 @@ function App() {
       if (stab.open) closeSettings();
       else if (activeProject.id) handleCloseTab(activeProject.id);
     },
+    // Cmd+W (macOS): put the window away to the menu-bar icon, like the red
+    // button; the page must claim the key itself, it never reaches the native menu.
+    "desktop.window.hide":     () => { window.__TAURI__?.core?.invoke("hide_main_window"); },
     "desktop.tab.next":        () => cycleTabs(1),
     "desktop.tab.prev":        () => cycleTabs(-1),
     "desktop.tab.moveLeft":    () => shiftActiveProject(-1),
@@ -892,7 +937,7 @@ function App() {
     "desktop.panel.todo":      () => setPlanOpen(v => !v),
     "desktop.panel.changes":   () => setGitOpen(v => (v ? null : { path: null })),
     "desktop.panel.rules":     () => setRulesOpen(v => !v),
-    "desktop.panel.stats":     () => setStatsOpen(v => !v),
+    "desktop.panel.stats":     () => openStats(),
     "desktop.composer.promptHistory": () => setPromptHistoryOpen(v => !v),
     "desktop.session.compact": () => bridge?.compact(),
     "desktop.session.export":  () => bridge?.exportHtml(),
@@ -1038,7 +1083,7 @@ function App() {
     goal: { profileId: activeProfileId },
     computerUseSessionId: activeProject.id, computerUseAccentError,
     openApprovals: () => setRulesOpen(true),
-    openStats: () => { closeSettings(); setStatsOpen(true); },
+    openStats: () => { closeSettings(); openStats(); },
     openLogin: () => { closeSettings(); openBridge("login"); },
     onLogin: handlePickLogin,
     profileId: activeProfileId,
@@ -1057,7 +1102,10 @@ function App() {
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
     // Academic keeps the top bar to the research tools; these two move in here.
     ...(appModeName === "academic" ? [
-      ...(copilotProject ? [{ label: window.OMP_I18N.t("Librarian"), icon: "tag", onClick: () => setLibrarianOpen(true) }] : []),
+      ...(copilotProject ? [
+        { label: window.OMP_I18N.t("Librarian"), icon: "tag", onClick: () => openLibrarian() },
+        { label: window.OMP_I18N.t("Reader"), icon: "file", onClick: () => openReader() },
+      ] : []),
       { label: window.OMP_I18N.t("Terminal"), icon: "terminal", hint: keyHint("desktop.terminal.toggle"), on: _TERM_entryOf(terminal.state, planKey).open, onClick: () => terminal.toggle(planKey) },
       { label: window.OMP_I18N.t("Subagents"), icon: "agent", on: showSplit, onClick: subagentUi.togglePane },
     ] : []),
@@ -1212,6 +1260,10 @@ function App() {
                     subagents={subagentList}
                     showWorkflowPipeline={t.showWorkflowPipeline !== false}
                   />
+                  {isChat && handoffs[activeSessionId] && (
+                    <HandoffCard offer={handoffs[activeSessionId]} onAccept={handleAcceptHandoff}
+                      onDismiss={() => dropHandoff(activeSessionId)} />
+                  )}
                   <Composer
                     sessionId={planKey}
                     sessionIds={sessionIds}
@@ -1447,4 +1499,4 @@ function App() {
 }
 
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(window.OMP_PANEL ? <PanelRoot /> : <App />);

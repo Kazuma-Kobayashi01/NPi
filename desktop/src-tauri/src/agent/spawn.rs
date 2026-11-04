@@ -292,6 +292,13 @@ const SIDECHAT_FLAGS: &[&str] = &[
     "--no-title",
 ];
 
+/// The built-in tools Chat mode keeps (`--tools=`): web search and reading a URL
+/// or file. omp refuses to start when a named tool is unavailable in the
+/// session (memory tools need a configured backend), so only these two are
+/// named; the generative-UI and host tools (remember, hand-off) are not
+/// built-ins and stay available.
+const CHAT_TOOLS: &str = "web_search,read";
+
 // ── session spawn ─────────────────────────────────────────────────────────────
 
 /// Resolve `dir` to an absolute path so it can be handed to *both*
@@ -384,6 +391,13 @@ pub(super) fn spawn_omp(
     if sidechat {
         let at = args.len() - usize::from(config.is_some());
         args.splice(at..at, SIDECHAT_FLAGS.iter().map(|flag| (*flag).to_string()));
+    }
+    if app_mode == "chat" && !sidechat {
+        // Chat changes nothing: only the web and read tools, plus the
+        // host and UI tools omp always keeps. The coding tools, MCP servers and
+        // skills' tool schemas stay out of every request.
+        let at = args.len() - usize::from(config.is_some());
+        args.insert(at, format!("--tools={CHAT_TOOLS}"));
     }
     if let Some(text) = prompt {
         // Replaces omp's default prompt (omp still adds the skills list). Before the `--config` token, which stays last.

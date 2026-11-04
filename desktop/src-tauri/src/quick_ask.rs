@@ -20,6 +20,10 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 pub const QUICK_LABEL: &str = "quickask";
 const WIDTH: f64 = 720.0;
 const HEIGHT: f64 = 92.0;
+/// Extra height while the "New Chat / Current chat" menu is open below the bar.
+const MENU_HEIGHT: f64 = 120.0;
+/// Whether a native blur view backs the bar (`quick_ask_glass.rs`); the page draws the glass itself (`quickask.css`).
+const NATIVE_BACKDROP: bool = true;
 /// The longest prompt the quick-ask window may hand over.
 const MAX_PROMPT_BYTES: usize = 20_000;
 
@@ -49,10 +53,11 @@ pub fn main_hidden(app: &AppHandle) {
 /// The page, told which native backdrop (if any) is behind it: `?backdrop=glass` or `vibrancy`.
 fn page() -> &'static str {
     #[cfg(target_os = "macos")]
-    match crate::quick_ask_glass::available() {
-        crate::quick_ask_glass::Backdrop::Glass => return "quickask.html?backdrop=glass",
-        crate::quick_ask_glass::Backdrop::Vibrancy => return "quickask.html?backdrop=vibrancy",
-        crate::quick_ask_glass::Backdrop::None => {}
+    if NATIVE_BACKDROP {
+        match crate::quick_ask_glass::available() {
+            crate::quick_ask_glass::Backdrop::Vibrancy => return "quickask.html?backdrop=vibrancy",
+            crate::quick_ask_glass::Backdrop::None => {}
+        }
     }
     "quickask.html"
 }
@@ -72,12 +77,12 @@ fn build_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
         .build()
         .map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
-    {
+    if NATIVE_BACKDROP {
         // The bar is inset from the window edge (the page's body padding) and has 22 pt corners.
         let target = window.clone();
         let _ = window.run_on_main_thread(move || {
             if let Ok(ns_window) = target.ns_window() {
-                crate::quick_ask_glass::apply(ns_window, WIDTH, HEIGHT, 14.0, 22.0);
+                crate::quick_ask_glass::apply(ns_window, WIDTH, HEIGHT, 14.0, 24.0);
             }
         });
     }
@@ -113,6 +118,7 @@ pub fn toggle(app: &AppHandle) {
         let _ = window.hide();
         return;
     }
+    let _ = window.set_size(tauri::LogicalSize::new(WIDTH, HEIGHT));
     place(&window);
     let _ = window.show();
     let _ = window.set_focus();
@@ -123,6 +129,15 @@ pub fn toggle(app: &AppHandle) {
 pub fn on_blur(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(QUICK_LABEL) {
         let _ = window.hide();
+    }
+}
+
+/// Grows the window downward for the target menu, and back (the bar stays put).
+#[tauri::command]
+pub fn quickask_resize(app: AppHandle, open: bool) {
+    if let Some(window) = app.get_webview_window(QUICK_LABEL) {
+        let height = if open { HEIGHT + MENU_HEIGHT } else { HEIGHT };
+        let _ = window.set_size(tauri::LogicalSize::new(WIDTH, height));
     }
 }
 

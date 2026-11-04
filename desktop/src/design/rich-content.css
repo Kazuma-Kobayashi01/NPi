@@ -575,3 +575,61 @@
     max-height: 320px;
   }
 }
+
+/* An image with a description: the picture on the left, the explanation on the right (ui.present image.description). */
+.gui-image-card.gui-image-side {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.gui-image-side .gui-image-media {
+  flex: 0 0 min(42%, 340px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.gui-image-side .gui-image-media .md-inline-img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.gui-image-side .gui-image-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gui-image-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg-0);
+}
+
+.gui-image-desc {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  white-space: pre-wrap;
+}
+
+/* A narrow chat column stacks the card again. */
+@media (max-width: 640px) {
+  .gui-image-card.gui-image-side { flex-direction: column; }
+  .gui-image-side .gui-image-media { flex-basis: auto; width: 100%; }
+}

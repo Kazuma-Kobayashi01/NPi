@@ -10,9 +10,11 @@ The page is plain HTML (`quickask.html`, its own CSS and JS; no bundler, and `bu
 
 `quickask_submit` hides the window, shows the main window and emits `quickask://submit` to it. `live.js` handles that: for `new` (or when no tab is open) it opens a tab in the Chat folder (`chatDir`, after `npi:show-chat` has switched the app to Chat mode) and sends the text there; for `current` it sends the text to the active tab. A prompt is sent like a typed one, so approvals and every other rule apply.
 
-## Liquid Glass
+## Glass and blur
 
-On macOS the bar's backdrop is native (`quick_ask_glass.rs`, the ninth `unsafe` module; the classes are found by name at run time so it builds on any SDK): `NSGlassEffectView` (Liquid Glass, macOS 26 and later) inset 14 pt from the window edge with 22 pt corners, placed behind the transparent webview; on older systems an `NSVisualEffectView` with the HUD material, rounded through its layer. Rust tells the page which one through the URL (`quickask.html?backdrop=glass|vibrancy`); with a native backdrop the CSS only tints the bar and drops its own fill and shadow, without one (Windows, Linux, no class found) the bar paints an opaque background as before. The glass follows the system appearance, not the app's theme tweak, so a dark app theme on a light system gets a light glass under light text.
+The glass look is drawn by the page (`quickask.css`): a tinted frosted fill, specular rims, an inner glow, a light that flows around the rim (an animated conic gradient masked to the border) and a slow sweep. A page cannot blur what is behind its own window, so on macOS `quick_ask_glass.rs` (the ninth `unsafe` module; the class is found by name at run time) puts an `NSVisualEffectView` (popover material, rounded through its layer, pinned to the top when the window grows) behind the transparent webview, and the page, told through `quickask.html?backdrop=vibrancy`, lowers its tint so the blur shows. The system's own Liquid Glass (`NSGlassEffectView`) is not used. Without the class (Windows, Linux) the tint stays higher so the bar is legible. The blur follows the system appearance, not the app's theme tweak.
+
+The target menu ("New Chat / Current chat") opens below the bar: the window grows by `MENU_HEIGHT` (`quickask_resize`) and shrinks again when it closes or the window is shown.
 
 ## Tray icon and Cmd+W
 

@@ -6,7 +6,8 @@
 # macOS to trust the certificate for code signing, which needs your password.
 #
 #   sh scripts/macos-local-signing.sh            # creates "NPi Desktop Local"
-#   npm run build -- --config src-tauri/tauri.localsign.conf.json
+#   then, after the build (outside `devstore run`, whose HOME hides the login keychain):
+#   codesign --force --deep --options runtime --sign "NPi Desktop Local" "src-tauri/target/release/bundle/macos/NPi Desktop.app"
 set -eu
 NAME="${1:-NPi Desktop Local}"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
@@ -26,10 +27,13 @@ basicConstraints = critical,CA:false
 keyUsage = critical,digitalSignature
 extendedKeyUsage = critical,codeSigning
 CNF
-openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$tmp/cert.cnf" \
+# The system's own openssl: a Homebrew or conda openssl 3 writes a PKCS#12 that `security import`
+# cannot verify ("MAC verification failed").
+OPENSSL=/usr/bin/openssl
+"$OPENSSL" req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$tmp/cert.cnf" \
   -keyout "$tmp/key.pem" -out "$tmp/cert.pem" 2>/dev/null
-openssl pkcs12 -export -inkey "$tmp/key.pem" -in "$tmp/cert.pem" -name "$NAME" \
+"$OPENSSL" pkcs12 -export -inkey "$tmp/key.pem" -in "$tmp/cert.pem" -name "$NAME" \
   -out "$tmp/id.p12" -passout pass:npi-local
 security import "$tmp/id.p12" -k "$KEYCHAIN" -P npi-local -T /usr/bin/codesign
 security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN" "$tmp/cert.pem"
-echo "Created \"$NAME\". Build with: npm run build -- --config src-tauri/tauri.localsign.conf.json"
+echo "Created \"$NAME\". After each build, sign the app with: codesign --force --deep --options runtime --sign \"$NAME\" <the .app>"

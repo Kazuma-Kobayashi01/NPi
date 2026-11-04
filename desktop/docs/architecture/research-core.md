@@ -68,3 +68,13 @@ It does not judge whether a quote supports a claim, and "matched" means "in the 
 ## Not built yet
 
 Sections as a tree (flat per paper, in reading order), digests and `Digest`/`Artifact` tables, cursors, a filter language beyond the folder prefix, matching inside Latin words, a UI, automatic indexing on file changes (indexing runs on the commands, on a Copilot search once an index exists, and when a quote is checked), deleting old stale anchors, OCR, Docling/GROBID, vector search. Verified by unit tests only (including a real SQLite FTS5 and `pdf-inspector` on generated PDFs); not run against real papers, long documents or the real app, so parse quality on two-column layouts and tables is unmeasured.
+
+## Reader, summaries, number checks and OCR
+
+**Reader** (`librarian/reader.rs`, `design/librarian/reader-window.jsx`): read-only commands `research_papers`, `research_sections`, `research_page`, `research_anchor` and `research_search` (the webview names rows by id, never by path). The reader is its own window (panel kind `reader`, `panel_window.rs`); `?anchor=<id>` or the `reader://goto` event opens the page a citation's anchor lies on and highlights the block.
+
+**Summaries and comparison tables** (`librarian/summaries.rs`, schema v6): `summaries` holds a paper's L2 summary and its sections' L1 summaries with the paper's `source_hash` at the time; a changed file shows them as *stale* and nothing rewrites them. A fact or a table cell that carries a quote is checked with `check_quote`: `matched`, else `unverified`; no quote is `model` (the model's reading, never shown as verified). A cell may be `not_reported` or `not_comparable` and then holds no value. Copilot tools: `research_summarize`, `research_summaries`, `research_compare`.
+
+**Numbers and tables**: `research_check_number` compares a number as the paper spells it (thousand separators, full-width digits, the minus sign and a percent sign are ignored; it must stand alone; an optional unit right after it and a context word in the same block); `research_check_table` finds a Markdown table on the page and compares one cell. Both are deterministic and say nothing about meaning.
+
+**OCR** (`ocr.rs`, macOS only): a PDF without a text layer, or pages of one, are drawn with CoreGraphics and read by the Vision framework on the machine (zh-Hans, zh-Hant, en-US; at most 80 pages per file). The paper gets parse status `ocr` (listed in `IndexReport.ocr` / `IndexStatus.ocr`), its anchors `locator_quality = ocr`, and the reader says the text may contain mistakes. Where OCR is unavailable or finds nothing the file stays `scanned`.

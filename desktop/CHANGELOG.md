@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Academic reader: its own window (Academic toolbar → Reader) with the project's indexed papers and sections, one page of a paper at a time, full-text search, and a jump from a citation's anchor to the page. "Index project" builds the index from the window.
+- Summaries and comparison tables in the reader: the Copilot saves a paper's summary (L2) and its sections' summaries (L1) and comparison tables (`research_summarize`, `research_summaries`, `research_compare`). Each fact or cell with a quote is checked against the page and marked as matching the original, not found, or the model's reading; "not reported" and "not comparable" keep no value; a changed file marks a summary stale. New `research_check_number` and `research_check_table` tools check numbers and table cells against a page. Library schema is now v6 (a backup of an older file is kept).
+- OCR for scanned PDFs on macOS (Vision, on the machine): pages without a text layer are recognised, indexed and marked "OCR".
+- The Librarian window ranks its search with the project's FTS5 index (short Chinese words work) when one exists.
+- `docs/PLAN_ACADEMIC_NEXT.md`: the five items above, the smaller gaps, what waits for 3.1 and what is unverified.
+- Chat is conversation-only: it keeps web search, reading, the generative UI, a `remember` tool for its memory file and a `handoff_to_work` tool; the coding tools, MCP tools and library lookups are no longer sent with each request. When the model judges a request needs real work it offers a card above the composer; the button asks for a folder, opens a Code or Academic tab on it and puts the model's work brief in the prompt box, unsent. Chat's prompt now answers first in text and uses web, images and forms only when they help, and compaction starts at 85% instead of 70%.
+- Librarian and usage statistics open as their own resizable windows (native traffic lights, Cmd+W closes them) instead of floating inside the main window. Cmd+W in the main window now hides it to the menu-bar icon; closing a tab stays on Ctrl+W.
 - Quick ask: Option+Space opens a small prompt box over whatever you are doing; the prompt goes to a new chat or to the tab on screen. The app also has a menu-bar icon, and on macOS Cmd+W and the red button now close the window to it (the Dock icon goes while the window is hidden; click the menu-bar icon to bring it back).
 - Notifications on macOS: the Settings row shows what the system said when it refused, and explains that an ad-hoc signed build is treated as a new app by every build. `scripts/macos-local-signing.sh` and `src-tauri/tauri.localsign.conf.json` sign local builds with one stable certificate so the permission is kept.
 - Research Core: a per-project index of `papers/` PDFs (and notes, digests, drafts) in `research.db` (schema v5): blocks with page-level anchors, scanned PDFs recorded and never guessed, a changed file marks its old anchors stale, and FTS5 search that finds short Chinese words such as 文献 as well as English. The Copilot's `research_search` and `library_search` use it once a project is indexed (hits show `file p.N` and an anchor id), and a new `research_check_quote` tool verifies that a quote is on a page of a paper. `research_index` / `research_index_status` commands (no UI yet). See `docs/architecture/research-core.md`.
@@ -17,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
 ### Fixed
 
+- Images the model finds no longer fail on a host's HTTP 429: the fetch honours `Retry-After` (up to 4 s), retries a 429/503 twice with a growing pause, and starts requests to one host 250 ms apart.
+- The quick-ask "New Chat / Current chat" menu was cut off by the window edge; it opens below the bar and the window grows for it.
+- The quick-ask bar draws its own glass (frosted tint, specular rims, inner glow, a light flowing around the edge) instead of the system's backdrop.
 - After Rewind (or Fork) the sidebar listed the conversation twice. A Rewind to the first prompt moves the tab onto an empty session omp writes only at the next message, so the saved list could not tie the tab to its old conversation. The tab now remembers the file it came from and the sidebar hides that conversation; the Chat list also refreshes when a chat moves onto another file.
 - Context compaction rows: "nothing to compact" and a cancelled compaction no longer show as a red "compaction failed", omp's reason is shown in the row, a skipped automatic pass leaves no row, and a row no longer stays "running" after its process died. The row is translated.
 
@@ -33,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The `ui.present` image component takes an optional `description`: with it the card is laid out with the picture on the left and the title, explanation and credit on the right (stacked in a narrow column). Chat's output hints tell the model to use it instead of a markdown image followed by a paragraph and a pasted source link. Needs the kernel built from this tree.
 - Settings: the Advanced destination is gone. Its rows moved to where they belong: the side column, "New tabs show", project sidebar and column widths into Code, the keyboard shortcuts into General.
 - Settings → Models: the picker's models are a tidy grid per vendor (a checkbox per model, a count, All / None per vendor, a filter, Clear all); models that share a name show their id.
 - Secondary windows (Settings, Librarian, Git, file preview, Approvals, Usage, Plan) have traffic lights at the top left and drag by their head: red closes, yellow folds the window down to its head, green fills the screen (a double click on the head does the same). They replace the × buttons.

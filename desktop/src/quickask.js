@@ -16,7 +16,7 @@
   const root = document.documentElement;
   if (prefs.theme === "light") root.dataset.theme = "light";
   const backdrop = new URLSearchParams(location.search).get("backdrop");
-  if (backdrop === "glass" || backdrop === "vibrancy") root.dataset.backdrop = backdrop;
+  if (backdrop === "vibrancy") root.dataset.backdrop = backdrop;
   if (/^#[0-9a-f]{3,8}$/i.test(prefs.accent || "")) root.style.setProperty("--accent", prefs.accent);
 
   const input = document.getElementById("q");
@@ -33,7 +33,13 @@
     document.getElementById("target-label").textContent = t[target];
     menu.querySelectorAll("li").forEach(li => li.classList.toggle("on", li.dataset.target === target));
   };
-  const setMenu = open => { menu.hidden = !open; targetButton.setAttribute("aria-expanded", String(open)); };
+  // The window is as tall as the bar; it grows below it while the menu is open.
+  const setMenu = open => {
+    if (menu.hidden === !open) return;
+    menu.hidden = !open;
+    targetButton.setAttribute("aria-expanded", String(open));
+    invoke("quickask_resize", { open }).catch(console.error);
+  };
   const submit = async () => {
     const text = input.value.trim();
     if (!text) return;

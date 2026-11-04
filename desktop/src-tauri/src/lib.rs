@@ -41,6 +41,9 @@ mod json_store;
 mod keybindings;
 mod model_usage;
 mod navigation_guard;
+mod chat_handoff;
+mod panel_window;
+mod ocr;
 mod pdf_text;
 mod omp_cli;
 mod open_tabs;
@@ -222,9 +225,15 @@ fn start_session(
     };
     // The agent can look things up in the user's Academic library, read only
     // (`copilot::ResearchHub`).
-    let research: Arc<dyn copilot::HostTools> = Arc::new(copilot::ResearchHub::new(Arc::clone(
-        &*app.state::<Arc<academic_space::AcademicSpace>>(),
-    )));
+    // Chat keeps no library lookups: its one host tool offers the hand-off to
+    // Code or Academic (`chat_handoff`).
+    let research: Arc<dyn copilot::HostTools> = if app_mode == app_mode::AppMode::Chat {
+        Arc::new(chat_handoff::ChatHandoff::new(app.clone(), args.session_id.clone()))
+    } else {
+        Arc::new(copilot::ResearchHub::new(Arc::clone(
+            &*app.state::<Arc<academic_space::AcademicSpace>>(),
+        )))
+    };
     bridge.start_session_with_host(
         // Owned by the bridge's map; the widget hook below still needs the id.
         args.session_id.clone(),
@@ -322,11 +331,11 @@ fn sidechat_start(
 const COPILOT_PROMPT: &str = "\
 You are NPi Academic Copilot, a local literature assistant bound to one research project. \
 Your only tools are research_search, research_read and research_save, which see this project's \
-files, and library_search, library_get, library_check and library_suggest, which see its reference library, and nothing else. You have no network, shell or other file access; never claim otherwise. \
+files, research_check_quote, research_check_number and research_check_table, which check quotes, numbers and table cells against the indexed pages, research_summarize, research_summaries and research_compare, which keep your summaries and comparison tables for the user's reader, and library_search, library_get, library_check and library_suggest, which see its reference library, and nothing else. You have no network, shell or other file access; never claim otherwise. \
 Answer only from the project's files: cite the file and line for every claim taken from them, \
 quote exactly, and say plainly when the files do not contain the answer. A PDF is read \
 as its extracted text (line numbers refer to that text); a scanned PDF has none, so ask the \
-user for a text version instead of guessing. Cite only references the library holds (library_search, library_get); a reference it does not hold is unverified, and you give no DOI, page number or venue it does not state. To check a draft's citations use library_check. You cannot change the library: propose tags, groups or notes with library_suggest and the user decides. Save notes, digests and artifacts with research_save only when asked or when it \
+user for a text version instead of guessing. Cite only references the library holds (library_search, library_get); a reference it does not hold is unverified, and you give no DOI, page number or venue it does not state. To check a draft's citations use library_check. You cannot change the library: propose tags, groups or notes with library_suggest and the user decides. A summary or comparison cell without a checked quote is shown as your reading, never as verified: give the exact quote and page for every claim taken from a paper, and use not_reported or not_comparable instead of a plausible guess. Save notes, digests and artifacts with research_save only when asked or when it \
 clearly helps. Reply in the user's language.
 
 # Project rules
@@ -1687,6 +1696,17 @@ fn hides_on_close(label: &str) -> bool {
     cfg!(target_os = "macos") && label == "main"
 }
 
+/// Put the main window away (red button, Cmd+W): leave fullscreen first, hide it,
+/// and leave only the menu-bar icon.
+#[tauri::command]
+fn hide_main_window(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_fullscreen(false);
+        let _ = window.hide();
+    }
+    quick_ask::main_hidden(&app);
+}
+
 /// Bring the hidden or minimised main window back in front.
 #[cfg(target_os = "macos")]
 fn show_main_window(app: &AppHandle) {
@@ -1972,6 +1992,7 @@ pub fn run() {
             open_project,
             academic_dir,
             librarian::commands::library_list,
+            librarian::commands::library_search,
             librarian::commands::library_add,
             librarian::commands::library_update,
             librarian::commands::library_remove,
@@ -2002,6 +2023,14 @@ pub fn run() {
             librarian::commands::library_check_draft_pick,
             librarian::commands::research_index,
             librarian::commands::research_index_status,
+            librarian::commands::research_papers,
+            librarian::commands::research_sections,
+            librarian::commands::research_page,
+            librarian::commands::research_anchor,
+            librarian::commands::research_search,
+            librarian::commands::research_summaries,
+            librarian::commands::research_comparisons,
+            librarian::commands::research_comparison_delete,
             academic_copilot_start,
             take_pending_open_projects,
             start_git_watch,
@@ -2092,8 +2121,11 @@ pub fn run() {
             app_update_install,
             set_close_guard,
             quit_app,
+            hide_main_window,
+            panel_window::open_panel_window,
             quick_ask::quickask_submit,
             quick_ask::quickask_hide,
+            quick_ask::quickask_resize,
             python_runtime::python_runtime_status,
             python_runtime::python_runtime_ensure,
             python_runtime::python_runtime_packages,
@@ -2123,11 +2155,7 @@ fn handle_run_event(app: &AppHandle, event: tauri::RunEvent) {
             ..
         } if hides_on_close(label) => {
             api.prevent_close();
-            if let Some(window) = app.get_webview_window(label) {
-                let _ = window.set_fullscreen(false);
-                let _ = window.hide();
-            }
-            quick_ask::main_hidden(app);
+            hide_main_window(app.clone());
         }
         // A click outside the quick-ask window puts it away.
         tauri::RunEvent::WindowEvent {

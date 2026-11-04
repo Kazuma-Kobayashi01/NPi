@@ -84,6 +84,10 @@
     }, [panelRef, place]);
 
     const zoom = React.useCallback(() => { setShaded(false); setZoomed(z => !z); }, []);
+    // In a secondary OS window the title bar's own lights and the OS drag do all of this.
+    if (window.OMP_PANEL) {
+      return { lights: null, headProps: { "data-wc-head": "", "data-tauri-drag-region": "" }, shaded: false, zoomed: false };
+    }
     const lights = React.createElement(Lights, {
       onClose, shaded, zoomed, onShade: () => { setZoomed(false); setShaded(s => !s); }, onZoom: zoom,
     });
