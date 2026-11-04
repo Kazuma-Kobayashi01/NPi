@@ -168,6 +168,19 @@ pub fn register(project: &Path, exe: &Path) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Registers again when `.mcp.json` names this app at a path where it no longer is (the app was moved).
+/// A file with no such entry, or one the user pointed elsewhere and that still exists, is left alone.
+pub fn refresh(project: &Path, exe: &Path) {
+    let Ok(text) = std::fs::read_to_string(project.join(".mcp.json")) else { return };
+    let Ok(doc) = serde_json::from_str::<Value>(&text) else { return };
+    let entry = doc.pointer(&format!("/mcpServers/{SERVER_NAME}"));
+    let ours = entry.and_then(|e| e.pointer("/args/0")).and_then(Value::as_str) == Some("--npi-mcp-librarian");
+    let gone = entry.and_then(|e| e.get("command")).and_then(Value::as_str).is_some_and(|c| !Path::new(c).exists());
+    if ours && gone {
+        let _ = register(project, exe);
+    }
+}
+
 /// Entry point of `--npi-mcp-librarian <folder>`: serves stdin/stdout until stdin closes.
 pub fn run(project: &Path) -> Result<(), String> {
     if !project.is_dir() {
@@ -285,6 +298,33 @@ mod tests {
         assert_eq!(text_of(&replies[2]), "done: tidy");
         assert_eq!((replies[3]["result"]["isError"].clone(), text_of(&replies[3])), (json!(true), "no model".to_string()));
         assert_eq!(replies[4]["error"]["code"], -32602, "the library tools are the other server's");
+    }
+
+    #[test]
+    fn a_moved_app_is_registered_again_and_nothing_else_is_touched() {
+        let d = TempDir::new("mcp", "refresh");
+        let root = project(&d);
+        let exe = d.path().join("omp-desktop");
+        std::fs::write(&exe, "x").unwrap();
+        refresh(&root, &exe);
+        assert!(!root.join(".mcp.json").exists(), "never registered, never added");
+        register(&root, Path::new("/gone/omp-desktop")).unwrap();
+        refresh(&root, &exe);
+        let doc: Value = serde_json::from_str(&std::fs::read_to_string(root.join(".mcp.json")).unwrap()).unwrap();
+        assert_eq!(doc["mcpServers"]["npi-librarian"]["command"], exe.to_str().unwrap());
+        assert_eq!(doc["mcpServers"]["npi-copilot"]["command"], exe.to_str().unwrap());
+        let mine = r#"{"mcpServers":{"npi-librarian":{"command":"/gone/mine","args":["--other"]}}}"#;
+        std::fs::write(root.join(".mcp.json"), mine).unwrap();
+        refresh(&root, &exe);
+        assert_eq!(std::fs::read_to_string(root.join(".mcp.json")).unwrap(), mine, "not ours");
+    }
+
+    #[test]
+    fn a_text_never_names_a_tool_this_server_does_not_have() {
+        let offered: Vec<String> = tools().iter().filter_map(|t| t["name"].as_str().map(str::to_string)).collect();
+        let mut texts: Vec<String> = tools().iter().filter_map(|t| t["description"].as_str().map(str::to_string)).collect();
+        texts.push(INSTRUCTIONS.to_string());
+        crate::copilot::assert_names_exist(&texts, &offered);
     }
 
     #[test]

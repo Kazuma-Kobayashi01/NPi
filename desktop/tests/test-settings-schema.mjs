@@ -43,6 +43,16 @@ check("every section is complete and only the last is separated", () => {
   assert.ok(S.SECTIONS.some(s => s.id === "computerUse"), "Computer Use has its own destination");
 });
 
+check("every authored section reaches the menu, Usage and Memory on their own", () => {
+  assert.deepEqual(Array.from(S.UNPLACED), []);
+  const ids = S.SECTIONS.map(s => s.id);
+  for (const id of ["usage", "memory"]) assert.ok(ids.includes(id), id);
+  const types = id => S.SECTIONS.find(s => s.id === id).groups.flatMap(g => g.rows).map(r => r.type);
+  assert.deepEqual(Array.from(types("usage")), ["usageLimits", "usageStats"]);
+  assert.deepEqual(Array.from(types("memory")), ["memory"]);
+  assert.ok(!Array.from(types("chat")).includes("memory"), "one place only");
+});
+
 check("every tweak row names a TWEAK_DEFAULTS key whose default is valid", () => {
   const ids = new Set();
   for (const r of S.rows()) {

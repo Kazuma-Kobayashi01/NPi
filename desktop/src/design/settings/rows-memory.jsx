@@ -1,4 +1,4 @@
-/* design/settings/rows-memory.jsx — Settings → Chat's custom row `memory` (window.OMP_SETTINGS_ROWS): the
+/* design/settings/rows-memory.jsx — Settings → Memory's custom row `memory` (window.OMP_SETTINGS_ROWS): the
    switch, and every note the model keeps, by kind, to edit or delete. All of it is Rust's
    (src-tauri/src/memory/). A change reaches a session when it next starts. */
 

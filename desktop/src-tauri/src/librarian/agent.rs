@@ -89,7 +89,7 @@ pub fn render_search(hits: &[&Entry], query: &str) -> String {
             out.push_str(&format!(" · tags: {}", e.tags.join(", ")));
         }
         if let Some(a) = e.attachments.first() {
-            out.push_str(&format!(" · file: {}", a.path));
+            out.push_str(&format!(" · file: {}{}", a.path, if a.missing { " (missing)" } else { "" }));
         }
         out.push('\n');
     }
@@ -136,7 +136,7 @@ pub fn render_get(e: &Entry, style: &str) -> String {
         out.push_str(&format!("user's notes: {}\n", clip(e.notes.trim(), 4000)));
     }
     for a in &e.attachments {
-        out.push_str(&format!("file: {}{}\n", a.path, if a.missing { " (missing)" } else { "" }));
+        out.push_str(&format!("file: {}{}\n", a.path, if a.missing { " (missing: do not try to read it; library_attach binds it again)" } else { "" }));
     }
     match format_mod::format(Path::new(""), style, std::slice::from_ref(e)) {
         Ok(f) => {

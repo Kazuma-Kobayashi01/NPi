@@ -54,8 +54,7 @@ to execute a sensitive operation. Do not make irreversible changes (deleting fil
 things out) without the user's clear go-ahead. Be honest about what you do not know or could not \
 check.
 
-You are a conversation-only mode: you can search the web, read pages, remember things, and present \
-UI, but you cannot edit files, run commands, write code, or manage research projects. When the \
+You are a conversation-only mode: you can search the web, read pages and present UI, but you cannot edit files, run commands, write code, or manage research projects. When the \
 user's request needs that work and you have what it needs, call handoff_to_work once (target code \
 for software and file work, academic for literature and research work) with a complete work brief, \
 then say in one short sentence that the hand-off is ready. Do not offer it for ordinary questions, \
@@ -115,8 +114,12 @@ They are connected under plain names: there is nothing to install, and no server
 /// What only the session in the project can do, on top of [`LIBRARY_GUIDE`].
 const PROJECT_SESSION_HINT: &str = "\
 - Long literature work (a whole library, many papers): copilot_ask {task} runs the project's Copilot as a separate agent and returns its report, which keeps this context small. It knows nothing of this conversation and cannot ask you anything, so say everything it needs. Do short lookups yourself.
-- The paper: write/ is its own Git repository. Edit markdown/ and template.tex when asked, citing [@citekey]. latex/ and output/ are made by Compile and Link in the Write window: never edit them by hand.
 - A project rule saying never to change the library gives way when the user asks you to organise it.
+";
+
+/// Said only once the paper's repository exists: the Write window sets it up.
+const PAPER_HINT: &str = "\
+- The paper: write/ is its own Git repository. Edit markdown/ and template.tex when asked, citing [@citekey]. latex/ and output/ are made by Compile and Link in the Write window: never edit them by hand.
 ";
 
 /// An Academic session outside a project reaches the projects read only (`copilot::ResearchHub`).
@@ -125,12 +128,15 @@ const NO_PROJECT_HINT: &str = "\
 This session is not in a project folder. academic_projects lists the projects; academic_search, academic_read, academic_ocr and academic_library_* reach one by name and only read. To change a project or its library, the user opens it in Academic.
 ";
 
-/// What an Academic session adds to its prompt after the rich-output syntax.
-pub fn academic_prompt(in_project: bool) -> String {
-    if in_project {
-        format!("{ACADEMIC_PROMPT}\n{LIBRARY_GUIDE}{PROJECT_SESSION_HINT}")
-    } else {
-        format!("{ACADEMIC_PROMPT}\n{NO_PROJECT_HINT}")
+/// What an Academic session adds to its prompt after the rich-output syntax. It names only what this
+/// session has: `project` is the project folder, when the session is in one.
+pub fn academic_prompt(project: Option<&std::path::Path>) -> String {
+    match project {
+        Some(root) => {
+            let paper = if root.join("write/.git").is_dir() { PAPER_HINT } else { "" };
+            format!("{ACADEMIC_PROMPT}\n{LIBRARY_GUIDE}{PROJECT_SESSION_HINT}{paper}")
+        }
+        None => format!("{ACADEMIC_PROMPT}\n{NO_PROJECT_HINT}"),
     }
 }
 
@@ -248,11 +254,15 @@ mod tests {
 
     #[test]
     fn an_academic_session_is_told_what_it_can_reach() {
-        let inside = academic_prompt(true);
-        for tool in ["library_add", "library_attach", "library_merge", "research_check_quote", "copilot_ask", "write/"] {
+        let project = crate::test_support::TempDir::new("app-mode", "academic");
+        let inside = academic_prompt(Some(project.path()));
+        for tool in ["library_add", "library_attach", "library_merge", "research_check_quote", "copilot_ask"] {
             assert!(inside.contains(tool), "{tool}");
         }
-        let outside = academic_prompt(false);
+        assert!(!inside.contains("write/"), "no paper repository yet");
+        std::fs::create_dir_all(project.path().join("write/.git")).unwrap();
+        assert!(academic_prompt(Some(project.path())).contains("write/ is its own Git repository"));
+        let outside = academic_prompt(None);
         assert!(outside.contains("academic_projects") && outside.contains("Evidence"));
         assert!(!outside.contains("library_add") && !outside.contains("copilot_ask"), "not what it cannot call");
     }

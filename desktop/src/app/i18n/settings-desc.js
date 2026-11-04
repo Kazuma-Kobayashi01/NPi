@@ -49,6 +49,8 @@
     ["What is left of your subscriptions, and what this computer has used.", "各订阅的剩余额度，以及这台电脑的用量。", "各訂閱的剩餘額度，以及這台電腦的用量。", "各サブスクリプションの残量と、このコンピュータの使用量。"],
     ["How much of each limit is used, as each provider reports it.", "各额度的已用比例，数据来自各服务商。", "各額度的已用比例，資料來自各服務商。", "各上限の使用割合。各プロバイダの報告によります。"],
     ["Requests, cost, tokens and speed from this computer's history, by model and folder.", "这台电脑历史记录中的请求数、费用、Token 和速度，按模型和文件夹统计。", "這台電腦歷史記錄中的請求數、費用、Token 和速度，按模型和資料夾統計。", "このコンピュータの履歴から、リクエスト数、費用、トークン、速度をモデルとフォルダ別に表示します。"],
+    ["What the assistant remembers about you, in Chat, Code and Academic.", "助手在 Chat、Code、Academic 中记住的关于你的信息。", "助手在 Chat、Code、Academic 中記住的關於你的資訊。", "Chat・Code・Academic でアシスタントが覚えているあなたの情報。"],
+    ["The default model, favourites and vendors.", "默认模型、常用模型和服务商。", "預設模型、常用模型和服務商。", "既定のモデル、お気に入り、ベンダー。"],
     ["The assistant notes short facts about you as you talk, such as your field, work, interests and projects, in Chat, Code and Academic, and reads them when a conversation starts. They stay on this computer. Off, nothing is noted or read.", "助手会在聊天时记下关于你的简短信息，比如领域、工作、兴趣和项目，在 Chat、Code、Academic 中通用，并在会话开始时读取。内容只保存在这台电脑上。关闭后不再记录，也不再读取。", "助手會在聊天時記下關於你的簡短資訊，例如領域、工作、興趣和專案，在 Chat、Code、Academic 中通用，並在對話開始時讀取。內容只保存在這台電腦上。關閉後不再記錄，也不再讀取。", "アシスタントは会話の中で、分野、仕事、興味、プロジェクトなどの短いメモを残し、Chat・Code・Academic で共有して、会話の開始時に読み込みます。内容はこのコンピュータにのみ保存されます。オフにすると記録も読み込みもしません。"],
     ["`box` folds a turn's thinking and tool calls into one line you can open; `rows` shows each as its own row (the Detailed and Full steps).",
       "`box` 把一个回合的思考和工具调用折叠成可展开的一行；`rows` 则逐条显示（对应“详细”和“完整”两档）。", "`box` 把一個回合的思考和工具呼叫摺疊成可展開的一行；`rows` 則逐條顯示（對應「詳細」和「完整」兩檔）。", "`box` は 1 ターンの思考とツール呼び出しを開ける 1 行にまとめ、`rows` はそれぞれを別の行で表示します（「詳細」「最大」の段階）。"],

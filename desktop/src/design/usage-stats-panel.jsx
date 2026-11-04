@@ -88,7 +88,7 @@ function UsageStatsBody({ embedded = false }) {
   };
   const selected = STATS_RANGES.find(item => item.value === range);
   const current = result?.range === range ? result.res : null;
-  const overall = current?.ok && current.value.overall.totalRequests > 0 ? current.value.overall : null;
+  const overall = current?.ok && current.value?.overall?.totalRequests > 0 ? current.value.overall : null;
   const data = overall ? current.value : EMPTY;
 
   return (

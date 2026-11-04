@@ -244,8 +244,12 @@ fn start_session(
     } else {
         Arc::new(copilot::ResearchHub::new(space))
     };
+    // A registered MCP server whose program has moved would fail at every start.
+    if let (Some(project), Ok(exe)) = (&academic_project, std::env::current_exe()) {
+        librarian::mcp::refresh(project, &exe);
+    }
     let append_prompt = if app_mode == app_mode::AppMode::Academic {
-        format!("{}\n{}", app_mode::DESKTOP_RICH_OUTPUT_HINT, app_mode::academic_prompt(academic_project.is_some()))
+        format!("{}\n{}", app_mode::DESKTOP_RICH_OUTPUT_HINT, app_mode::academic_prompt(academic_project.as_deref()))
     } else {
         app_mode::DESKTOP_RICH_OUTPUT_HINT.to_string()
     };
@@ -257,14 +261,19 @@ fn start_session(
     });
     let (research, append_prompt) = match notes {
         Ok(store) if store.enabled() => {
-            let block = memory::tools::prompt(&store);
             let mode = match app_mode {
                 app_mode::AppMode::Chat => "chat",
                 app_mode::AppMode::Code => "code",
                 app_mode::AppMode::Academic => "academic",
             };
-            let host = memory::Store::default_path().map(|path| Arc::new(memory::tools::MemoryHost::new(Arc::clone(&research), path, mode)) as Arc<dyn copilot::HostTools>);
-            (host.unwrap_or(research), format!("{append_prompt}\n{block}"))
+            // The prompt speaks of the tools only when the tools are there.
+            match memory::Store::default_path() {
+                Ok(path) => {
+                    let block = memory::tools::prompt(&store);
+                    (Arc::new(memory::tools::MemoryHost::new(Arc::clone(&research), path, mode)) as Arc<dyn copilot::HostTools>, format!("{append_prompt}\n{block}"))
+                }
+                Err(_) => (research, append_prompt),
+            }
         }
         _ => (research, append_prompt),
     };

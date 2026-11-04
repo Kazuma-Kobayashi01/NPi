@@ -1,6 +1,6 @@
 # Memory
 
-Short notes about the user that the model keeps across conversations, in Chat, Code and Academic. On by default; Settings → Chat → Memory turns it off, and shows every note to edit or delete.
+Short notes about the user that the model keeps across conversations, in Chat, Code and Academic. On by default; Settings → Memory turns it off, and shows every note to edit or delete.
 
 ## Store (`src-tauri/src/memory/mod.rs`)
 
@@ -16,4 +16,4 @@ Chat's file in the chat folder is taken in once (`import_chat_memory`) and left 
 
 ## Checked
 
-Unit tests, and `real_model_takes_notes_and_uses_them` (ignored by default) with a real model: it noted two facts from a message while answering something else, used them in the next conversation, and noted nothing for "1+1". Not checked in the real app: a session started from a tab, and the Settings row with a real store (it ran against a fake bridge).
+Unit tests, and `real_model_takes_notes_and_uses_them` (ignored by default) with a real model: it noted two facts from a message while answering something else, used them in the next conversation, and noted nothing for "1+1". Not checked in the real app: a session started from a tab, and the Settings page with a real store (the real page ran against a fake bridge).

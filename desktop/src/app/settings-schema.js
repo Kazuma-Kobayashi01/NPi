@@ -102,7 +102,6 @@
       ] },
       { name: "Chat assistant", rows: [
         custom("chatInstructions", "Instructions for Chat", "Standing instructions the assistant keeps in mind in every chat in Chat mode: tone, language, format. Applies to chats started or restarted after saving.", "instructions system prompt tone style persona"),
-        custom("memory", "Memory", "The assistant notes short facts about you as you talk, such as your field, work, interests and projects, in Chat, Code and Academic, and reads them when a conversation starts. They stay on this computer. Off, nothing is noted or read.", "memory remember personal facts notes sqlite"),
       ] },
       { name: "Folding", rows: [
         tweak("foldWork", "seg", "Thinking and tools", "`box` folds a turn's thinking and tool calls into one line you can open; `rows` shows each as its own row (the Detailed and Full steps).", "group box summary one line claude",
@@ -165,6 +164,11 @@
       ] },
       { name: "Vendors", src: "omp login", rows: [
         custom("vendors", "Vendors", "Who the models come from. Signing in uses omp's own sign-in, so the terminal stays signed in too.", "vendor provider login sign in oauth anthropic openai google api"),
+      ] },
+    ] },
+    { id: "memory", icon: "layers", title: "Memory", blurb: "What the assistant remembers about you, in Chat, Code and Academic.", groups: [
+      { name: "Notes", src: "memory.db", rows: [
+        custom("memory", "Memory", "The assistant notes short facts about you as you talk, such as your field, work, interests and projects, in Chat, Code and Academic, and reads them when a conversation starts. They stay on this computer. Off, nothing is noted or read.", "memory remember personal facts notes sqlite"),
       ] },
     ] },
     { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", groups: [
@@ -252,11 +256,15 @@
     { id: "general", icon: "sparkle", title: "General", blurb: "Look, text, how tabs behave and the keyboard shortcuts.", from: ["appearance", "session", "shortcuts"] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript, workflow pipelines and the prompt box.", from: ["chat"] },
     { id: "conversations", icon: "clock", title: "Conversations", blurb: "Manage, search, preview, export and organize your conversation history across projects.", from: ["conversations"] },
-    { id: "models", icon: "bolt", title: "Models", blurb: "Default model, favourites, vendors and usage statistics.", from: ["models"] },
+    { id: "memory", icon: "layers", title: "Memory", blurb: "What the assistant remembers about you, in Chat, Code and Academic.", from: ["memory"] },
+    { id: "models", icon: "bolt", title: "Models", blurb: "The default model, favourites and vendors.", from: ["models"] },
+    { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", from: ["usage"] },
     { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
     { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Screen access, app control and macOS permissions.", from: ["computerUse"] },
     { id: "code", icon: "terminal", title: "Code", sep: true, blurb: "Side column and column widths, terminal, browser and the floating cards.", from: ["layout", "terminal", "browser", "rail"] },
   ];
+  /** Authored sections no destination gathers: never shown. A test keeps this empty. */
+  const UNPLACED = RAW_SECTIONS.filter(r => !MERGED.some(m => m.from.includes(r.id))).map(r => r.id);
   const SECTIONS = MERGED.map(m => ({
     id: m.id, icon: m.icon, title: m.title, sep: m.sep, blurb: m.blurb,
     groups: m.from.flatMap(id => RAW_SECTIONS.find(r => r.id === id).groups),
@@ -380,7 +388,7 @@
   }
 
   window.OMP_SETTINGS = Object.freeze({
-    SECTIONS, THEMES, ACCENTS, themeAccent,
+    SECTIONS, UNPLACED, THEMES, ACCENTS, themeAccent,
     rows, value, clamp, visible, isModified, resetRow, modifiedCount, resetRows, resetEdits, search,
   });
 })();

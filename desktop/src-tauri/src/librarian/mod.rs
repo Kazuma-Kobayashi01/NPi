@@ -29,6 +29,7 @@ pub mod tools;
 mod transfer;
 
 pub use agent::{check_citations, render_get, render_report, render_search, search};
+pub use attach::mark_missing;
 pub use format::{add_user_style, cite_draft, format, styles, Cited, Formatted, StyleInfo};
 
 pub use organize::Group;

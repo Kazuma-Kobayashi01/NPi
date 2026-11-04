@@ -57,7 +57,7 @@ Besides these, the Copilot now has the library tools of `librarian.md` (organisi
 
 ## Prompts (`app_mode.rs`)
 
-Academic keeps omp's own prompt, which says how its tools work, and appends to it (`academic_prompt`): what the work is and the evidence rules, in every Academic session; then, in a project, `LIBRARY_GUIDE` (which tool for which task) and what only that session can do (`copilot_ask`, `write/`); outside a project, how to reach projects read only. The Copilot's own prompt (`copilot_worker.rs`) carries the same guide. A test keeps the guide and the tool list equal both ways. The project's `RULES.md` comes on top of these and is the user's.
+Academic keeps omp's own prompt, which says how its tools work, and appends to it (`academic_prompt`): what the work is and the evidence rules, in every Academic session; then, in a project, `LIBRARY_GUIDE` (which tool for which task) and what only that session can do (`copilot_ask`, `write/`); outside a project, how to reach projects read only. The Copilot's own prompt (`copilot_worker.rs`) carries the same guide. A prompt names only what the session has: tests check every tool a prompt, tool description, MCP instruction or project template names against what is offered, the paper line appears once `write/.git` exists, and Memory's block comes only with its tools. The project's `RULES.md` comes on top of these and is the user's.
 
 ## The Academic library as tools for the main chat (`copilot::ResearchHub`)
 

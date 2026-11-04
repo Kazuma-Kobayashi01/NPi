@@ -1,7 +1,7 @@
 //! Memory: short notes about the user that the model keeps across conversations, in Chat, Code and
 //! Academic alike. One SQLite file on this computer, `~/.local/share/npi/memory.db`; nothing here
 //! leaves it except as part of a session's prompt. `tools.rs` is what the model sees. Settings →
-//! Chat shows every note and can edit, delete or turn the whole thing off (on by default).
+//! Memory shows every note and can edit, delete or turn the whole thing off (on by default).
 
 pub mod commands;
 pub mod tools;

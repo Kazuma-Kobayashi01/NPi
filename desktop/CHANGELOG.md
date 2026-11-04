@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Settings → Usage: what is left of each subscription as horizontal bars with their reset times, then the usage statistics, which no longer need their own window.
-- Memory: in Chat, Code and Academic the model keeps short notes about you (field, work, interests, projects, people) and reads them when a conversation starts. Stored in SQLite at `~/.local/share/npi/memory.db`; on by default, with every note editable in Settings → Chat. Chat's old `MEMORY.md` is taken in once.
+- Memory: in Chat, Code and Academic the model keeps short notes about you (field, work, interests, projects, people) and reads them when a conversation starts. Stored in SQLite at `~/.local/share/npi/memory.db`; on by default, with every note editable in Settings → Memory. Chat's old `MEMORY.md` is taken in once.
 - Agents can bind PDFs: `library_attach` (a path, a look under `papers/`, or every reference at once), and `library_add` binds a reference's PDF by itself.
 - Write: a paper's own Git repository in `write/` and a window that manages it. Markdown drafts, Compile (an agent writes the LaTeX of each changed file; `references.bib` comes from the library), Link (one complete `main.tex`), a pipeline progress bar, and opening in VS Code or Typora.
 - "Open in Reader" on a reference in the literature column.
@@ -46,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The model is no longer told to read a memory summary that does not exist, to work in a paper repository that has not been set up, or to use memory tools it does not have; files that moved are marked missing in library tool answers; `.mcp.json` follows the app when it moves.
 - Librarian: the group checkboxes no longer stretch and scatter their labels, and a long style name no longer pushes "Copy as…" out of its popover.
 - Host tools no longer stop for approval: omp asked about them in `write` mode, though the Copilot's pane has no prompt to answer.
 - Librarian: edits in the form are saved, not lost, when the selection moves, the window closes, or a file, group or suggestion changes the reference. Esc no longer closes the window, "Copy" works, abandoned "New reference" forms leave no empty row, a new reference that repeats one is refused, and publisher markup no longer shows in titles.

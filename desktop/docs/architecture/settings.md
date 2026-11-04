@@ -71,4 +71,6 @@ Settings (`design/settings/settings-window.jsx`), the Librarian, the git browser
 
 ## Usage section
 
+A section shows only if `MERGED` gathers it: an authored section with no destination is dropped silently, so `UNPLACED` lists any and a test keeps it empty.
+
 `rows-usage.jsx`: the subscription bars (`bridge.usageLimits`, the same `usage_limits` the side panel reads; `app/usage-limits.js` names and orders them, drops a repeated shared quota and any limit with no fraction) and `UsageStatsBody` from `usage-stats-panel.jsx`, which the usage window also shows.

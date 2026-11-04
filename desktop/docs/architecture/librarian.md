@@ -96,6 +96,8 @@ A "model reads page 1" option for PDFs without a DOI, batch-adding a folder of P
 
 `library_attach` binds a PDF to a reference: `citekey` and `path` (a project file, or an absolute path to a PDF, which is copied into `papers/`, the original untouched; a file already under `papers/` is recorded where it is), `citekey` alone (looked for under `papers/`), or `all: true` (every reference without one, 50 at most). `library_add` takes `pdf`, and without it binds a PDF it finds; a repeat still takes the PDF, and a PDF that fails leaves the reference added with a note. Finding: a file under `papers/` that no reference holds is the paper when page 1 shows its DOI or whole title (12 characters at least, ignoring case, spaces and punctuation), or its file name holds the title; a scan counts by file name only. Two candidates bind nothing and are reported.
 
+`library_get` and `library_search` mark a file that moved as missing, so the model does not try to read it. An Academic session re-registers the MCP servers if `.mcp.json` names this app at a path that is gone; an entry it did not write is left alone. Tools from a server named `npi-*` are not auto-approved: a name in a project's `.mcp.json` proves nothing about the program behind it.
+
 Any `.pdf` path an agent names can be copied in, the Copilot's included: only a file starting `%PDF`, and into this project only.
 
 ## Organising, and the Copilot as a tool (`librarian/organize_tools.rs`, `copilot_worker.rs`)

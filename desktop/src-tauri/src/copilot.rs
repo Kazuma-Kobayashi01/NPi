@@ -267,6 +267,18 @@ pub fn tool_definitions() -> Value {
     ])
 }
 
+/// Panics when a text names a `library_*`, `research_*` or `academic_*` tool outside `offered`: a tool
+/// the model is told about and does not have is a failed call.
+#[cfg(test)]
+pub fn assert_names_exist(texts: &[String], offered: &[String]) {
+    for text in texts {
+        for word in text.split(|c: char| !c.is_alphanumeric() && c != '_') {
+            let tool = ["library_", "research_", "academic_"].iter().any(|p| word.starts_with(p) && word.len() > p.len());
+            assert!(!tool || offered.iter().any(|n| n == word), "{word} is named but not offered, in: {text}");
+        }
+    }
+}
+
 /// What the stdout reader needs of a worker's host tools: the definitions
 /// sent with `set_host_tools` and the `host_tool_result` for one call.
 pub trait HostTools: Send + Sync {
@@ -518,7 +530,9 @@ impl CopilotHost {
     /// Every live reference of this project's library.
     fn library(&self) -> Result<(crate::librarian::Library, Vec<crate::librarian::Entry>), String> {
         let lib = crate::librarian::Library::open(&self.root)?;
-        let entries = lib.list()?;
+        let mut entries = lib.list()?;
+        // A file that moved is said to be gone, or the model would try to read it.
+        crate::librarian::mark_missing(&self.root, &mut entries);
         Ok((lib, entries))
     }
 
@@ -1155,6 +1169,47 @@ mod tests {
         // A library tool is answered here, a Copilot tool by the Copilot.
         assert!(text_of(&academic.call("1", "library_edit", &json!({ "citekey": "nope" }))).contains("library_search"));
         assert!(text_of(&academic.call("2", "research_search", &json!({ "query": "x" }))).len() > 0);
+    }
+
+    #[test]
+    fn a_session_is_told_only_of_tools_it_has() {
+        let (_d, h) = host("tool-names");
+        let check = |defs: Value, extra: &[String]| {
+            let list = defs.as_array().unwrap();
+            let offered: Vec<String> = list.iter().filter_map(|t| t["name"].as_str().map(str::to_string)).collect();
+            let mut texts: Vec<String> = list.iter().filter_map(|t| t["description"].as_str().map(str::to_string)).collect();
+            texts.extend_from_slice(extra);
+            assert_names_exist(&texts, &offered);
+        };
+        check(AcademicHost::new(h.root.clone()).definitions(), &[crate::copilot_worker::system_prompt(&h.root)]);
+        check(crate::copilot_worker::MainHost::new(h.root.clone(), None).definitions(), &[crate::app_mode::academic_prompt(Some(&h.root))]);
+    }
+
+    #[test]
+    fn the_project_templates_name_only_tools_that_exist() {
+        let (_d, h) = host("template-names");
+        let main = crate::copilot_worker::MainHost::new(h.root.clone(), None).definitions();
+        let mut offered: Vec<String> = main.as_array().unwrap().iter().filter_map(|t| t["name"].as_str().map(str::to_string)).collect();
+        offered.push("academic_library_search".to_string()); // the skill says it is for the main chat, outside a project
+        let texts = [
+            include_str!("../templates/academic/RULES.md").to_string(),
+            include_str!("../templates/academic/AGENTS.md").to_string(),
+            include_str!("../templates/academic/skills/librarian/SKILL.md").to_string(),
+            include_str!("../templates/academic/skills/literature-intake/SKILL.md").to_string(),
+            include_str!("../templates/academic/skills/paper-digest/SKILL.md").to_string(),
+            include_str!("../templates/academic/skills/data-processing/SKILL.md").to_string(),
+        ];
+        assert_names_exist(&texts, &offered);
+    }
+
+    #[test]
+    fn a_file_that_moved_is_reported_gone() {
+        let (_d, h) = host("missing-file");
+        let lib = crate::librarian::Library::open(&h.root).unwrap();
+        let e = lib.add(&json!({ "type": "book", "title": "Trees and forests" }), "manual").unwrap();
+        lib.attach(e.id, "papers/gone.pdf", &"a".repeat(64), "pdf").unwrap();
+        let got = text_of(&h.call("1", "library_get", &json!({ "citekey": e.citekey })));
+        assert!(got.contains("papers/gone.pdf (missing"), "{got}");
     }
 
     #[test]
