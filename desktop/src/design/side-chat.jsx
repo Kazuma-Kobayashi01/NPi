@@ -15,6 +15,7 @@
     { label: "Summarize my notes", text: "Summarize the notes in notes/ and list what is still missing." },
     { label: "Search the project", text: "Search the project for " },
     { label: "Compare papers", text: "Compare the papers on " },
+    { label: "Organize the library", text: "Look at the library overview, fill in the missing metadata, tag and group the references, and list the duplicates you find without merging them." },
   ];
   const BOX_MAX = 160;
 

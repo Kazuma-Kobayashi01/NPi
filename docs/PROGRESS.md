@@ -7,7 +7,7 @@
 ## 0. 先看这三件事
 
 1. **已提交并推送(2026-11-05)。** Desktop 分支 `3.0.0.121` 已提交(`bb1d949` 功能、`5f36015` 文档、`36053d3` 版本号)并推送到 `origin/3.0.0.121`;`3.0.0.101`(`bb79b6e`)同时推送。`3.0.0.102`、`3.0.0.103` 与 101 指向同一个提交,没有推送(没有独立内容)。omp 仓库 `kernel.2.0.10-universal` 提交 `52a22ce3e0` 并推送到 `NPi-Kernel`。
-2. **`omp` 仓库干净;Desktop 的 3.0.0.122–126 改动已在分支 `3.0.0.126` 提交,未推送。** 之后的改动从 `3.0.0.121` 继续,版本号要升时新建分支。
+2. **`omp` 仓库干净;Desktop 的 3.0.0.122–130 改动已提交在本地分支(最新 `3.0.0.130`),未推送。** 之后的改动从 `3.0.0.121` 继续,版本号要升时新建分支。
 3. **平台范围:只做 macOS**(2026-11-04 决定);**Windows 适配交给别人**(2026-11-05)。`PLAN.md` 里"必须兼容 Windows"的要求在本仓库作废(见 §6),相关内容留作交接参考。
 
 ## 1. 版本与产物
@@ -21,7 +21,11 @@
 | 3.0.0.103 | 与 101 同一提交(内容在 121 里) | `3.0.0.103/` | **稳定证书** | 加左图右文、图片 429、快速询问玻璃、新内核 |
 | 3.0.0.121 | 已提交并推送(`bb1d949`) | `3.0.0.121/` | **稳定证书** | 加 Academic 阅读器、摘要与对照表、数值核对、OCR |
 | 3.0.0.122–125 | 内容并入 126(中间版本,dmg 已有) | `3.0.0.12x/` | **稳定证书** | PDF 阅读器、OCR 工具、内建文献库工具、Copy as…、Copy 修复 |
-| 3.0.0.126 | 已提交(未推送,当前) | `3.0.0.126/` | **稳定证书** | Librarian 完善:多选与批量、合并、对齐面板、导入面板与新格式、OpenAlex、拖拽入组、找回附件;SHA-256 `74780a8a…8cf2`(未在真机实测) |
+| 3.0.0.126 | 已提交(`4ca309d`,未推送) | `3.0.0.126/` | **稳定证书** | Librarian 完善:多选与批量、合并、对齐面板、导入面板与新格式、OpenAlex、拖拽入组、找回附件;SHA-256 `74780a8a…8cf2`(未在真机实测) |
+| 3.0.0.127 | 内容并入 130 | `3.0.0.127/` | **稳定证书** | Copilot 整理文献、`copilot_ask` 与 `npi-copilot` MCP、宿主工具审批自动应答 |
+| 3.0.0.128 | 内容并入 130 | `3.0.0.128/` | **稳定证书** | Write 流水线、文献栏 Open in Reader |
+| 3.0.0.129 | 内容并入 130 | `3.0.0.129/` | **稳定证书** | Agent 绑定 PDF、Academic 提示词与工具整理、Librarian UI 修复 |
+| 3.0.0.130 | 已提交(未推送,当前) | `3.0.0.130/` | **稳定证书** | Memory、设置里的 Usage 页;SHA-256 `80660874…8713`(未在真机实测) |
 
 打包流程(每次都这样,别改顺序):
 
@@ -94,7 +98,13 @@
 - 阅读器改为看 PDF 原页(PDF.js 4.10.38,Apache-2.0,已入库 `src/vendor/pdfjs/`):文字层可选、缩放、页码框;搜索命中与锚点跳转到页并标出引文;"文字"标签保留。
 - OCR 工具:`research_ocr`(Copilot)、`academic_ocr`(Academic 主标签),每次最多 6 页;宿主工具调用改在独立线程执行。
 - Academic 顶栏默认显示"文献库""阅读器"和"文献栏"开关三个按钮;最右侧新增文献栏(搜索、分组、在提示词里引用、在文献库中打开),默认显示。
-- Librarian 完善批(分支 `3.0.0.125`,未提交):切换/关闭/附件/建议都先保存表单不丢改动;多选与批量(分组、标签、对齐、回收、两条合并);内置筛选(缺元数据、无 PDF、可能重复、待处理建议);可改 citekey 与复制 `[@key]`;元数据对齐面板;导入面板支持粘贴 DOI/arXiv 与 PubMed、Web of Science、EndNote XML(按内容识别);OpenAlex 兜底 Crossref;多选/拖入 PDF 排队;找回缺失附件;PDF 入库后自动索引。真实应用内未验证:原生拖放、文件对话框、带未保存内容关窗;OpenAlex 与新格式未用真实服务/真实导出验证。
+- Librarian 完善批:切换/关闭/附件/建议都先保存表单不丢改动;多选与批量(分组、标签、对齐、回收、两条合并);内置筛选(缺元数据、无 PDF、可能重复、待处理建议);可改 citekey 与复制 `[@key]`;元数据对齐面板;导入面板支持粘贴 DOI/arXiv 与 PubMed、Web of Science、EndNote XML(按内容识别);OpenAlex 兜底 Crossref;多选/拖入 PDF 排队;找回缺失附件;PDF 入库后自动索引。真实应用内未验证:原生拖放、文件对话框、带未保存内容关窗;OpenAlex 与新格式未用真实服务/真实导出验证。
+- 设置新增 Usage 页:订阅额度横向统计条(`usage_limits`,数据来自 `omp usage --json`)加原用量统计;统计面板拆成 `UsageStatsBody` 共用。额度条用假数据看过,统计嵌入设置页未在真实应用看过。
+- Memory:Chat、Code、Academic 通用的记忆(`~/.local/share/npi/memory.db`),模型在对话中自动记一句,会话开始时读取;设置里默认开启,可编辑、删除。已用真实模型验证记录与使用;标签页实际启动未验证。
+- Academic 提示词整理:Academic 会话原来只有 Code 的提示词,现在加了专属提示词(研究工作与证据规则)和统一的工具指南 `LIBRARY_GUIDE`;Copilot 提示词重写,测试保证指南与工具表一致;工具描述精简。
+- Agent 绑定 PDF:`library_attach`(MCP 与内建工具都有),`library_add` 入库时自动绑定(可给 `pdf`,否则按 DOI/标题在 `papers/` 里匹配,多个候选时不绑)。
+- 论文写作流水线:`write/` 独立 Git 仓库,Markdown 初稿 → Compile(Agent 逐文件转 LaTeX,`references.bib` 由文献库生成)→ Link(填模板输出 `output/main.tex`);Write 管理窗口带流水线进度条,可一键打开 VS Code/Typora。已用真实模型跑通 Compile 和 Link;窗口只在假后端下看过。文献栏加了 Open in Reader。详见 `desktop/docs/architecture/writing.md`。
+- Copilot 能力(提前自 3.1):Copilot 可整理文献(`library_overview/group/tag/merge` 加查询、对齐、添加、编辑);`copilot_ask` 让 Academic 会话把长任务交给 Copilot,同时有 MCP 服务 `npi-copilot`(`--npi-mcp-copilot`,"连接 Agent"一并登记)。修复:omp 会对宿主工具弹审批,现由 reader 自动应答。已用真实模型跑通 `copilot_ask`(含 `set_host_tools` 握手);应用内调用和 omp 经 `.mcp.json` 连接未验证。
 - Librarian MCP 服务(`--npi-mcp-librarian`,"连接 Agent"按钮登记到项目 `.mcp.json`):含联网查 Crossref 的 `library_lookup` 与对齐元数据的 `library_align`(默认只预览)。已用手写 MCP 客户端对真实 Crossref 验证;omp 实际连接未验证。
 - Academic 会话内建文献库工具(`copilot::AcademicHost`:宿主工具,无需连接 MCP、无审批、不用传 project):Copilot 全套 + `library_lookup/align/add/edit`;提示词补充调用顺序与示例,错误信息写成能指导下一步;不提供删除,每次改动先备份到 `.npi-academic/agent-edits.jsonl`。MCP 服务提供同样四个工具(终端 `npi` 要免审批需配 `tools.approval`,见 `librarian.md`)。
 - **不换 Chromium 底座(2026-11-05 决定)**:调研过 `tauri-runtime-cef`(官方 3.0.0-alpha.6 要升 Tauri 3 alpha;第三方 SableClient 版兼容 Tauri 2.12 但只在 Linux 验证过,macOS 未测、打包要自己写),代价大于收益,放弃。Reader 看 PDF 已由 PDF.js 解决;Browser 面板仍用随包的 `chrome-headless-shell`。
@@ -161,7 +171,7 @@
 
 ### 推迟到 3.1
 
-`research_propose_ops`(Copilot 提结构修改,授权绑定 `planId + baseRevision`)、按论文逐篇授权、从主 Chat 调用 Copilot、Docling PoC。
+`research_propose_ops`(Copilot 提结构修改,授权绑定 `planId + baseRevision`)、按论文逐篇授权、Docling PoC。
 
 ## 5. 已知风险
 

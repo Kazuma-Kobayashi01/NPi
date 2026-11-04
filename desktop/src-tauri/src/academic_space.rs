@@ -73,6 +73,7 @@ impl AcademicSpace {
         for dir in DIRS {
             std::fs::create_dir_all(project.join(dir)).map_err(|e| format!("{dir}: {e}"))?;
         }
+        crate::writing::scaffold(project)?;
         for (rel, content) in FILES {
             let path = project.join(rel);
             if path.exists() {

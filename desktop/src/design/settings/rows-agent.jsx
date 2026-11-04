@@ -62,17 +62,6 @@ function _SRA_GoalContinue({ row, ctx, query }) {
   );
 }
 
-function _SRA_Usage({ row, ctx, query }) {
-  const { SettingsRow: Row, SettingsButton: Button, Icon } = window;
-  return (
-    <Row label={row.label} query={query} className="st-linkrow" desc={row.desc}>
-      <Button accent onClick={ctx.openStats}>
-        Open <Icon name="external" size={11} />
-      </Button>
-    </Row>
-  );
-}
-
 function _SRA_SubagentModel({ row, ctx, query, modified, onReset }) {
   const { SettingsRow: Row, SettingsSeg: Seg, OMP_MODELS: M } = window;
   const { t, setTweak, bridge, profileId } = ctx;
@@ -204,7 +193,6 @@ function _SRA_SidechatModel({ row, ctx, query, modified, onReset }) {
 }
 
 Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
-  usage: _SRA_Usage,
   startupProfile: _SRA_StartupProfile,
   goalContinue: _SRA_GoalContinue,
   subagentModel: _SRA_SubagentModel,

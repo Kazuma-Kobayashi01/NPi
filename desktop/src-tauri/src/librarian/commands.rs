@@ -895,7 +895,6 @@ pub async fn research_search(space: Space<'_>, project: String, query: String, l
 mod tests {
     use super::*;
     use crate::academic_space::AcademicSpace;
-    use std::path::Path;
 
     fn space(name: &str) -> (crate::test_support::TempDir, AcademicSpace) {
         let d = crate::test_support::TempDir::new("librarian", name);

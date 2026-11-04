@@ -13,6 +13,7 @@ This folder is one NPi Academic research project. Work only inside it.
 | `data/raw/` | Source data exactly as received | read only |
 | `data/processed/` | Cleaned or computed data, with the script or steps that made it | create, edit |
 | `drafts/` | The user's own writing | edit only when asked |
+| `write/` | The paper: a Git repository with Markdown drafts, compiled LaTeX and the linked result | edit `markdown/` and `template.tex` when asked; `latex/` and `output/` are generated |
 | `.npi-academic/` | Project metadata managed by the app | do not touch |
 
 ## How to work

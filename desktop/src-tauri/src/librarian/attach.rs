@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 const INBOX: &str = ".npi-academic/inbox";
-const PAPERS: &str = "papers";
+pub(super) const PAPERS: &str = "papers";
 /// A staged PDF nobody confirmed is removed after this long.
 const INBOX_KEEP: Duration = Duration::from_secs(7 * 24 * 3600);
 /// Largest PDF attached.
@@ -117,6 +117,15 @@ pub fn stage(project: &Path, source: &Path) -> Result<Staged, String> {
         .unwrap_or("paper")
         .to_string();
     Ok(Staged { hash, name })
+}
+
+/// The content hash of `path`, as attachments record it.
+pub fn file_hash(path: &Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("could not read the file: {e}"))?;
+    if !bytes.starts_with(b"%PDF") {
+        return Err("that file is not a PDF".into());
+    }
+    Ok(hex(&Sha256::digest(&bytes)))
 }
 
 /// The file under `papers/` with content `hash`, as a project-relative path: an attachment renamed by hand.

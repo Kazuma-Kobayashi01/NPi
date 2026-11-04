@@ -1,7 +1,6 @@
-//! Chat mode's two host tools: `remember` (one line into the user's memory file)
-//! and the hand-off to Code or Academic.
+//! Chat mode's host tool: the hand-off to Code or Academic. (Memory comes from `memory/tools.rs`.)
 //!
-//! Chat keeps only tools that change nothing (web, reading, UI, its own memory file). When the model
+//! Chat keeps only tools that change nothing (web, reading, UI, memory). When the model
 //! judges the request needs real work (files, commands, code, a research
 //! project) it calls `handoff_to_work` with a work prompt it wrote. Nothing
 //! starts: Rust emits `chat://handoff` and the page shows a card above the
@@ -9,7 +8,7 @@
 //! draft, unsent (`src/app/handoff.js`).
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 use crate::copilot::{frame, HostTools};
 
@@ -52,17 +51,6 @@ fn parse(args: &Value) -> Result<(&'static str, String, String), String> {
 impl HostTools for ChatHandoff {
     fn definitions(&self) -> Value {
         json!([{
-            "name": "remember",
-            "label": "Remember",
-            "description": "Save one short fact about the user to the memory that persists across chats. Use it when the user asks you to remember something, or states a lasting preference worth keeping.",
-            "parameters": {
-                "type": "object",
-                "properties": { "fact": { "type": "string", "description": "One short fact, in the user's language." } },
-                "required": ["fact"],
-                "additionalProperties": false
-            },
-            "loadMode": "essential"
-        }, {
             "name": "handoff_to_work",
             "label": "Offer hand-off",
             "description": "Offer the user a one-click hand-off of this conversation to a work mode, where the actual work (editing files, running commands, writing code, managing a research project) is done. Chat itself cannot do that work. Call it once, only when the request clearly needs such work and you have gathered what the work needs; target \"code\" for software and file work in a project folder, \"academic\" for literature and research-project work. Write `prompt` as a complete, self-contained work brief for the next agent, in the user's language: goal, relevant facts and decisions from this chat, constraints and preferences, expected deliverable. Nothing starts until the user clicks the card; the brief is put in the new tab's prompt box unsent. After calling, tell the user in one short sentence that the hand-off is ready, and do not start the work yourself.",
@@ -92,13 +80,6 @@ impl HostTools for ChatHandoff {
                 }
             }
             ("handoff_to_work", Err(e)) => Err(e),
-            ("remember", _) => {
-                let fact = args.get("fact").and_then(Value::as_str).unwrap_or("");
-                self.app
-                    .state::<crate::chat_space::ChatSpace>()
-                    .remember(fact)
-                    .map(|()| "Remembered.".to_string())
-            }
             (other, _) => Err(format!("unknown tool: {other}")),
         };
         frame(id, outcome)

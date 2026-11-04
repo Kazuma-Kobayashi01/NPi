@@ -154,6 +154,8 @@
 .stats-body {
   padding: 14px;
 }
+.stats-toolbar { display: flex; align-items: center; gap: 10px; }
+.stats-window { margin-left: auto; color: var(--fg-3); font-size: var(--d-text-xs); }
 .stats-ranges {
   width: fit-content;
   margin-bottom: 14px;

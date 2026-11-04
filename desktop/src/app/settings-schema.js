@@ -102,7 +102,7 @@
       ] },
       { name: "Chat assistant", rows: [
         custom("chatInstructions", "Instructions for Chat", "Standing instructions the assistant keeps in mind in every chat in Chat mode: tone, language, format. Applies to chats started or restarted after saving.", "instructions system prompt tone style persona"),
-        custom("chatMemory", "Memory", "What the assistant remembers about you across chats. It reads this at the start of each chat and can add to it when you ask it to remember something.", "memory remember notes"),
+        custom("memory", "Memory", "The assistant notes short facts about you as you talk, such as your field, work, interests and projects, in Chat, Code and Academic, and reads them when a conversation starts. They stay on this computer. Off, nothing is noted or read.", "memory remember personal facts notes sqlite"),
       ] },
       { name: "Folding", rows: [
         tweak("foldWork", "seg", "Thinking and tools", "`box` folds a turn's thinking and tool calls into one line you can open; `rows` shows each as its own row (the Detailed and Full steps).", "group box summary one line claude",
@@ -166,8 +166,13 @@
       { name: "Vendors", src: "omp login", rows: [
         custom("vendors", "Vendors", "Who the models come from. Signing in uses omp's own sign-in, so the terminal stays signed in too.", "vendor provider login sign in oauth anthropic openai google api"),
       ] },
-      { name: "Telemetry & Usage", rows: [
-        custom("usage", "Usage statistics", "Requests, cost, tokens and speed over the last 24 hours, by model and folder.", "cost tokens stats usage spend"),
+    ] },
+    { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", groups: [
+      { name: "Subscription", src: "omp usage", rows: [
+        custom("usageLimits", "Subscription limits", "How much of each limit is used, as each provider reports it.", "subscription quota limit remaining plan claude chatgpt codex antigravity"),
+      ] },
+      { name: "Statistics", src: "omp stats", rows: [
+        custom("usageStats", "Usage statistics", "Requests, cost, tokens and speed from this computer's history, by model and folder.", "cost tokens stats usage spend"),
       ] },
     ] },
     { id: "terminal", icon: "terminal", title: "Terminal", blurb: "The shell panel under the chat. Each tab has its own shell, started in the tab's project folder.", groups: [

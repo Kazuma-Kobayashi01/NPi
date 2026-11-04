@@ -41,7 +41,7 @@ use inflight::{InFlight, Snapshot};
 use inner::BridgeInner;
 use journal::{EventJournal, Replay};
 use reader::{spawn_stderr_reader, spawn_stdout_reader};
-use spawn::spawn_omp;
+pub(crate) use spawn::spawn_omp;
 
 /// Ring capacity for each session's event journal: headroom for the gap
 /// between a tab losing its live listener and regaining it (background tab

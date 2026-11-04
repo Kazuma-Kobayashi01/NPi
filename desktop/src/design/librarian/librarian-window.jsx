@@ -57,6 +57,12 @@ function LibrarianWindow({ bridge, project, onClose }) {
     setLoaded(true);
   }, [call]);
   React.useEffect(() => { reload(); }, [reload]);
+  // An agent may have changed the library meanwhile. An open form with edits waits, or it would be replaced.
+  React.useEffect(() => {
+    const again = () => { if (!detail.current?.dirty()) reload(); };
+    window.addEventListener("focus", again);
+    return () => window.removeEventListener("focus", again);
+  }, [reload]);
   React.useEffect(() => { call("styles").then(r => { if (r.ok) setStyles(r.value); }); }, [call]);
   const pickStyle = id => { setStyleId(id); try { localStorage.setItem(styleKey, id); } catch {} };
   const addStyle = async () => {
@@ -210,7 +216,7 @@ function LibrarianWindow({ bridge, project, onClose }) {
   const connectAgents = async () => {
     const res = await call("mcp_register");
     if (!res.ok) return say(res.error);
-    say(T("Registered npi-librarian in {path}. Agents started in this project folder (npi in a terminal, for one) can now search the library and look metadata up on Crossref.", { path: res.value.path }));
+    say(T("Registered npi-librarian and npi-copilot in {path}. Agents started in this project folder (npi in a terminal, for one) can now use the library and hand work to the Copilot.", { path: res.value.path }));
   };
   const importPdf = async () => {
     const res = await call("pdf_pick");

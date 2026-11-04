@@ -11,6 +11,7 @@ function PanelRoot() {
   window.useThemeEffect(t);
   if (kind === "librarian") return <LibrarianWindow bridge={window.OMP_BRIDGE} project={project} onClose={close} />;
   if (kind === "reader") return <ReaderWindow bridge={window.OMP_BRIDGE} project={project} anchor={anchor} path={path} onClose={close} />;
+  if (kind === "write") return <WriteWindow bridge={window.OMP_BRIDGE} project={project} profile={profile} onClose={close} />;
   if (kind === "stats") return <UsageStatsPanel onClose={close} profileLabel={profile ?? "default"} />;
   return null;
 }

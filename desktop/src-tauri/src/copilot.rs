@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
 
 /// Folders the Copilot may read, relative to the project.
-const READ_DIRS: &[&str] = &["papers", "notes", "digests", "artifacts", "data", "drafts"];
+const READ_DIRS: &[&str] = &["papers", "notes", "digests", "artifacts", "data", "drafts", "write"];
 /// Folders it may write, by the `kind` of what it saves.
 const WRITE_DIRS: &[(&str, &str)] = &[
     ("note", "notes"),
@@ -44,7 +44,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_search",
             "label": "Search project",
-            "description": "Search the text files of this research project (notes, digests, artifacts, processed data, text papers and the extracted text of PDFs) for passages containing the query terms. Returns file, line and a snippet for each hit; once the project is indexed, hits show the page (file p.N) and an anchor id that research_check_quote and citations can use. Chinese and English both work. A scanned PDF has no text and is reported, not searched.",
+            "description": "Search this project (notes, digests, artifacts, processed data, the text of PDFs) for the query terms, Chinese or English. Returns file, line and a snippet per hit; once a paper is indexed, also its page and an anchor id that citations and research_check_quote use. A scanned PDF has no text and is reported, not searched.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -91,7 +91,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_check_quote",
             "label": "Check quote",
-            "description": "Deterministically check that a quotation is on a page of a paper in this project, using the indexed text (line breaks, hyphenation and case are ignored). Give the project-relative path, the 1-based page and the exact words. Answers matched (with the anchor id), not found, or stale (the file changed since it was indexed). It does not judge whether the quote supports a claim.",
+            "description": "Check that a quotation is on a page of a paper, ignoring line breaks, hyphenation and case. Give the project-relative path, the 1-based page and the exact words. Answers matched (with an anchor id), not found, or stale (the file changed since indexing). It does not judge whether the quote supports a claim.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -107,7 +107,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_summarize",
             "label": "Save summary",
-            "description": "Save your summary of a paper (level \"paper\", L2) or of one of its sections (level \"section\", L1, naming the heading exactly as research_read shows it). Search or read the paper first so it is indexed. Give `facts`: short claims each with the exact `quote` and 1-based `page` it rests on; a quote is checked against the page and stored as matched or unverified, a fact without a quote is stored as your reading. Say in `coverage` what you did not read (tables, failed pages). A summary never replaces the paper: numbers, formulas and direct quotes go back to it, and a changed file marks the summary stale.",
+            "description": "Save your summary of a paper (level \"paper\") or one section (level \"section\", the heading exactly as research_read shows it) for the user\'s reader. Search or read the paper first so it is indexed. `facts` are short claims, each with the exact `quote` and 1-based `page`: a quote is checked and stored as matched or unverified, a fact without one as your reading. Say in `coverage` what you did not read.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -138,7 +138,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_compare",
             "label": "Save comparison table",
-            "description": "Save a comparison of papers as a table the user can open in the reader. `columns` are {key, label}; each row is {label, cells} where cells maps a column key to {value, path, page, quote, kind}. Give path, page and the exact quote for every value taken from a paper: it is checked and shown as matched or unverified; a cell without them is shown as your reading. Use kind \"not_reported\" when the paper does not say, and \"not_comparable\" when the papers measure different things: never fill such a cell with a plausible value.",
+            "description": "Save a comparison of papers as a table for the user\'s reader. `columns` are {key, label}; each row is {label, cells}, with cells mapping a column key to {value, path, page, quote, kind}. A value from a paper needs path, page and exact quote and is checked; without them it shows as your reading. Use kind \"not_reported\" when the paper does not say and \"not_comparable\" when the papers measure different things: never a plausible value.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -155,7 +155,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_check_number",
             "label": "Check number",
-            "description": "Deterministically check that a number is on a page of a paper (or in a text file), as the paper spells it: thousand separators, full-width digits, the minus sign and a percent sign are ignored, and the number must stand alone. Optionally require a `unit` right after it and a `context` word in the same passage. Answers matched with the passages, or not found. It does not judge what the number means.",
+            "description": "Check that a number is on a page of a paper or in a text file, as a number standing alone: thousand separators, full-width digits, the minus sign and a percent sign are ignored. Optionally require a `unit` right after it and a `context` word in the same passage. Answers matched with the passages, or not found. It does not judge what the number means.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -191,7 +191,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "research_ocr",
             "label": "OCR pages",
-            "description": "Read pages of a scanned PDF (or pages without a text layer) with OCR on this computer and return the recognised text per page. Use it when research_read or research_search reports that a PDF has no text. At most 6 pages per call (give `pages`, 1-based; default page 1); call again for more. The text is a recognition and may contain mistakes, especially numbers, formulas and non-Latin scripts: say so, and do not quote it as the paper's own words without checking the page. It does not change the project; research_search indexes a scanned PDF (with OCR) by itself, after which it can be searched and cited.",
+            "description": "Read pages of a scanned PDF with OCR on this computer, for when research_read or research_search reports no text. At most 6 pages per call (`pages`, 1-based; default page 1). The text is a recognition and may hold mistakes, above all in numbers, formulas and non-Latin scripts: say so, and check the page before quoting it. research_search indexes scanned PDFs by itself.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -236,7 +236,7 @@ pub fn tool_definitions() -> Value {
         {
             "name": "library_check",
             "label": "Check citations",
-            "description": "Check the citations of a draft against the library, deterministically: [@citekey] markers, Author (Year) and (Author, Year) mentions, and DOIs. Reports which match a reference, which have a different year, and which are not in the library (possibly invented). Give the draft text, or a project-relative path such as drafts/intro.md. Numbered citations like [1] cannot be checked.",
+            "description": "Check a draft\'s citations against the library: [@citekey] markers, Author (Year) and (Author, Year) mentions, and DOIs. Reports which match, which differ in year, and which are not in the library (possibly invented). Give the text, or a project path such as write/markdown/01-intro.md. Numbered citations like [1] cannot be checked.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -283,8 +283,8 @@ impl HostTools for CopilotHost {
     }
 }
 
-/// The built-in tools of an Academic session whose folder is an Academic project: everything the
-/// Copilot has for that project plus the library tools that reach Crossref or change the library
+/// The tools of the Copilot and of an Academic session whose folder is an Academic project: the ones
+/// for reading and checking, plus the library tools that reach Crossref or organise the library
 /// (`librarian/tools.rs`), under plain names and bound to the project, so the model passes no project
 /// and the user answers no approval prompt. Nothing here deletes anything.
 pub struct AcademicHost {
@@ -818,8 +818,8 @@ impl CopilotHost {
                 let Ok(kind) = entry.file_type() else {
                     continue;
                 };
-                // A symlink is skipped, never followed.
-                if kind.is_symlink() {
+                // A symlink is skipped, never followed; nothing hidden is read (write/.git).
+                if kind.is_symlink() || entry.file_name().to_string_lossy().starts_with('.') {
                     continue;
                 }
                 let path = entry.path();
@@ -1151,6 +1151,7 @@ mod tests {
             assert!(names.iter().any(|x| x == n), "{n}");
         }
         assert!(!names.iter().any(|n| n.contains("delete") || n.contains("remove")), "nothing deletes");
+        assert!(names.iter().any(|n| n == "library_group"), "the organising tools");
         // A library tool is answered here, a Copilot tool by the Copilot.
         assert!(text_of(&academic.call("1", "library_edit", &json!({ "citekey": "nope" }))).contains("library_search"));
         assert!(text_of(&academic.call("2", "research_search", &json!({ "query": "x" }))).len() > 0);
@@ -1296,6 +1297,17 @@ mod tests {
             text_of(&h.call("1", "research_search", &json!({ "query": "secretword" })))
                 .contains("No passage")
         );
+    }
+
+    #[test]
+    fn the_paper_is_read_but_not_its_git_history() {
+        let (_d, h) = host("write-read");
+        std::fs::create_dir_all(h.root.join("write/.git/refs")).unwrap();
+        std::fs::create_dir_all(h.root.join("write/markdown")).unwrap();
+        std::fs::write(h.root.join("write/.git/refs/notes.md"), "hidden needle").unwrap();
+        std::fs::write(h.root.join("write/markdown/01-intro.md"), "visible needle").unwrap();
+        let found = text_of(&h.call("1", "research_search", &json!({ "query": "needle" })));
+        assert!(found.contains("01-intro.md") && !found.contains(".git"), "{found}");
     }
 
     #[test]

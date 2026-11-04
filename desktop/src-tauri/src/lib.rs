@@ -13,6 +13,7 @@ mod approval;
 mod app_mode;
 mod chat_space;
 mod copilot;
+mod copilot_worker;
 pub mod librarian;
 mod chat_image;
 mod mcp_skills;
@@ -39,6 +40,7 @@ mod goal_config;
 mod model_config;
 mod json_store;
 mod keybindings;
+mod memory;
 mod model_usage;
 mod navigation_guard;
 mod chat_handoff;
@@ -67,6 +69,7 @@ mod text;
 mod updater;
 mod widgets;
 mod workspace;
+mod writing;
 
 use agent::AgentBridge;
 use approval::RuleBook;
@@ -237,14 +240,33 @@ fn start_session(
     let research: Arc<dyn copilot::HostTools> = if app_mode == app_mode::AppMode::Chat {
         Arc::new(chat_handoff::ChatHandoff::new(app.clone(), args.session_id.clone()))
     } else if let Some(project) = &academic_project {
-        Arc::new(copilot::AcademicHost::new(project.clone()))
+        Arc::new(copilot_worker::MainHost::new(project.clone(), profile))
     } else {
         Arc::new(copilot::ResearchHub::new(space))
     };
-    let append_prompt = if academic_project.is_some() {
-        format!("{}\n{}", app_mode::DESKTOP_RICH_OUTPUT_HINT, app_mode::ACADEMIC_LIBRARY_HINT)
+    let append_prompt = if app_mode == app_mode::AppMode::Academic {
+        format!("{}\n{}", app_mode::DESKTOP_RICH_OUTPUT_HINT, app_mode::academic_prompt(academic_project.is_some()))
     } else {
         app_mode::DESKTOP_RICH_OUTPUT_HINT.to_string()
+    };
+    // Notes about the user, in every mode, unless they turned Memory off. A failure here costs only the
+    // notes: the session starts without them.
+    let notes = memory::Store::open_default().and_then(|store| {
+        store.import_chat_memory(&app.state::<chat_space::ChatSpace>().memory())?;
+        Ok(store)
+    });
+    let (research, append_prompt) = match notes {
+        Ok(store) if store.enabled() => {
+            let block = memory::tools::prompt(&store);
+            let mode = match app_mode {
+                app_mode::AppMode::Chat => "chat",
+                app_mode::AppMode::Code => "code",
+                app_mode::AppMode::Academic => "academic",
+            };
+            let host = memory::Store::default_path().map(|path| Arc::new(memory::tools::MemoryHost::new(Arc::clone(&research), path, mode)) as Arc<dyn copilot::HostTools>);
+            (host.unwrap_or(research), format!("{append_prompt}\n{block}"))
+        }
+        _ => (research, append_prompt),
     };
     bridge.start_session_with_host(
         // Owned by the bridge's map; the widget hook below still needs the id.
@@ -280,15 +302,7 @@ fn isolated_workspace(app: &AppHandle, name: &str) -> Result<(PathBuf, PathBuf),
         .app_cache_dir()
         .map_err(|e| format!("{name} cache directory: {e}"))?
         .join(name);
-    private_fs::private_dirs(true)
-        .create(&cwd)
-        .map_err(|e| format!("{name} workspace: {e}"))?;
-    let config = cwd.join("runtime.yml");
-    std::fs::write(
-        &config,
-        "includeWorkspaceTree: false\nworkspace:\n  additionalDirectories: []\nplan:\n  enabled: false\n  defaultOnStartup: false\ngit:\n  enabled: false\n",
-    )
-    .map_err(|e| format!("{name} policy: {e}"))?;
+    let config = copilot_worker::write_policy(&cwd)?;
     Ok((cwd, config))
 }
 
@@ -340,21 +354,8 @@ fn sidechat_start(
     )
 }
 
-const COPILOT_PROMPT: &str = "\
-You are NPi Academic Copilot, a local literature assistant bound to one research project. \
-Your only tools are research_search, research_read and research_save, which see this project's \
-files, research_check_quote, research_check_number and research_check_table, which check quotes, numbers and table cells against the indexed pages, research_summarize, research_summaries and research_compare, which keep your summaries and comparison tables for the user's reader, research_ocr, which reads pages of a scanned PDF with OCR (the text may contain mistakes), and library_search, library_get, library_check and library_suggest, which see its reference library, and nothing else. You have no network, shell or other file access; never claim otherwise. \
-Answer only from the project's files: cite the file and line for every claim taken from them, \
-quote exactly, and say plainly when the files do not contain the answer. A PDF is read \
-as its extracted text (line numbers refer to that text); a scanned PDF has none, so ask the \
-user for a text version instead of guessing. Cite only references the library holds (library_search, library_get); a reference it does not hold is unverified, and you give no DOI, page number or venue it does not state. To check a draft's citations use library_check. You cannot change the library: propose tags, groups or notes with library_suggest and the user decides. A summary or comparison cell without a checked quote is shown as your reading, never as verified: give the exact quote and page for every claim taken from a paper, and use not_reported or not_comparable instead of a plausible guess. Save notes, digests and artifacts with research_save only when asked or when it \
-clearly helps. Reply in the user's language.
-
-# Project rules
-";
-
 /// Start the Academic Copilot for one project: an independent worker with no
-/// omp tools, only the fixed research host tools bound to `project`
+/// omp tools, only the fixed research and library host tools bound to `project`
 /// (`copilot.rs`). `project` must be a folder directly under the Academic space.
 #[tauri::command]
 fn academic_copilot_start(
@@ -376,7 +377,7 @@ fn academic_copilot_start(
     let cwd_text = cwd
         .to_str()
         .ok_or_else(|| "Copilot workspace path is not UTF-8".to_string())?;
-    let prompt = format!("{COPILOT_PROMPT}{}", academic_space::AcademicSpace::rules(&root));
+    let prompt = copilot_worker::system_prompt(&root);
     terminal.register_tab(&session_id, None);
     bridge.start_session_with_host(
         session_id,
@@ -393,7 +394,7 @@ fn academic_copilot_start(
         },
         app,
         Arc::clone(rule_book.inner()),
-        Some(Arc::new(copilot::CopilotHost::new(root)) as Arc<dyn copilot::HostTools>),
+        Some(Arc::new(copilot::AcademicHost::new(root)) as Arc<dyn copilot::HostTools>),
     )
 }
 
@@ -2032,6 +2033,18 @@ pub fn run() {
             librarian::commands::library_add_pdf,
             librarian::commands::library_attach_pdf,
             librarian::commands::library_attach_pick,
+            memory::commands::memory_state,
+            memory::commands::memory_set_enabled,
+            memory::commands::memory_update,
+            memory::commands::memory_delete,
+            memory::commands::memory_clear,
+            writing::commands::write_status,
+            writing::commands::write_init,
+            writing::commands::write_compile,
+            writing::commands::write_cancel,
+            writing::commands::write_link,
+            writing::commands::write_add_section,
+            writing::commands::write_open,
             librarian::commands::library_attachment_open,
             librarian::commands::library_attachment_locate,
             librarian::commands::library_import_text,

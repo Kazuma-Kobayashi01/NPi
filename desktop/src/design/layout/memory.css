@@ -1,0 +1,23 @@
+/* Settings → Memory (design/settings/rows-memory.jsx). */
+.st-mem { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.st-mem-kind { margin: 4px 0; color: var(--fg-1); font-size: var(--d-text-sm); font-weight: 600; }
+.st-mem-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.st-mem-note { display: grid; grid-template-columns: minmax(90px, 150px) minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in oklab, var(--fg-4) 18%, transparent); }
+.st-mem-title { overflow: hidden; color: var(--fg-1); white-space: nowrap; text-overflow: ellipsis; }
+.st-mem-text { padding: 0; overflow: hidden; border: 0; background: none; color: var(--fg-3); font: inherit; text-align: left; white-space: nowrap; text-overflow: ellipsis; cursor: text; }
+.st-mem-when { color: var(--fg-4); font-size: var(--d-text-xs); white-space: nowrap; }
+
+/* Settings → Usage: the subscription bars (design/settings/rows-usage.jsx). */
+.st-quota { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+.st-quota-account { display: flex; flex-direction: column; gap: 10px; }
+.st-quota-account h4 { margin: 0; color: var(--fg-1); font-size: var(--d-text-sm); font-weight: 600; }
+.st-quota-account h4 small { color: var(--fg-4); font-weight: 400; }
+.st-quota-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr) 76px; align-items: center; gap: 14px; }
+.st-quota-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: var(--fg-1); }
+.st-quota-name small { color: var(--fg-4); font-size: var(--d-text-xs); }
+.st-quota-bar { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in oklab, var(--fg-4) 22%, transparent); }
+.st-quota-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s ease; }
+.st-quota-bar.warning > span { background: var(--warning, #d39a2e); }
+.st-quota-bar.exhausted > span { background: var(--danger, #d9534f); }
+.st-quota-used { color: var(--fg-3); font-size: var(--d-text-xs); text-align: right; white-space: nowrap; }
+.stats-body.embedded { padding: 0; overflow: visible; max-height: none; }

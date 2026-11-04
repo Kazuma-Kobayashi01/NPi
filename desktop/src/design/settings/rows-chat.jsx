@@ -1,7 +1,6 @@
 /* design/settings/rows-chat.jsx — Settings → Chat's custom rows (window.OMP_SETTINGS_ROWS):
-   `chatInstructions` and `chatMemory`, the two texts the Chat prompt carries
-   (chat_space.rs). Both are saved together with the button; they are read from
-   Rust, not kept in the tweaks. */
+   `chatInstructions`, the text the Chat prompt carries (chat_space.rs), read from
+   Rust, not kept in the tweaks. Memory has its own row (rows-memory.jsx). */
 
 function _SRC_useChatPrefs(ctx) {
   const [saved, setSaved] = React.useState(null);   // { instructions, memory } as on disk
@@ -38,6 +37,5 @@ function _SRC_Text({ row, ctx, query, field, placeholder }) {
 }
 
 const _SRC_Instructions = (props) => <_SRC_Text {...props} field="instructions" placeholder="For example: answer in Chinese, warm and concise, no bullet lists." />;
-const _SRC_Memory = (props) => <_SRC_Text {...props} field="memory" placeholder="One fact per line, for example: I live in Shanghai." />;
 
-Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, { chatInstructions: _SRC_Instructions, chatMemory: _SRC_Memory });
+Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, { chatInstructions: _SRC_Instructions });

@@ -42,7 +42,7 @@ impl Lookup for Crossref {
 }
 
 pub struct LibraryTools {
-    root: PathBuf,
+    pub(super) root: PathBuf,
 }
 
 impl LibraryTools {
@@ -50,15 +50,24 @@ impl LibraryTools {
         Self { root }
     }
 
-    pub const NAMES: [&'static str; 4] = ["library_lookup", "library_align", "library_add", "library_edit"];
+    pub const NAMES: [&'static str; 9] = [
+        "library_lookup", "library_align", "library_add", "library_edit", "library_attach", "library_overview", "library_group", "library_tag", "library_merge",
+    ];
 
     /// The tools as host tools define them (`parameters`); `mcp.rs` renames that to `inputSchema`.
     pub fn definitions() -> Vec<Value> {
+        let mut all = Self::editing_definitions();
+        all.push(super::pdf_tools::definition());
+        all.extend(super::organize_tools::definitions());
+        all
+    }
+
+    fn editing_definitions() -> Vec<Value> {
         vec![
             json!({
                 "name": "library_lookup",
                 "label": "Look up metadata",
-                "description": "Ask Crossref for a work's metadata, by DOI or by title (plus the first author's family name). Returns up to 3 candidates as CSL-JSON summaries; nothing in the library changes. Example: {\"doi\": \"10.1038/nature14539\"} or {\"title\": \"Attention is all you need\", \"author\": \"Vaswani\"}. To add the work to the library use library_add; to fix a reference already there use library_align.",
+                "description": "Look a work up in Crossref, then OpenAlex, by DOI or by title plus first author. Returns up to 3 candidates; the library does not change. Example: {\"doi\": \"10.1038/nature14539\"} or {\"title\": \"Attention is all you need\", \"author\": \"Vaswani\"}. To add it use library_add; to fix a reference already there use library_align.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -73,7 +82,7 @@ impl LibraryTools {
             json!({
                 "name": "library_align",
                 "label": "Align metadata",
-                "description": "Bring references' metadata in line with Crossref. Give `citekey` (one reference), or `all: true` (the first 20 references that lack a DOI or a venue). Crossref is asked by the reference's DOI, else by its title and first author; a record is accepted only if its title is almost the same, otherwise the reference is reported as `mismatch` (a wrong DOI shows up this way) and left alone. The result lists, per reference, each field with its `from` and `to`. Default is a preview: nothing is written. Call again with `apply: true` to fill the blank fields (your own values stay); `overwrite: true` also replaces differing values. Example: {\"citekey\": \"smith2020graph\"} then {\"citekey\": \"smith2020graph\", \"apply\": true}.",
+                "description": "Compare references with Crossref and OpenAlex: `citekey` for one, or `all: true` for the first 20 lacking a DOI or venue. A record with another title is reported as `mismatch` and left alone (a wrong DOI shows up this way). Default is a preview of each field\'s `from` and `to`. `apply: true` fills blank fields; `overwrite: true` also replaces differing ones. Example: {\"citekey\": \"smith2020graph\"}, then {\"citekey\": \"smith2020graph\", \"apply\": true}.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -89,12 +98,13 @@ impl LibraryTools {
             json!({
                 "name": "library_add",
                 "label": "Add reference",
-                "description": "Add a reference to the library. Give a `doi` (the record comes from Crossref), or `csl` (a CSL-JSON object you built, for example {\"type\": \"article-journal\", \"title\": \"...\", \"author\": [{\"family\": \"Smith\", \"given\": \"A\"}], \"issued\": {\"date-parts\": [[2020]]}}). Returns the new citekey. A reference that is already in the library (same DOI, or same title and year) is reported with its citekey and not added twice. Only add what you have seen in a source; never invent a reference.",
+                "description": "Add a reference by `doi`, or by `csl` (CSL-JSON you built from a source you read, for example {\"type\": \"article-journal\", \"title\": \"...\", \"author\": [{\"family\": \"Smith\", \"given\": \"A\"}], \"issued\": {\"date-parts\": [[2020]]}}). Its PDF is bound too: give `pdf`, or one under papers/ showing the DOI or title is found. A repeat (same DOI, or title and year) is reported, not added. Never invent a reference.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "doi": { "type": "string" },
-                        "csl": { "type": "object", "description": "CSL-JSON of the reference." }
+                        "csl": { "type": "object", "description": "CSL-JSON of the reference." },
+                        "pdf": { "type": "string", "description": "The paper's PDF: a file in this project, or an absolute path (copied into papers/)." }
                     },
                     "additionalProperties": false
                 },
@@ -103,7 +113,7 @@ impl LibraryTools {
             json!({
                 "name": "library_edit",
                 "label": "Edit reference",
-                "description": "Change one reference: `set` replaces CSL fields (title, author, year, issued, container-title, volume, issue, page, publisher, DOI, URL, abstract, type, ISSN, ISBN, language, keyword), `tags_add` / `tags_remove` change its tags, `note_append` adds a line to the user's notes. `author` is a list of {family, given} objects or of strings like \"Smith, Anna\"; `year` is a shorthand for issued. Nothing is deleted: the reference as it was is kept in .npi-academic/agent-edits.jsonl. Example: {\"citekey\": \"smith2020graph\", \"set\": {\"volume\": \"7\", \"page\": \"1-9\"}, \"tags_add\": [\"gnn\"]}.",
+                "description": "Change one reference: `set` replaces CSL fields (title, author, year, issued, container-title, volume, issue, page, publisher, DOI, URL, abstract, type, ISSN, ISBN, language, keyword), `tags_add` / `tags_remove` change its tags, `note_append` adds a line to the notes. `author` is a list of {family, given} or \"Smith, Anna\"; `year` is short for issued. Example: {\"citekey\": \"smith2020graph\", \"set\": {\"volume\": \"7\"}, \"tags_add\": [\"gnn\"]}.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -128,12 +138,17 @@ impl LibraryTools {
             "library_align" => self.align(args, lookup),
             "library_add" => self.add(args, lookup),
             "library_edit" => self.edit(args),
+            "library_attach" => self.attach_tool(args),
+            "library_overview" => self.overview(),
+            "library_group" => self.group(args),
+            "library_tag" => self.tag(args),
+            "library_merge" => self.merge(args),
             _ => return None,
         })
     }
 
     /// Keeps a copy of a reference as it was before an agent changed it.
-    fn remember(&self, entry: &Entry, what: &str) {
+    pub(super) fn remember(&self, entry: &Entry, what: &str) {
         let line = json!({ "at": now(), "what": what, "citekey": entry.citekey, "id": entry.id, "csl": entry.csl, "notes": entry.notes, "tags": entry.tags });
         let dir = self.root.join(".npi-academic");
         let _ = std::fs::create_dir_all(&dir);
@@ -142,7 +157,7 @@ impl LibraryTools {
         }
     }
 
-    fn find<'a>(entries: &'a [Entry], key: &str) -> Result<&'a Entry, String> {
+    pub(super) fn find<'a>(entries: &'a [Entry], key: &str) -> Result<&'a Entry, String> {
         let key = key.trim().trim_start_matches("[@").trim_start_matches('@').trim_end_matches(']');
         entries.iter().find(|e| e.citekey == key).ok_or_else(|| no_such_citekey(entries, key))
     }
@@ -232,11 +247,14 @@ impl LibraryTools {
         if super::csl::fields(&csl).title.trim().is_empty() {
             return Err("the reference needs a title".into());
         }
+        let pdf = args.get("pdf").and_then(Value::as_str).map(str::trim).filter(|p| !p.is_empty());
         if let Some(existing) = lib.duplicate_of(&csl)? {
-            return Ok(format!("already in the library as [@{}] (\"{}\"); not added again. Use library_edit or library_align to change it.", existing.citekey, super::csl::fields(&existing.csl).title));
+            let note = self.bind_on_add(&lib, &existing, pdf);
+            return Ok(format!("already in the library as [@{}] (\"{}\"); not added again. Use library_edit or library_align to change it.{note}", existing.citekey, super::csl::fields(&existing.csl).title));
         }
         let entry = lib.add(&csl, source)?;
-        Ok(format!("added [@{}] (\"{}\"). Cite it as [@{}].", entry.citekey, super::csl::fields(&entry.csl).title, entry.citekey))
+        let note = self.bind_on_add(&lib, &entry, pdf);
+        Ok(format!("added [@{}] (\"{}\"). Cite it as [@{}].{note}", entry.citekey, super::csl::fields(&entry.csl).title, entry.citekey))
     }
 
     // -------------------------------------------------------------- edit

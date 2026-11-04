@@ -29,7 +29,7 @@ function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpe
   // A draft is not added unasked; the window keeps it open instead.
   React.useEffect(() => {
     if (!apiRef) return undefined;
-    apiRef.current = { flush: async () => (isDraft || !dirty ? true : save()) };
+    apiRef.current = { flush: async () => (isDraft || !dirty ? true : save()), dirty: () => isDraft || dirty };
     return () => { apiRef.current = null; };
   });
   const copy = async kind => { if (await onCite([entry.id], kind)) setState("copied"); };

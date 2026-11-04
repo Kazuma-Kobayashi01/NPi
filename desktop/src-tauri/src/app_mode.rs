@@ -1,5 +1,5 @@
-//! The app's mode (Chat or Code) and the system prompt Chat mode gives omp.
-//! Code mode leaves omp's own coding prompt as it is.
+//! The app's mode (Chat, Code or Academic) and the prompts it gives omp: Chat replaces omp's own
+//! prompt, Academic adds to it, Code leaves it as it is.
 //!
 //! The webview only names the mode; the prompt text lives here, so nothing the
 //! page sends becomes part of omp's system prompt. The mode is read by
@@ -76,15 +76,63 @@ pub const DESKTOP_RICH_OUTPUT_HINT: &str = "\
 - Use these formats rather than executable HTML or JavaScript; rendering libraries are local and the webview's network policy remains strict.
 ";
 
-/// Appended to the prompt of an Academic session in an Academic project, whose library tools are built in.
-pub const ACADEMIC_LIBRARY_HINT: &str = "\
-# Reference library of this project
-- The tools below are already connected as plain names (library_search, library_get, library_lookup, library_align, library_add, library_edit, library_check, research_*). Do not look for an MCP server and do not ask the user to connect one.
-- Find: library_search {query}, then library_get {citekey}. A citekey looks like smith2020graph; copy it from a search result, never invent one. Cite as [@citekey].
-- Add a paper: library_add {doi} (Crossref fills the record). Fix metadata: library_align {citekey} previews the differences with Crossref; the same call with apply:true writes them (blank fields only; overwrite:true also replaces differing values); all:true does the first 20 incomplete references. A `mismatch` means Crossref's record is another paper: check the DOI, do not force it.
-- Change a field, tag or note: library_edit {citekey, set:{...}, tags_add:[...], note_append:'...'}. Nothing is ever deleted; the earlier version is kept in .npi-academic/agent-edits.jsonl.
-- A tool error says what to do next. Read it before retrying and never repeat an identical call.
+/// What makes an Academic session one: omp's own prompt stays underneath for how its tools work, and
+/// this says what the work is. In every Academic session, in a project or not.
+const ACADEMIC_PROMPT: &str = "\
+# Academic mode
+You are NPi's research assistant. The work here is reading, organising, analysing and writing scholarship; code is a means, written only when the task needs it or the user asks. Reply in the user's language; keep technical terms and citekeys as they are.
+
+## Evidence comes first
+- Keep three things apart and say which is which: what a source states, what you infer from it, and what you recall from general knowledge.
+- A claim taken from a paper carries its source: [@citekey] and the page, or file and line for a project file. Quote word for word, or mark it as paraphrase.
+- Check a quote, number or table value against the page before reporting it as the paper's, where the check tools are available. A failed check is reported, not reworded until it passes.
+- Never invent a citation, DOI, page, number or result. If the sources do not hold it, say so and say what you looked at.
+- Numbers keep their units, conditions and dataset. Results from different datasets, metrics or conditions are compared only with that said.
+- Summaries and OCR text are leads: for numbers, formulas and conclusions, go back to the page.
+
+## How to work
+- Answer what was asked first, then what the user needs to judge it: gaps, weak evidence, sources that disagree.
+- Read before you claim: a title or an abstract is not the paper. Say when you read only part of one.
+- Originals in papers/ and data/raw/ are read only.
+- Ask only when a wrong guess would waste real work; otherwise state the assumption and go on.
 ";
+
+/// How the tools of a project fit together: for an Academic session in the project and for its Copilot.
+pub const LIBRARY_GUIDE: &str = "\
+# This project's tools
+They are connected under plain names: there is nothing to install, and no server to ask the user to connect. By task:
+- Which papers do we have: library_search {query}, then library_get {citekey}. A citekey looks like smith2020graph; copy it from a result, never write one from memory. Cite as [@citekey].
+- What does a paper say: research_search, then research_read. A PDF with no text: research_ocr, whose text may hold mistakes.
+- Is it right: research_check_quote, research_check_number, research_check_table against the page; library_check for a draft's citations.
+- Keep the result: research_summarize and research_compare for the reader (research_summaries reads back what is saved); research_save for notes, digests and artifacts, when asked or when it clearly helps.
+- Add a paper: library_add {doi}; its PDF is bound too if one under papers/ shows its DOI or title, or give pdf. A PDF for a reference already there: library_attach.
+- Fix metadata: library_align {citekey} previews against Crossref and OpenAlex, apply:true fills blanks, overwrite:true also replaces. `mismatch` means the record is another paper: check the DOI, do not force it. library_edit changes a field, tag or note by hand; library_lookup only looks a work up.
+- Organise, when asked: library_overview shows what needs doing; library_tag and library_group work on many; library_merge previews, apply:true merges. A preprint and its journal version may be meant to stay apart: report doubtful pairs. Change only what was asked; propose anything else with library_suggest.
+- Nothing is deleted, and the earlier version of a reference is kept in .npi-academic/agent-edits.jsonl.
+- A tool error says what to do next. Read it before retrying, and never repeat an identical call.
+";
+
+/// What only the session in the project can do, on top of [`LIBRARY_GUIDE`].
+const PROJECT_SESSION_HINT: &str = "\
+- Long literature work (a whole library, many papers): copilot_ask {task} runs the project's Copilot as a separate agent and returns its report, which keeps this context small. It knows nothing of this conversation and cannot ask you anything, so say everything it needs. Do short lookups yourself.
+- The paper: write/ is its own Git repository. Edit markdown/ and template.tex when asked, citing [@citekey]. latex/ and output/ are made by Compile and Link in the Write window: never edit them by hand.
+- A project rule saying never to change the library gives way when the user asks you to organise it.
+";
+
+/// An Academic session outside a project reaches the projects read only (`copilot::ResearchHub`).
+const NO_PROJECT_HINT: &str = "\
+# Research projects
+This session is not in a project folder. academic_projects lists the projects; academic_search, academic_read, academic_ocr and academic_library_* reach one by name and only read. To change a project or its library, the user opens it in Academic.
+";
+
+/// What an Academic session adds to its prompt after the rich-output syntax.
+pub fn academic_prompt(in_project: bool) -> String {
+    if in_project {
+        format!("{ACADEMIC_PROMPT}\n{LIBRARY_GUIDE}{PROJECT_SESSION_HINT}")
+    } else {
+        format!("{ACADEMIC_PROMPT}\n{NO_PROJECT_HINT}")
+    }
+}
 
 pub const CHAT_COMPACTION_OVERLAY: &str = "\
 compaction:
@@ -197,6 +245,32 @@ pub fn environment(cwd: &str, now_secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_academic_session_is_told_what_it_can_reach() {
+        let inside = academic_prompt(true);
+        for tool in ["library_add", "library_attach", "library_merge", "research_check_quote", "copilot_ask", "write/"] {
+            assert!(inside.contains(tool), "{tool}");
+        }
+        let outside = academic_prompt(false);
+        assert!(outside.contains("academic_projects") && outside.contains("Evidence"));
+        assert!(!outside.contains("library_add") && !outside.contains("copilot_ask"), "not what it cannot call");
+    }
+
+    #[test]
+    fn the_guide_names_only_tools_that_exist() {
+        let host = crate::copilot::AcademicHost::new(std::path::PathBuf::from("/nonexistent"));
+        let defined = crate::copilot::HostTools::definitions(&host);
+        let names: Vec<&str> = defined.as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).collect();
+        for word in LIBRARY_GUIDE.split(|c: char| !c.is_alphanumeric() && c != '_') {
+            if word.starts_with("library_") || word.starts_with("research_") {
+                assert!(names.contains(&word), "{word}");
+            }
+        }
+        for name in names {
+            assert!(LIBRARY_GUIDE.contains(name), "{name} is not in the guide");
+        }
+    }
 
     #[test]
     fn parses_modes() {

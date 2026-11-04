@@ -22,7 +22,7 @@ mod commit;
 mod file;
 mod graph;
 mod log;
-mod status;
+pub(crate) mod status;
 
 pub use commit::{commit, commit_file, CommitView};
 pub use file::{file, is_binary, FileView};

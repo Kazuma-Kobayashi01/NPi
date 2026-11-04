@@ -10,7 +10,7 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// The panels that run without the main window's state: (kind, width, height).
-const KINDS: [(&str, f64, f64); 3] = [("librarian", 1400.0, 880.0), ("reader", 1360.0, 880.0), ("stats", 760.0, 660.0)];
+const KINDS: [(&str, f64, f64); 4] = [("librarian", 1400.0, 880.0), ("reader", 1360.0, 880.0), ("write", 900.0, 720.0), ("stats", 760.0, 660.0)];
 pub const LABEL_PREFIX: &str = "panel-";
 
 /// Percent-encodes `s` for a query value.

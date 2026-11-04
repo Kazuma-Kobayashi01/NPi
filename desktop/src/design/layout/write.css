@@ -1,0 +1,27 @@
+/* The Write window (design/write/write-window.jsx). */
+.wr-modal { display: flex; flex-direction: column; width: min(900px, 96vw); height: min(720px, 92vh); }
+.panel-mode .wr-modal { width: 100%; height: 100%; }
+.wr-body { display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1; padding: 16px 18px; overflow-y: auto; }
+.wr-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 28px 24px; max-width: 560px; color: var(--fg-2); line-height: 1.5; }
+.wr-pipe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.wr-stage { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wr-stage-name { color: var(--fg-1); font-weight: 600; }
+.wr-stage-detail { overflow: hidden; color: var(--fg-4); font-size: var(--d-text-xs); white-space: nowrap; text-overflow: ellipsis; }
+.wr-bar { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in oklab, var(--fg-4) 22%, transparent); }
+.wr-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--fg-4); transition: width .3s ease; }
+.wr-stage.done .wr-bar-fill { background: var(--success, #3aa675); }
+.wr-stage.active .wr-bar-fill { background: var(--accent); }
+.wr-stage.attention .wr-bar-fill { background: var(--warning, #d39a2e); }
+.wr-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.wr-gap { flex: 1; }
+.wr-git { color: var(--fg-4); font-size: var(--d-text-xs); }
+.wr-files { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.wr-files li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 2px; border-top: 1px solid color-mix(in oklab, var(--fg-4) 18%, transparent); }
+.wr-file { display: flex; flex-direction: column; flex: 1; gap: 2px; min-width: 0; }
+.wr-file-title { overflow: hidden; color: var(--fg-1); white-space: nowrap; text-overflow: ellipsis; }
+.wr-file-name { color: var(--fg-4); font-size: var(--d-text-xs); }
+.wr-chip { padding: 1px 7px; border-radius: 9px; font-size: var(--d-text-xs); color: var(--fg-3); background: color-mix(in oklab, var(--fg-4) 16%, transparent); }
+.wr-chip.fresh { color: var(--success, #3aa675); }
+.wr-chip.stale { color: var(--warning, #d39a2e); }
+.wr-warn { flex-basis: 100%; color: var(--warning, #d39a2e); font-size: var(--d-text-xs); }
+.wr-add { align-self: flex-start; }

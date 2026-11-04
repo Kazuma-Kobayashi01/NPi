@@ -148,6 +148,30 @@ fn try_auto_approve<W: std::io::Write>(
     )
 }
 
+/// The names of a worker's host tools.
+fn host_tool_names(host: Option<&dyn crate::copilot::HostTools>) -> Vec<String> {
+    host.map(|h| h.definitions())
+        .and_then(|d| d.as_array().map(|tools| tools.iter().filter_map(|t| t["name"].as_str().map(str::to_string)).collect()))
+        .unwrap_or_default()
+}
+
+/// Answers an approval prompt for one of this worker's host tools. omp gives a tool that declares no tier
+/// the highest one, so it asks about ours too; these are the tools Rust itself registered, each bounded
+/// in `copilot.rs` and `librarian/tools.rs`, and the Copilot's pane has no prompt to show. Returns
+/// whether it answered: the frame then goes no further, like a `host_tool_call`.
+fn answer_host_approval<W: std::io::Write>(frame: &serde_json::Value, host_tools: &[String], stdin: &Mutex<W>) -> bool {
+    let Some(tool) = approval::approval_tool_name(frame) else { return false };
+    if !host_tools.iter().any(|name| name == tool) {
+        return false;
+    }
+    let Some(id) = approval::approval_request_id(frame) else { return false };
+    if let Ok(mut w) = stdin.lock() {
+        let _ = writeln!(*w, "{}", approvals::approve_answer(id));
+        let _ = w.flush();
+    }
+    true
+}
+
 /// The reader's approval step for one parsed frame: a rule-covered prompt is
 /// answered by [`try_auto_approve`] and its notice returned; any other frame
 /// goes to the frontend as is and is shown to `approvals` first — a prompt
@@ -283,6 +307,7 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
         last_errors,
         host,
     } = config;
+    let host_tools = host_tool_names(host.as_deref());
     thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         let line_event = format!("agent://line/{sid}");
@@ -328,6 +353,9 @@ pub(super) fn spawn_stdout_reader(config: StdoutReaderConfig) {
                         .as_ref()
                         .and_then(|frame| frame.get("type"))
                         .and_then(serde_json::Value::as_str);
+                    if parsed.as_ref().is_some_and(|frame| answer_host_approval(frame, &host_tools, &stdin)) {
+                        continue;
+                    }
                     // Notifications are decided here, where every tab's frames pass (a
                     // background tab's never reach the webview).
                     if let Some(frame) = parsed.as_ref() {
@@ -808,6 +836,19 @@ mod tests {
             sent,
             json!({ "type": "extension_ui_response", "id": "req-9", "value": "Approve" })
         );
+    }
+
+    #[test]
+    fn a_host_tools_approval_prompt_is_answered_and_no_other() {
+        let host = vec!["library_group".to_string()];
+        let prompt = |tool: &str| serde_json::json!({ "type": "extension_ui_request", "id": "req-7", "method": "select", "title": format!("Allow tool: {tool}"), "options": ["Approve", "Deny"] });
+        let stdin = Mutex::new(Vec::<u8>::new());
+        assert!(!answer_host_approval(&prompt("bash"), &host, &stdin), "omp's own tools still ask");
+        assert!(stdin.lock().unwrap().is_empty());
+        assert!(answer_host_approval(&prompt("library_group"), &host, &stdin));
+        let written = String::from_utf8(stdin.lock().unwrap().clone()).unwrap();
+        assert!(written.contains("req-7") && written.contains("Approve"));
+        assert!(!answer_host_approval(&prompt("library_group"), &[], &stdin), "a session with no host tools");
     }
 
     #[test]

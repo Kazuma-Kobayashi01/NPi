@@ -27,7 +27,8 @@
 
 1. `research_propose_ops`:让 Copilot 提结构修改(授权绑定 `planId + baseRevision` 的预览、执行、日志、移入项目回收区)。
 2. 按论文逐篇授权。
-3. 从主 Chat 调用 Copilot。
+
+(从主 Chat 调用 Copilot 已提前做完:`copilot_ask`。)
 
 ## 四、尚未验证
 

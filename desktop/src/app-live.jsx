@@ -392,8 +392,12 @@ function App() {
     const ok = await window.OMP_OPEN_PANEL("librarian", { project: window.OMP_PROJECT_NAV.basename(copilotProject), profile: activeProfileId });
     if (!ok) setLibrarianOpen(true);
   };
-  const openReader = async () => {
-    await window.OMP_OPEN_PANEL("reader", { project: window.OMP_PROJECT_NAV.basename(copilotProject), profile: activeProfileId, title: `Reader · ${window.OMP_PROJECT_NAV.basename(copilotProject)}` });
+  // `path`: one file of the project, from the literature column; the toolbar's click passes none.
+  const openReader = async path => {
+    await window.OMP_OPEN_PANEL("reader", { project: window.OMP_PROJECT_NAV.basename(copilotProject), profile: activeProfileId, title: `Reader · ${window.OMP_PROJECT_NAV.basename(copilotProject)}`, path: typeof path === "string" ? path : null });
+  };
+  const openWrite = async () => {
+    await window.OMP_OPEN_PANEL("write", { project: window.OMP_PROJECT_NAV.basename(copilotProject), profile: activeProfileId, title: `Write · ${window.OMP_PROJECT_NAV.basename(copilotProject)}` });
   };
   const openStats = async () => {
     const ok = await window.OMP_OPEN_PANEL("stats", { profile: activeProfileId, title: `Usage · ${activeProfileLabel}` });
@@ -1175,6 +1179,7 @@ function App() {
                 copilot={!!copilotProject}
                 onLibrarian={copilotProject ? openLibrarian : null}
                 onReader={copilotProject ? openReader : null}
+                onWrite={copilotProject ? openWrite : null}
                 onLibrary={copilotProject ? () => setLibraryOpen(o => !o) : null}
                 libraryOpen={libraryShown}
               />

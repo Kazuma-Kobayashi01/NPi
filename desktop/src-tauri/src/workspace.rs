@@ -202,6 +202,26 @@ fn git_output(work_dir: &Path, args: &[&str], label: &str) -> Result<Vec<u8>, St
     Ok(output.stdout)
 }
 
+/// Makes `dir` a Git repository on branch `main`.
+pub fn repo_init(dir: &Path) -> Result<(), String> {
+    git_output(dir, &["init", "--quiet", "--initial-branch=main"], "init").map(|_| ())
+}
+
+/// Commits everything in `dir`. `false` when there was nothing to commit. Hooks do not run, and a
+/// machine with no Git identity gets NPi's, so a first commit never fails on setup.
+pub fn commit_all(dir: &Path, message: &str) -> Result<bool, String> {
+    git_output(dir, &["add", "--all"], "add")?;
+    if git_succeeds(dir, &["diff", "--cached", "--quiet"], "diff")? {
+        return Ok(false);
+    }
+    let mut args = vec!["-c", "core.hooksPath=/dev/null"];
+    if !git_succeeds(dir, &["config", "user.email"], "config")? {
+        args.extend(["-c", "user.name=NPi Desktop", "-c", "user.email=npi@localhost"]);
+    }
+    args.extend(["commit", "--quiet", "--no-gpg-sign", "--message", message]);
+    git_output(dir, &args, "commit").map(|_| true)
+}
+
 /// Run a `git` subcommand purely for its exit status, discarding both
 /// streams. For probes where a non-zero exit is an expected, non-error
 /// answer (an unborn `HEAD`, a path absent from `HEAD`) rather than a

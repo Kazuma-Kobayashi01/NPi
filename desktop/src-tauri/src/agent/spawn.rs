@@ -364,7 +364,7 @@ fn sanitize_child_env(cmd: &mut Command) {
 /// [`crate::supervisor::ProcessSupervisor`] already attached to it, so the
 /// whole process tree (subagents, tool-call children) can be torn down as
 /// a unit — plain `Child::kill` only signals the direct `omp` process.
-pub(super) fn spawn_omp(
+pub(crate) fn spawn_omp(
     launch: super::Launch<'_>,
 ) -> Result<(Child, crate::supervisor::ProcessSupervisor), String> {
     let super::Launch {

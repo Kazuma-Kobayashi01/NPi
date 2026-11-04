@@ -59,8 +59,9 @@
 .lb-field-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .lb-field-row > .lb-field { min-width: 0; }
 .lb-key { font-family: var(--font-mono); font-size: var(--d-text-sm); color: var(--fg-2); user-select: all; }
-.lb-checks { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-.lb-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--d-text-sm); color: var(--fg-2); }
+.lb-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; }
+.lb-check { display: flex; align-items: flex-start; gap: 6px; min-width: 0; font-size: var(--d-text-sm); line-height: 1.35; color: var(--fg-2); }
+.lb-check input { flex: none; width: auto; margin: 2px 0 0; }
 .lb-detail-foot { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--line); }
 .lb-state { flex: 1; min-width: 0; color: var(--fg-4); font-size: var(--d-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-del.armed { color: var(--rose); }
@@ -177,7 +178,7 @@
 
 /* "Copy as…" (librarian/copy-menu.jsx). */
 .cm-root { position: relative; display: inline-flex; }
-.cm-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 440px; max-width: 80vw; display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line-bright); border-radius: 12px; background: var(--bg-elevated); box-shadow: var(--shadow-window, 0 10px 30px rgba(0, 0, 0, 0.4)); font-weight: 400; }
+.cm-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 540px; max-width: 80vw; display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line-bright); border-radius: 12px; background: var(--bg-elevated); box-shadow: var(--shadow-window, 0 10px 30px rgba(0, 0, 0, 0.4)); font-weight: 400; }
 .cm-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cm-scope { gap: 14px; font-size: var(--d-text-xs); color: var(--fg-2); }
 .cm-scope label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
@@ -191,7 +192,13 @@
 .cm-label { color: var(--fg-3); font-size: var(--d-text-xs); }
 .cm-recent .btn { font-size: 11px; }
 .cm-note { padding: 8px 10px; border-radius: var(--r-2); background: var(--accent-soft); color: var(--fg-1); font-size: var(--d-text-xs); line-height: 1.55; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.cm-style .lb-select { flex: 1; min-width: 0; }
+.cm-style { flex-wrap: nowrap; }
+.cm-style .cm-label, .cm-style .btn { flex: none; white-space: nowrap; }
+/* A <select> is as wide as its longest option unless told otherwise, and some style names are very long. */
+.cm-pop .cm-style .lb-select { flex: 1 1 0; width: 0; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.cm-pop { box-sizing: border-box; }
+.cm-pop .mode-seg { flex-wrap: wrap; max-width: 100%; }
+.cm-search { box-sizing: border-box; text-overflow: ellipsis; }
 .cm-hint { margin: 0; color: var(--fg-4); font-size: 11px; line-height: 1.5; }
 
 /* The head of the Librarian: the buttons keep one line each and the title gives way, not the other way round. */

@@ -58,10 +58,9 @@ function statsTotalTokens(stats) {
 // Mounted only while open (app-live.jsx gates on `statsOpen`), so there
 // is no `open` prop and no early return for it — see the matching note
 // in approval-rules-panel.jsx.
-function UsageStatsPanel({ onClose, profileLabel }) {
+/** The ranges, the figures and the tables: in the usage window and in Settings → Usage. */
+function UsageStatsBody({ embedded = false }) {
   const bridge = window.OMP_BRIDGE;
-  const panelRef = React.useRef(null);
-  const wc = window.useWindowChrome(onClose, panelRef);
   const [range, setRange]     = React.useState("all");
   const [result, setResult]   = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -93,23 +92,17 @@ function UsageStatsPanel({ onClose, profileLabel }) {
   const data = overall ? current.value : EMPTY;
 
   return (
-    <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "6vh" }}>
-      <div className="stats-panel" ref={panelRef} onClick={e => e.stopPropagation()}>
-        <div className="stats-head" {...wc.headProps}>
-          {wc.lights}
-          <_StatsIcon name="cost" size={13} color="var(--accent)" />
-          <span className="mono" style={{ color: "var(--fg-2)" }}>usage · {profileLabel} · {selected.window}</span>
-          <button className="btn icon ghost" style={{ marginLeft: "auto" }} onClick={refresh} title="Refresh">
-            <_StatsIcon name="refresh" size={11} />
-          </button>
-        </div>
-        <div className="stats-body">
-          <div className="stats-ranges mode-seg" role="radiogroup" aria-label="Usage time range">
+    <div className={`stats-body${embedded ? " embedded" : ""}`}>
+      <div className="stats-toolbar">
+        <div className="stats-ranges mode-seg" role="radiogroup" aria-label="Usage time range">
             {STATS_RANGES.map(item => (
               <button key={item.value} type="button" role="radio" aria-checked={range === item.value}
                 onClick={() => selectRange(item.value)}>{item.label}</button>
             ))}
-          </div>
+        </div>
+        <span className="mono stats-window">{selected.window}</span>
+        <button className="btn icon ghost" onClick={refresh} title="Refresh"><_StatsIcon name="refresh" size={11} /></button>
+      </div>
           {(loading || !current) && <div className="panel-empty mono">syncing session logs…</div>}
           {!loading && current && !current.ok && <div className="panel-empty mono">{current.error}</div>}
           {!loading && current?.ok && !overall && <div className="panel-empty mono">no usage in {selected.window}</div>}
@@ -190,10 +183,25 @@ function UsageStatsPanel({ onClose, profileLabel }) {
               )}
             </>
           )}
+    </div>
+  );
+}
+
+function UsageStatsPanel({ onClose, profileLabel }) {
+  const panelRef = React.useRef(null);
+  const wc = window.useWindowChrome(onClose, panelRef);
+  return (
+    <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "6vh" }}>
+      <div className="stats-panel" ref={panelRef} onClick={e => e.stopPropagation()}>
+        <div className="stats-head" {...wc.headProps}>
+          {wc.lights}
+          <_StatsIcon name="cost" size={13} color="var(--accent)" />
+          <span className="mono" style={{ color: "var(--fg-2)" }}>usage · {profileLabel}</span>
         </div>
+        <UsageStatsBody />
       </div>
     </div>
   );
 }
 
-window.UsageStatsPanel = UsageStatsPanel;
+Object.assign(window, { UsageStatsPanel, UsageStatsBody });

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Settings → Usage: what is left of each subscription as horizontal bars with their reset times, then the usage statistics, which no longer need their own window.
+- Memory: in Chat, Code and Academic the model keeps short notes about you (field, work, interests, projects, people) and reads them when a conversation starts. Stored in SQLite at `~/.local/share/npi/memory.db`; on by default, with every note editable in Settings → Chat. Chat's old `MEMORY.md` is taken in once.
+- Agents can bind PDFs: `library_attach` (a path, a look under `papers/`, or every reference at once), and `library_add` binds a reference's PDF by itself.
+- Write: a paper's own Git repository in `write/` and a window that manages it. Markdown drafts, Compile (an agent writes the LaTeX of each changed file; `references.bib` comes from the library), Link (one complete `main.tex`), a pipeline progress bar, and opening in VS Code or Typora.
+- "Open in Reader" on a reference in the literature column.
+- The Academic Copilot can organise the library when asked: `library_overview`, `library_group`, `library_tag`, `library_merge`, and the lookup, align, add and edit tools.
+- `copilot_ask`: an Academic session hands long literature work to the Copilot and gets its report; also an MCP server (`--npi-mcp-copilot`, registered as `npi-copilot` by "Connect agents").
 - Librarian: drag a reference (or the selection) onto a group in the sidebar to add it.
 - Librarian: select several references (Cmd-click, Shift-click, arrows, Cmd+A) to group, tag, align, trash or merge them; built-in filters for missing metadata, no PDF, possible duplicates and waiting suggestions; an editable citation key; "Align metadata…" with a preview before anything changes; "Read" on an attachment.
 - Librarian import takes pasted text: DOIs and arXiv ids are looked up, and BibTeX, RIS, CSL-JSON, PubMed `.nbib`, Web of Science and EndNote XML are recognised by their content, in files too.
@@ -32,8 +39,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Librarian for the Academic Copilot: it can search the reference library, read a reference with its formatted citation, check a draft's citations against the library (matched, other year, not in the library) and suggest tags, groups or notes that you accept or dismiss on the reference. "Check a draft…" runs the same check from the Librarian window; the main chat gets the read-only tools. New projects also get a Librarian skill.
 - Librarian citation styles: APA, IEEE, Chicago, MLA, Nature, Vancouver, Harvard and GB/T 7714 (numeric, author-date, note) through a CSL engine, your own `.csl` files, "Copy citation" / "Copy reference" / "Copy list" in the chosen style, and "Cite a draft…" which turns `[@citekey]` in a Markdown draft into citations plus a reference list.
 - Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
+### Changed
+
+- Academic sessions have a prompt of their own (research work and evidence rules) instead of only a coding prompt, and one guide to the project's tools. The Copilot's prompt no longer leaves out its tools or denies the network it has, and tool descriptions are shorter.
+- The Copilot can read `write/`.
+
 ### Fixed
 
+- Librarian: the group checkboxes no longer stretch and scatter their labels, and a long style name no longer pushes "Copy as…" out of its popover.
+- Host tools no longer stop for approval: omp asked about them in `write` mode, though the Copilot's pane has no prompt to answer.
 - Librarian: edits in the form are saved, not lost, when the selection moves, the window closes, or a file, group or suggestion changes the reference. Esc no longer closes the window, "Copy" works, abandoned "New reference" forms leave no empty row, a new reference that repeats one is refused, and publisher markup no longer shows in titles.
 - A PDF added to the Librarian is indexed by itself, and the Reader indexes a file it has not reached instead of saying to.
 - Librarian "Copy" (the buttons at the bottom of a reference and "Copy as…") failed with "could not copy": WebKit refuses `navigator.clipboard` once the click's gesture has been spent on an `await`. Rust now writes the clipboard (`clipboard_write`, `NSPasteboard`; text and HTML for a paste into Word).

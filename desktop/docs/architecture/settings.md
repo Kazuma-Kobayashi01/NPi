@@ -68,3 +68,7 @@ Settings (`design/settings/settings-window.jsx`), the Librarian, the git browser
 ## Closing the main window (macOS)
 
 `lib.rs` `hides_on_close`: the red button and Cmd+W (the default menu's Close Window) only hide the `main` window; nothing is stopped. `RunEvent::Reopen` (a Dock click) shows it again. Quitting is Cmd+Q, which `CloseGuard` still holds for confirmation while a tab is busy; the webview then quits through the `quit_app` command (`live.js` `_requestQuit`), since closing the window no longer ends the app. Other platforms: a window close is a quit, as before.
+
+## Usage section
+
+`rows-usage.jsx`: the subscription bars (`bridge.usageLimits`, the same `usage_limits` the side panel reads; `app/usage-limits.js` names and orders them, drops a repeated shared quota and any limit with no fraction) and `UsageStatsBody` from `usage-stats-panel.jsx`, which the usage window also shows.

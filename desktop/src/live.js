@@ -4950,6 +4950,20 @@
       return _invokeResult(`library_${name}`, { project, ...(args ?? {}) });
     },
 
+    /** A Settings command of Memory (src-tauri/src/memory/commands.rs): `memory_<name>`. Only the listed names go through. */
+    memory(name, args) {
+      const NAMES = ["state", "set_enabled", "update", "delete", "clear"];
+      if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown memory command: ${name}` });
+      return _invokeResult(`memory_${name}`, args ?? {});
+    },
+
+    /** A command of the paper of one Academic project (writing/commands.rs): `write_<name>`. Only the listed names go through. */
+    write(name, project, args) {
+      const NAMES = ["status", "init", "compile", "cancel", "link", "add_section", "open"];
+      if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown write command: ${name}` });
+      return _invokeResult(`write_${name}`, { project, ...(args ?? {}) });
+    },
+
     /** A Research Core command of one Academic project (librarian/commands.rs): `research_<name>` with
      *  `project` (its folder name) and `args`. Resolves to `{ ok, value | error }`. Only the listed names go through. */
     research(name, project, args) {

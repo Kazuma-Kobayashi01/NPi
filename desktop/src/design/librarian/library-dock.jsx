@@ -1,6 +1,6 @@
 /* librarian/library-dock.jsx — the literature column at the far right of an Academic project:
    the project's references with a search box, a group filter and, per reference, what is needed while
-   writing: put its citation key into the prompt, or open it in the Librarian. It only reads
+   writing: put its citation key into the prompt, open it in the Librarian, or open its PDF in the Reader. It only reads
    (`bridge.library`, the Librarian's own commands); everything that changes the library stays in the
    Librarian window. The search is the project's full-text index when there is one (the Librarian
    window's `search` command), else a substring filter (app/librarian.js). */
@@ -62,7 +62,7 @@ function LibraryDock({ bridge, project, onInsert, onOpenLibrarian, onOpenReader,
         <span className="libdock-count">{entries.length}</span>
         <span className="libdock-gap" />
         <button type="button" className="sc-ibtn" title={T("Open the Librarian")} onClick={onOpenLibrarian}><Icon name="layers" size={13} /></button>
-        <button type="button" className="sc-ibtn" title={T("Open the reader")} onClick={onOpenReader}><Icon name="file" size={13} /></button>
+        <button type="button" className="sc-ibtn" title={T("Open the reader")} onClick={() => onOpenReader()}><Icon name="file" size={13} /></button>
         <button type="button" className="sc-ibtn" title={T("Close")} aria-label={T("Close")} onClick={onClose}><Icon name="close" size={12} /></button>
       </div>
       <div className="libdock-tools">
@@ -81,6 +81,7 @@ function LibraryDock({ bridge, project, onInsert, onOpenLibrarian, onOpenReader,
         {shown.map(e => {
           const d = L.display(e);
           const on = open === e.id;
+          const pdf = (e.attachments ?? []).find(a => !a.missing);
           return (
             <div key={e.id} className={`libdock-row${on ? " on" : ""}`}>
               <button type="button" className="libdock-main" onClick={() => setOpen(on ? null : e.id)} aria-expanded={on}>
@@ -95,6 +96,7 @@ function LibraryDock({ bridge, project, onInsert, onOpenLibrarian, onOpenReader,
                   <div className="libdock-actions">
                     <button type="button" className="btn ghost" onClick={() => onInsert(`[@${e.citekey}]`)}>{T("Cite in prompt")}</button>
                     <button type="button" className="btn ghost" onClick={onOpenLibrarian}>{T("Open in Librarian")}</button>
+                    {pdf && <button type="button" className="btn ghost" onClick={() => onOpenReader(pdf.path)}>{T("Open in Reader")}</button>}
                   </div>
                   <code className="libdock-key">{e.citekey}</code>
                 </div>

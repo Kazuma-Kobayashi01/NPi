@@ -1,12 +1,12 @@
 //! The Chat space: one folder every chat conversation runs in, the user's
-//! instructions for the chat assistant and its memory.
+//! instructions for the chat assistant.
 //!
 //! A chat is an ordinary omp session whose cwd is the chat folder, so chats
 //! and code projects never mix (the sidebar tells them apart by that folder).
 //! The instructions (`chat-instructions.md`, kept beside the app's other
-//! config) and the memory (`MEMORY.md` inside the chat folder, so the
-//! assistant can update it itself) are added to the Chat prompt at each omp
-//! start (`system_prompt`).
+//! config) are added to the Chat prompt at each omp start (`system_prompt`).
+//! `MEMORY.md` in the chat folder is the old memory: `memory::Store` took its
+//! lines in once, and it is no longer written or read into prompts.
 
 use std::path::{Path, PathBuf};
 
@@ -90,30 +90,6 @@ impl ChatSpace {
         std::fs::write(self.config.join(PROFILE_FILE), json).map_err(|e| format!("profile: {e}"))
     }
 
-    /// Adds one fact (one line) to the memory file; refused when it would pass the size cap.
-    pub fn remember(&self, fact: &str) -> Result<(), String> {
-        let fact = fact.split_whitespace().collect::<Vec<_>>().join(" ");
-        if fact.is_empty() {
-            return Err("nothing to remember".to_string());
-        }
-        let line = format!("- {}", crate::text::prefix_within(&fact, 500));
-        let path = self.memory_path();
-        let mut text = std::fs::read_to_string(&path).unwrap_or_default();
-        if text.lines().any(|l| l.trim() == line) {
-            return Ok(());
-        }
-        if !text.is_empty() && !text.ends_with('\n') {
-            text.push('\n');
-        }
-        text.push_str(&line);
-        text.push('\n');
-        if text.len() > MAX_BYTES {
-            return Err("the memory is full; ask the user to tidy it in Settings".to_string());
-        }
-        self.ensure_dir()?;
-        std::fs::write(&path, text).map_err(|e| format!("memory: {e}"))
-    }
-
     pub fn memory_path(&self) -> PathBuf {
         self.dir.join(MEMORY_FILE)
     }
@@ -143,7 +119,7 @@ impl ChatSpace {
         self.instructions()
     }
 
-    /// The structured memory and instructions context block without the base prompt.
+    /// The instructions block without the base prompt.
     pub fn memory_context(&self) -> String {
         let mut out = String::new();
         let instructions = self.instructions();
@@ -152,18 +128,6 @@ impl ChatSpace {
             out.push_str("The user's standing instructions for how to answer (follow them):\n");
             out.push_str(instructions);
             out.push_str("\n\n");
-        }
-        let memory_path = self.memory_path();
-        out.push_str(&format!(
-            "Memory: notes about the user that persist across chats live in {}. When the user asks \
-             you to remember something, call the remember tool with one short fact.",
-            memory_path.display()
-        ));
-        let memory = self.memory();
-        let memory = memory.trim();
-        if !memory.is_empty() {
-            out.push_str("\nWhat you remember now:\n");
-            out.push_str(memory);
         }
         out
     }
@@ -185,10 +149,10 @@ impl ChatSpace {
         Ok(())
     }
 
-    /// The Chat prompt: the base text, then the user's instructions and memory.
+    /// The Chat prompt: the base text, then the user's profile and instructions.
     pub fn system_prompt(&self, base: &str) -> String {
         let with_profile = compose_profile(base, &self.profile());
-        compose(&with_profile, &self.instructions(), &self.memory(), &self.memory_path())
+        compose(&with_profile, &self.instructions())
     }
 }
 
@@ -215,22 +179,12 @@ What the user told you about themselves:
 {}", lines.join("\n"))
 }
 
-fn compose(base: &str, instructions: &str, memory: &str, memory_path: &Path) -> String {
+fn compose(base: &str, instructions: &str) -> String {
     let mut out = base.to_string();
     let instructions = instructions.trim();
     if !instructions.is_empty() {
         out.push_str("\n\nThe user's standing instructions for how to answer (follow them):\n");
         out.push_str(instructions);
-    }
-    out.push_str(&format!(
-        "\n\nMemory: notes about the user that persist across chats live in {}. When the user asks \
-         you to remember something, call the remember tool with one short fact.",
-        memory_path.display()
-    ));
-    let memory = memory.trim();
-    if !memory.is_empty() {
-        out.push_str("\nWhat you remember now:\n");
-        out.push_str(memory);
     }
     out
 }
@@ -276,25 +230,23 @@ mod tests {
     }
 
     #[test]
-    fn nothing_saved_reads_as_empty_and_the_prompt_still_names_the_memory_file() {
+    fn nothing_saved_reads_as_empty() {
         let (_d, s) = space();
         assert_eq!(s.instructions(), "");
         assert_eq!(s.memory(), "");
         let p = s.system_prompt("BASE");
-        assert!(p.starts_with("BASE"));
-        assert!(p.contains("MEMORY.md"));
-        assert!(!p.contains("standing instructions"));
+        assert_eq!(p, "BASE");
     }
 
     #[test]
-    fn saved_instructions_and_memory_reach_the_prompt() {
+    fn saved_instructions_reach_the_prompt_and_the_old_memory_file_does_not() {
         let (_d, s) = space();
         s.save("Answer in Chinese.", "Likes tea.").unwrap();
         assert_eq!(s.instructions(), "Answer in Chinese.");
         assert_eq!(s.memory(), "Likes tea.");
         let p = s.system_prompt("BASE");
         assert!(p.contains("Answer in Chinese."));
-        assert!(p.contains("Likes tea."));
+        assert!(!p.contains("Likes tea."), "memory::Store holds the notes now");
     }
 
     #[test]
@@ -344,7 +296,6 @@ mod tests {
         assert_eq!(s.reload_instructions(), "Follow rule.");
         let ctx = s.memory_context();
         assert!(ctx.contains("Follow rule."));
-        assert!(ctx.contains("Fact 1."));
-        assert!(ctx.contains("MEMORY.md"));
+        assert!(!ctx.contains("Fact 1."));
     }
 }
