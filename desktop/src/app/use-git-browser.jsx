@@ -31,7 +31,7 @@ function _ugbResult(res) {
 
 /** `edits`: the count of finished edit/write cards (OMP_GIT_BROWSER
  *  `finishedEdits`); a rise means a file on disk changed. */
-function useGitBrowser({ bridge, initialPath, branch, edits }) {
+function useGitBrowser({ bridge, initialPath, branch, edits, project }) {
   const [nonce, setNonce] = React.useState(0);
   // A change refetches the log; with `edits`, the working tree too.
   const logTick = `${branch ?? ""}\0${nonce}`;
@@ -181,6 +181,33 @@ function useGitBrowser({ bridge, initialPath, branch, edits }) {
     refresh();
   }, [bridge, refresh]);
 
+  // What an action on the head or a hunk refused, until the next action.
+  const [actionError, setActionError] = React.useState(null);
+  const report = React.useCallback(res => {
+    setActionError(res && !res.ok && !res.cancelled ? res.error : null);
+    refresh();
+  }, [refresh]);
+
+  const discardHunk = React.useCallback(async line => {
+    report(await bridge.workspaceDiscardHunk(selected, line));
+  }, [bridge, report, selected]);
+
+  // The worktree task this tab runs on, if any (worktree.rs).
+  const [worktree, setWorktree] = React.useState(null);
+  React.useEffect(() => {
+    let current = true;
+    bridge.worktreeInfo().then(res => { if (current) setWorktree(res?.ok ? res.value : null); });
+    return () => { current = false; };
+  }, [bridge, tick]);
+  const mergeWorktree = React.useCallback(async () => report(await bridge.worktreeMerge()), [bridge, report]);
+
+  // Review comments outlive the overlay (app/review-comments.js).
+  const [comments, setCommentList] = React.useState(() => window.OMP_REVIEW.load(project));
+  const setComments = React.useCallback(next => {
+    window.OMP_REVIEW.save(project, next);
+    setCommentList(next);
+  }, [project]);
+
   const browsing = commitSha && commit.sha === commitSha ? commit : null;
   const shownFile = fileKey && file.key === fileKey ? file : null;
   // Commit mode shows the commit's touched files, the working tree its own.
@@ -200,6 +227,7 @@ function useGitBrowser({ bridge, initialPath, branch, edits }) {
     fileError: shownFile?.error ?? null,
     selected, expanded, changedOnly, filter,
     select: setSelected, toggleDir, setChangedOnly, setFilter, browse, refresh, stage, discard,
+    discardHunk, worktree, mergeWorktree, actionError, setActionError, comments, setComments,
   };
 }
 

@@ -25,6 +25,8 @@ The mode switch (Chat, Code, Academic) is the picker `ModeSwitch` at the very to
 
 ## Chat rich interaction and image ownership
 
+A new Chat session starts with thinking off (`agent/spawn.rs` `chat_flags`, `--thinking=off`). The level can be raised in the session; a resumed chat keeps its own.
+
 `app_mode.rs::CHAT_PROMPT` is the English, human-centered Chat base prompt,
 not a second runtime. Chat favors sourced visual explanations and useful
 Display UI, but keeps ordinary conversation concise, honors text-only

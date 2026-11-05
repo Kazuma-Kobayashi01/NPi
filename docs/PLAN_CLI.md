@@ -64,6 +64,15 @@ TUI 不是从零开始,而且已经很模块化:
 
 ## 6. 本轮实施记录
 
+- 2026-11-05 参考 OpenCode 2.2.5 源码:连续的 read/grep/glob/find/ast_grep 折叠成一行(`Explored 3 files, 2 searches`,Ctrl+O 展开,失败不折叠,可见内容会结束本组);输入框身份行按宽度依次去掉服务商、思考级别、截断模型名,提示行从左侧开始丢;默认状态行不再重复模型;首页去掉 Tip 和 logo 旁的版本;终端不少于 116 列时显示右侧栏(标题、Context、Todo、目录与分支),设置 `tui.sidePanel` 可关。原生 TSP 终端不变。
+- 2026-11-05 首页:输入框收窄到 75 列并居中,页脚贴底,MCP 连接状态进页脚(失败仍发通知),占位提示带示例;启动动画约 1.2 秒,logo 由暗影被高光扫亮,提示逐字打出,设置 `startup.animation` 可关。启动加载期间先停在动画首帧,等事件循环空闲再播放。
+- 2026-11-05 所有 `chrome/overlay-box` 和 `HubFrame` 的框线改成抬高面板加左侧强调竖线,行列几何不变,鼠标命中不受影响;Agent Hub 文案里的 `omp-dev` 改成 `npi`。工具调用卡片、错误横幅未改。
+- 2026-11-05 CLI 右侧栏按 Desktop 侧栏的顺序重排:Environment、Context(进度条)、Plan usage(额度、重置时间,>65% 变黄、>85% 变红)、This conversation、Todo;额度来自状态行的缓存,5 分钟刷新一次。
+- 2026-11-05 阿里四个入口(国际站、中国站、Coding Plan、Token Plan)的模型信息和思考等级按 OpenCode 2.2.5 随包的 models.dev 数据写进 `rules/providers/alibaba*.kdl`;`models.json` 里两个套餐的行已同步。
+- 2026-11-05 设置页:←/→ 只换页;开关和枚举也改成回车进二级菜单、Esc 返回,空格不再进入;原生 TSP 页面不变。
+- 2026-11-05 Rail 输入框面板比页面背景浅一档(`theme.raisedBackground`),首页再加高两行。
+- 2026-11-05 背景色改用主题自带的 `export.pageBg`(输入框与背景同色时自动错开),切换主题实时刷新;空闲时第一次 Ctrl+C 显示退出提示,1 秒内再按退出;工作中 Ctrl+C 仍只取消。退出后清屏(`tui.clearOnExit` 可关)。
+
 - 首页使用居中 Rail 输入框，高度自适应；框内底行为 Build / Plan / Goal、模型和服务商，框外显示真实绑定的快捷键，首页页脚为左目录、右版本。Shell / Python / Plan 的占位提示随模式变化。
 - 命令弹层、设置、会话、服务连接共用 `chrome/list-dialog.ts` 框架。命令列表位于输入框上方，另外三类列表居中打开，保留搜索、鼠标操作、确认与取消逻辑。
 - 设置：搜索跨页生效，简单值可用左右键切换，Ctrl+左右键切换页签；子菜单保留独立输入与 Esc 返回。

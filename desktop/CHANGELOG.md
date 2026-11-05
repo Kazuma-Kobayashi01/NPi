@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Alibaba's international pay-as-you-go provider is listed as `Alibaba (International)`, separate from `Alibaba(China)`.
+- Quick ask (Option+Space) is now a floating panel that answers in place: it takes the keyboard without bringing the app forward, keeps its conversation, shows messages, tool calls and approvals, and switches mode, model and thinking from a capsule along its bottom edge. "Continue in window" opens the same conversation in the main window.
+- Worktree tasks in Code: a project's branch button opens a tab on its own worktree and branch, so tasks do not touch each other's files. The git browser shows how far it is from the main checkout's branch and merges it, asks the Agent for a PR, or removes it.
+- Review in the git browser: comment on a line and send the comments to the Agent together; undo one change of a modified file and keep the rest.
+- Rewind takes files back too: the kernel snapshots a Code project's files before each prompt, and Rewind offers to restore them with the conversation.
 - Settings → Usage: what is left of each subscription as horizontal bars with their reset times, then the usage statistics, which no longer need their own window.
 - Memory: in Chat, Code and Academic the model keeps short notes about you (field, work, interests, projects, people) and reads them when a conversation starts. Stored in SQLite at `~/.local/share/npi/memory.db`; on by default, with every note editable in Settings → Memory. Chat's old `MEMORY.md` is taken in once.
 - Agents can bind PDFs: `library_attach` (a path, a look under `papers/`, or every reference at once), and `library_add` binds a reference's PDF by itself.
@@ -41,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
 ### Changed
 
+- New Chat conversations start with thinking off; it can still be raised per conversation.
 - Academic sessions have a prompt of their own (research work and evidence rules) instead of only a coding prompt, and one guide to the project's tools. The Copilot's prompt no longer leaves out its tools or denies the network it has, and tool descriptions are shorter.
 - The Copilot can read `write/`.
 

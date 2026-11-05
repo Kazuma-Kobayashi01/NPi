@@ -19,7 +19,7 @@
 
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, SubagentPane, ProjectSidebar, EmptyWorkspace, SideChat,
-  ChromeToolbar, AmbientRail, ConversationTree, PlanKanban, HistoryModal, GitBrowser, FilePreview, ApprovalRulesPanel, UsageStatsPanel, PromptHistoryModal, useTweaks,
+  ChromeToolbar, AmbientRail, ConversationTree, PlanKanban, HistoryModal, GitBrowser, RewindDialog, FilePreview, ApprovalRulesPanel, UsageStatsPanel, PromptHistoryModal, useTweaks,
   SettingsPage, SettingsWindow, ConfirmCloseDialog, LibrarianWindow,
   useWidgets, WidgetCard, WidgetErrorCard, WidgetApprovalCard, WidgetBoundary,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, DEFAULT_PROFILE_ID,
@@ -169,9 +169,9 @@ function App() {
   React.useEffect(() => { bridge?.setAppMode?.(appModeName); }, [bridge, appModeName]);
   // A quick-ask prompt for a new chat (live.js) shows the Chat space first.
   React.useEffect(() => {
-    const show = () => setTweak("appMode", "chat");
-    window.addEventListener("npi:show-chat", show);
-    return () => window.removeEventListener("npi:show-chat", show);
+    const show = e => setTweak("appMode", e.detail);
+    window.addEventListener("npi:show-mode", show);
+    return () => window.removeEventListener("npi:show-mode", show);
   }, [setTweak]);
 
   // Chat's hand-off offers (chat_handoff.rs), one per tab; the card is above the composer.
@@ -651,6 +651,8 @@ function App() {
   // (OMP_WIDGETS.appendToDraft), since ⌘K's draftInsert replaces a
   // `/command` draft.
   const [promptInsert, setPromptInsert] = React.useState(null);
+  // A Rewind waiting for the user's choice about the files (design/rewind-dialog.jsx).
+  const [rewindAsk, setRewindAsk] = React.useState(null);
   const handlePickHistoryPrompt = (text) => setPromptInsert({ text, nonce: Date.now() });
   // `action` (OMP_WIDGETS.insertAction, from widgets.json only): "new-tab"
   // always opens a fresh tab on the project and fills that tab's draft (never
@@ -825,10 +827,22 @@ function App() {
   // Close tab → kills that session's omp process; bridge updates tab list.
   // Guarded: with `confirmBusyClose` a working tab asks first (live.js).
   // Rewind: back to before a message, its text returned to the prompt box.
-  const handleRewind = async (msg, dup) => {
-    const res = await bridge?.rewindToPrompt?.(msg.text, dup);
+  const finishRewind = async (entryId, files) => {
+    const res = await bridge?.rewindTo?.(entryId, files);
     if (res?.ok) setPromptInsert({ text: res.text, nonce: Date.now() });
     else if (res && !res.cancelled) console.warn("[app] rewind failed:", res.error);
+  };
+  // With files changed since that message's snapshot, the user picks whether they go back too.
+  const handleRewind = async (msg, dup) => {
+    const res = await bridge?.rewindPlan?.(msg.text, dup);
+    if (!res?.ok) { if (res) console.warn("[app] rewind failed:", res.error); return; }
+    if (res.changes?.length) setRewindAsk({ entryId: res.entryId, changes: res.changes });
+    else finishRewind(res.entryId, false);
+  };
+  const answerRewind = choice => {
+    const ask = rewindAsk;
+    setRewindAsk(null);
+    if (ask && choice !== "cancel") finishRewind(ask.entryId, choice === "files");
   };
   const handleCloseTab = id => { bridge?.closeSessionGuarded(id); };
   // Manual rename (#32): omp's `/rename <title>` via the bridge, which
@@ -857,6 +871,7 @@ function App() {
 
   // "New conversation" in a project: always a new tab, under the project's
   // own profile rather than the active tab's.
+  const handleNewWorktree = (path, profile) => { bridge?.newWorktreeTask(path, profile).catch(err => console.error("[app] worktree task failed:", err)); };
   const handleNewInProject = async (path, profile) => {
     if (!bridge) return;
     try {
@@ -1215,6 +1230,7 @@ function App() {
                 onCloseProject={handleCloseProject}
                 onRenameTab={handleRenameTab}
                 onNewInProject={handleNewInProject}
+                onNewWorktree={appModeName === "code" ? handleNewWorktree : null}
                 onOpenRecent={handleOpenRecent}
                 onForgetRecent={handleForgetRecent}
                 onOpenFolder={handleNewProject}
@@ -1479,8 +1495,11 @@ function App() {
         // (app/use-git-browser.jsx).
         <GitBrowser key={gitProject ?? ""} bridge={bridge}
           initialPath={gitOpen.project === gitProject ? gitOpen.path : null}
-          onClose={closeGit} branch={activeProject.branch ?? null} edits={gitEdits} />
+          onClose={closeGit} branch={activeProject.branch ?? null} edits={gitEdits}
+          project={gitProject ?? ""} onSendToAgent={text => { closeGit(); handleSend(text, []); }} />
       )}
+
+      {rewindAsk && <RewindDialog changes={rewindAsk.changes} onAnswer={answerRewind} />}
 
       {preview && preview.key === planKey && (
         <FilePreview target={preview.target} onClose={closePreview} onOpenGit={previewToGit} />

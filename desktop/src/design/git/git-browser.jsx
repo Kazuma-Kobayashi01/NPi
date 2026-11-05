@@ -10,8 +10,9 @@ const { Icon: _GB_Icon, GitFileTree: _GB_Tree, GitFileView: _GB_View, GitHistory
 
 // Memoised: App re-renders on every streamed frame, and none of them touch
 // these props (`edits` is a count, not the transcript).
-const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath, branch, edits }) {
-  const g = window.useGitBrowser({ bridge, initialPath, branch, edits });
+const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath, branch, edits, project, onSendToAgent }) {
+  const g = window.useGitBrowser({ bridge, initialPath, branch, edits, project });
+  const T = window.OMP_I18N.t;
   const rootRef = React.useRef(null);
   const wc = window.useWindowChrome(onClose, rootRef);
 
@@ -47,6 +48,17 @@ const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath
   // drag-select that merely ends there.
   const downOnScrim = React.useRef(false);
 
+  const wt = g.worktree;
+  // Asks only when something would be lost; the tabs on the worktree close with it.
+  const removeWorktree = async () => {
+    const force = wt.dirty > 0 || wt.ahead > 0;
+    const lost = T("Remove {branch}? {dirty} uncommitted files and {ahead} unmerged commits are lost.", { branch: wt.branch, dirty: wt.dirty, ahead: wt.ahead });
+    if (force && !window.confirm(lost)) return;
+    onClose();
+    const res = await bridge.worktreeRemove(force);
+    if (res && !res.ok && !res.cancelled) console.warn("[git] worktree removal failed:", res.error);
+  };
+
   const repo = g.status?.repo ?? null;
   const changed = g.status?.changed ?? 0;
   const inCommit = Boolean(g.commitSha);
@@ -75,8 +87,25 @@ const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath
           <span className="gitb-head-stats mono">
             {g.status && <span>{changed} changed</span>}
           </span>
+          {g.comments.length > 0 && <>
+            <span className="gitb-chip mono">{T("{n} comments", { n: g.comments.length })}</span>
+            <button type="button" className="btn primary gitb-act" onClick={() => { const text = window.OMP_REVIEW.format(g.comments); g.setComments([]); onSendToAgent(text); }}>{T("Send to Agent")}</button>
+            <button type="button" className="btn ghost gitb-act" onClick={() => g.setComments([])}>{T("Clear")}</button>
+          </>}
+          {wt && <>
+            <span className="gitb-chip mono" title={T("Worktree of {path}", { path: wt.main })}>{wt.target} ↑{wt.ahead} ↓{wt.behind}</span>
+            <button type="button" className="btn ghost gitb-act" disabled={wt.ahead === 0 || wt.dirty > 0} title={wt.dirty > 0 ? T("Commit the worktree first") : undefined} onClick={g.mergeWorktree}>{T("Merge into {branch}", { branch: wt.target })}</button>
+            <button type="button" className="btn ghost gitb-act" onClick={() => onSendToAgent(T("Commit what is left on this branch, push it and open a pull request."))}>{T("Open PR")}</button>
+            <button type="button" className="btn ghost gitb-act danger" onClick={removeWorktree}>{T("Remove worktree")}</button>
+          </>}
           <button type="button" className="btn ghost" onClick={g.refresh} title="Refresh" aria-label="refresh"><_GB_Icon name="refresh" size={12} /></button>
         </div>
+        {g.actionError && (
+          <div className="gitb-banner" role="alert">
+            <span>{g.actionError}</span>
+            <button type="button" className="btn ghost icon" aria-label="dismiss" onClick={() => g.setActionError(null)}><_GB_Icon name="close" size={10} /></button>
+          </div>
+        )}
         {g.error ? (
           <div className="gitb-empty tall gitb-error">{g.error}</div>
         ) : (
@@ -88,7 +117,9 @@ const GitBrowser = React.memo(function GitBrowser({ bridge, onClose, initialPath
               commit={g.commit} truncated={g.truncated} />
             <_GB_View path={g.selected} file={g.file} error={g.fileError} commit={g.commit}
               onStage={inCommit ? null : () => g.stage(g.selected)}
-              onDiscard={inCommit ? null : () => g.discard(g.selected, g.file?.status ?? null)} />
+              onDiscard={inCommit ? null : () => g.discard(g.selected, g.file?.status ?? null)}
+              onDiscardHunk={inCommit ? null : g.discardHunk}
+              comments={inCommit ? null : g.comments} onComments={g.setComments} />
             <_GB_History log={g.log} changedCount={changed}
               selected={g.commitSha ?? "@"} onSelect={g.browse} />
           </div>

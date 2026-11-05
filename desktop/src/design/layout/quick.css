@@ -1,0 +1,56 @@
+/* The quick-ask panel (design/quick/quick-window.jsx). The window is transparent and as tall as
+   .quick; --quick-margin leaves room for the glow and matches MARGIN in quick_ask.rs. */
+html.panel-quick, html.panel-quick body, html.panel-quick #root { background: transparent !important; overflow: hidden; }
+.quick {
+  --quick-margin: 20px;
+  width: 100%; box-sizing: border-box; padding: var(--quick-margin);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.quick-glass {
+  position: relative; width: 100%; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 22px; background: color-mix(in oklab, var(--bg-1) 72%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent),
+    0 0 22px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.quick-bar { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; }
+.quick-avatar {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--accent) 60%, #fff), var(--accent));
+}
+.quick-input {
+  flex: 1; min-width: 0; resize: none; border: 0; outline: 0; padding: 2px 0; background: transparent;
+  color: var(--fg-1); font: inherit; font-size: 19px; line-height: 26px; overflow-y: auto;
+}
+.quick-input::placeholder { color: var(--fg-4); }
+.quick-round {
+  flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--fg-1) 12%, transparent); color: var(--fg-1);
+}
+.quick-round.stop { background: var(--fg-1); }
+.quick-stop { width: 10px; height: 10px; border-radius: 2px; background: var(--bg-1); }
+.quick-messages {
+  display: flex; flex-direction: column; min-height: 0; max-height: 380px; overflow: hidden;
+  border-top: 1px solid var(--line);
+}
+.quick-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 18px;
+  font-size: var(--d-text-xs); color: var(--fg-4);
+}
+.quick-link { border: 0; background: none; padding: 0; color: var(--fg-2); font: inherit; cursor: pointer; }
+.quick-link:disabled { opacity: .45; cursor: default; }
+.quick-capsule {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 6px; border-radius: 999px;
+  background: color-mix(in oklab, var(--bg-1) 72%, transparent);
+  box-shadow: 0 0 0 1px var(--line), 0 6px 18px rgb(0 0 0 / .25);
+}
+.quick-mode {
+  border: 0; border-radius: 999px; padding: 4px 11px; background: none; color: var(--fg-3);
+  font: inherit; font-size: var(--d-text-xs); cursor: pointer;
+}
+.quick-mode.on { color: var(--fg-1); box-shadow: 0 0 0 1.5px var(--accent); }
+.quick-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--line); }
+.quick-select {
+  max-width: 180px; border: 0; outline: 0; background: none; color: var(--fg-2);
+  font: inherit; font-size: var(--d-text-xs);
+}

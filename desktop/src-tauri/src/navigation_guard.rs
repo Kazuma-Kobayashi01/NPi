@@ -118,14 +118,6 @@ pub fn open_external(url: &Url) -> Result<(), String> {
     }
 }
 
-/// The quick-ask window's own page (`quick_ask.rs`): only that window may load
-/// `quickask.html`, with or without its `?backdrop=` hint.
-fn is_quickask_page(label: &str, url: &Url, dev_url: Option<&Url>) -> bool {
-    label == crate::quick_ask::QUICK_LABEL
-        && is_app_origin(url, dev_url)
-        && url.path() == "/quickask.html"
-}
-
 /// A panel window's own page (`panel_window.rs`): `index.html?panel=…`, loaded
 /// by a `panel-…` window and by no other.
 fn is_panel_page(label: &str, url: &Url, dev_url: Option<&Url>) -> bool {
@@ -140,9 +132,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("navigation-guard")
         .on_navigation(|webview, url| {
             let dev_url = webview.config().build.dev_url.clone();
-            if is_quickask_page(webview.label(), url, dev_url.as_ref())
-                || is_panel_page(webview.label(), url, dev_url.as_ref())
-            {
+            if is_panel_page(webview.label(), url, dev_url.as_ref()) {
                 return true;
             }
             match classify(url, dev_url.as_ref()) {
@@ -168,15 +158,6 @@ mod tests {
 
     fn classify_str(url: &str) -> Navigation {
         classify(&Url::parse(url).expect("test URL parses"), None)
-    }
-
-    #[test]
-    fn only_the_quick_ask_window_loads_its_page() {
-        let page = Url::parse("tauri://localhost/quickask.html?backdrop=glass").unwrap();
-        assert!(is_quickask_page("quickask", &page, None));
-        assert!(!is_quickask_page("main", &page, None));
-        let other = Url::parse("tauri://localhost/other.html").unwrap();
-        assert!(!is_quickask_page("quickask", &other, None));
     }
 
     #[test]

@@ -21,6 +21,7 @@ Feature internals (RPC frames, state machines, measured omp behaviour) live in `
 |`subagents.md`|subagent manager|`app/subagents.js`, `design/subagents/`|
 |`conversation-tree.md`|conversation tree + prompt-cache model, branch/fork|`conversation_tree/`, `app/conversation-tree*.js`|
 |`git-browser.md`|git browser: files tree, full-file inline diff, commit graph, browse a commit|`src-tauri/src/git_browser/`, `app/git-browser.js`, `app/use-git-browser.jsx`, `design/git/`|
+|`worktree-tasks.md`|Code work review: a worktree per task, review comments and one-change undo in the git browser, file checkpoints behind Rewind|`worktree.rs`, `git_browser/hunk.rs`, `app/review-comments.js`, `design/rewind-dialog.jsx`|
 |`file-preview.md`|file preview of read-card paths and agent file links, read-card image thumbnails, write-card paths to the git browser|`project_file.rs`, `app/file-preview.js`, `design/chat/file-preview.jsx`, `design/chat/tool-card.jsx`|
 |`goal-mode.md`|goal mode, auto-continue|`app/goal.js`, `goal_config.rs`|
 |`updater.md`|in-app updates, release signing|`updater.rs`, `app/updater.js`|
@@ -39,7 +40,7 @@ Feature internals (RPC frames, state machines, measured omp behaviour) live in `
 |`writing.md`|the paper of an Academic project: `write/` Git repository, Compile (agent, Markdown to LaTeX), Link, the Write window|`src-tauri/src/writing/`, `src/design/write/`, `app/write-pipeline.js`|
 |`memory.md`|notes about the user across Chat, Code and Academic: `memory.db`, the model's tools and prompt block, the Settings row|`src-tauri/src/memory/`, `app/memory.js`, `design/settings/rows-memory.jsx`|
 |`notifications.md`|OS notifications: Rust-decided banners (done, needs input, failed), macOS `UNUserNotificationCenter` permission and click-to-tab, Settings row|`src-tauri/src/notify/`, `app/notify.js`, `design/settings/rows-notifications.jsx`|
-|`quick-ask.md`|Option+Space quick-ask window, menu-bar tray icon, Cmd+W hiding to the tray|`src-tauri/src/quick_ask.rs`, `src/quickask.*`|
+|`quick-ask.md`|Option+Space quick-ask window, menu-bar tray icon, Cmd+W hiding to the tray|`src-tauri/src/quick_ask.rs`, `quick_ask_glass.rs`, `design/quick/quick-window.jsx`|
 |`python-runtime.md`|embedded CPython/uv bundle, `--npi-python-host` re-entry, content-addressed install and versioned managed environments, Tauri status/ensure/packages commands|`python_runtime/`, `scripts/build-python-runtime.sh`, `resources/`|
 |`pr-automation.md`|Changes rail card: current-branch PR discovery (gix + trusted `gh`, GraphQL + head-filtered REST, fail-closed selection), CI line, read cadence and visibility gating, `ghMissing`/`retryable` errors, opt-in Auto-fix dispatch and feedback identities|`pr_automation/`, `app/pr-automation.js`, `app/use-pr-automation.jsx`, `design/pr-automation-*.jsx`, `design/pr-checks.jsx`, `live.js` `prAutomationSnapshot`/`prAutomationSend`|
 

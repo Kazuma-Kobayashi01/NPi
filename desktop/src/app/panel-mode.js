@@ -10,7 +10,7 @@
   const q = new URLSearchParams(location.search);
   const kind = q.get("panel");
   window.OMP_PANEL = kind ? { kind, project: q.get("project") || "", profile: q.get("profile") || null, anchor: Number(q.get("anchor")) || null, path: q.get("path") || null } : null;
-  if (window.OMP_PANEL) document.documentElement.classList.add("panel-mode");
+  if (window.OMP_PANEL) document.documentElement.classList.add("panel-mode", `panel-${kind}`);
 
   /** Opens (or focuses) the secondary window of `kind`; resolves to whether it opened. */
   window.OMP_OPEN_PANEL = async function (kind, opts) {

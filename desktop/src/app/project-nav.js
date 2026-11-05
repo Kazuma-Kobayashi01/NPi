@@ -38,8 +38,14 @@
     return parts.length > 1 ? parts[parts.length - 2] : "";
   }
 
+  /** The folder a tab belongs under: a worktree task's project, else its own. */
+  function homeOf(tab) {
+    return tab.worktree?.main || tab.path;
+  }
+
   function groupKey(tab) {
-    return tab.path ? `${tab.profile}|${normPath(tab.path)}` : `tab:${tab.id}`;
+    const home = homeOf(tab);
+    return home ? `${tab.profile}|${normPath(home)}` : `tab:${tab.id}`;
   }
 
   /** Tabs grouped by project, groups in order of their first member, members
@@ -52,9 +58,9 @@
       if (!group) {
         group = {
           key,
-          path: tab.path || null,
+          path: homeOf(tab) || null,
           profile: tab.profile,
-          name: tab.path ? basename(tab.path) : tab.name,
+          name: homeOf(tab) ? basename(homeOf(tab)) : tab.name,
           tabs: [],
         };
         groups.set(key, group);

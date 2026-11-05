@@ -189,3 +189,31 @@
 .tool-foot .diff-path { color: var(--fg-2); }
 .diff-path:hover, .diff-path:focus-visible { color: var(--accent); text-decoration-color: currentColor; }
 .diff-path:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Review: line actions, comments (git/file-view.jsx), refusals (git/git-browser.jsx). */
+.gitb-line { position: relative; }
+.gitb-line-act {
+  position: absolute; left: 2px; top: 0; width: 18px; height: 100%; padding: 0;
+  display: none; align-items: center; justify-content: center;
+  border: 0; border-radius: 3px; background: var(--accent); color: var(--bg-0, #fff);
+  font: inherit; cursor: pointer;
+}
+.gitb-line-act.undo { left: 22px; background: var(--fg-3); }
+.gitb-line:hover .gitb-line-act, .gitb-line-act:focus-visible { display: inline-flex; }
+.gitb-comment, .gitb-comment-box {
+  margin: 4px 12px 6px 84px; padding: 6px 8px; max-width: 640px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg-1);
+  font-family: var(--font-sans, inherit); white-space: pre-wrap;
+}
+.gitb-comment { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: var(--fg-2); }
+.gitb-comment-box textarea {
+  width: 100%; box-sizing: border-box; resize: vertical; padding: 4px;
+  border: 0; outline: none; background: transparent; color: var(--fg-1); font: inherit;
+}
+.gitb-comment-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.gitb-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px;
+  border-bottom: 1px solid var(--line); color: var(--diff-rm-fg); font-size: var(--d-text-xs);
+}
+.gitb-head { flex-wrap: wrap; row-gap: 4px; }
+.gitb-head .btn, .gitb-head .gitb-chip, .gitb-head-stats { white-space: nowrap; }

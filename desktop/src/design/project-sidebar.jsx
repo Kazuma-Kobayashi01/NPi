@@ -19,7 +19,7 @@ function sidebarHint(actionId, fallback) {
 
 function ProjectSidebar({
   tabs, activeId, recents, profileLabel, saved = [], historyProfile, onResume,
-  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode,
+  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode,
 }) {
   const ctx = window.useContextMenu();
   const tabMenu = t => [
@@ -96,6 +96,7 @@ function ProjectSidebar({
               <div className={`psb-row psb-project ${containsActive && !expanded ? "active" : ""}`}
                 onContextMenu={e => ctx.open(e, [
                   ...(group.path ? [{ label: _PSB_T("Open in Finder"), onClick: () => onReveal(group.path) }, "-"] : []),
+                  ...(group.path && onNewWorktree ? [{ label: _PSB_T("New task in a worktree"), onClick: () => onNewWorktree(group.path, group.profile) }, "-"] : []),
                   { label: _PSB_T("Close"), onClick: () => onCloseProject(group.tabs) },
                 ])}>
                   <button className={`psb-chev ${expanded ? "open" : ""}`}
@@ -115,6 +116,12 @@ function ProjectSidebar({
                     <span className="tab-count psb-count">{group.tabs.length + history.length}</span>
                   </button>
                 <span className="psb-actions">
+                  {group.path && onNewWorktree && (
+                    <button className="psb-act" title={_PSB_T("New task in a worktree")}
+                      onClick={() => onNewWorktree(group.path, group.profile)}>
+                      <Icon name="branch" size={10} />
+                    </button>
+                  )}
                   {group.path && (
                     <button className="psb-act" title={_PSB_T("New conversation here")}
                       onClick={() => onNewInProject(group.path, group.profile)}>
@@ -132,6 +139,7 @@ function ProjectSidebar({
                   ) : (
                     <button className="psb-main" title={t.name} onClick={() => onSelectTab(t.id)}
                       onDoubleClick={() => startRename(t.id)}>
+                      {t.worktree && <span title={t.worktree.branch}><Icon name="branch" size={9} color="var(--accent)" /></span>}
                       <span className="psb-name">{t.name}</span>
                       <TabRunDot state={t.runState} />
                     </button>

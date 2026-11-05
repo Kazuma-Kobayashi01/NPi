@@ -1,6 +1,6 @@
 # 总进度与下一步
 
-整理于 2026-11-05(分支 `3.0.0.121`)。这是**唯一的进度入口**:其他计划文档(`PLAN.md`、`PLAN_3.0.md`、`PLAN_LIBRARIAN.md`、`PLAN_CLI.md`、`PLAN_ACADEMIC_NEXT.md`)写"打算做什么",本文写"现在到了哪里、下一步做什么"。每做完一批就回来改这里。
+整理于 2026-11-05(分支 `3.0.0.135`)。这是**唯一的进度入口**:其他计划文档(`PLAN.md`、`PLAN_3.0.md`、`PLAN_LIBRARIAN.md`、`PLAN_CLI.md`、`PLAN_ACADEMIC_NEXT.md`)写"打算做什么",本文写"现在到了哪里、下一步做什么"。每做完一批就回来改这里。
 
 验证记录:用户装 `3.0.0.132` 后在真实 app 里点过上面列的功能(含 3.0.0.122–132 新增部分),反馈没有问题;逐行的"未验证"标记保留原样,没有逐条改,以后遇到具体问题再回写。
 
@@ -29,7 +29,10 @@
 | 3.0.0.129 | 内容并入 130 | `3.0.0.129/` | **稳定证书** | Agent 绑定 PDF、Academic 提示词与工具整理、Librarian UI 修复 |
 | 3.0.0.130 | 已提交(`aa7753b`) | `3.0.0.130/` | **稳定证书** | Memory、设置里的 Usage 页;SHA-256 `80660874…8713`(未在真机实测) |
 | 3.0.0.131 | 内容并入 132 | `3.0.0.131/` | **稳定证书** | 设置左侧菜单加入 Memory 与 Usage(原先写了配置但没进菜单) |
-| 3.0.0.132 | 已提交并推送(当前) | `3.0.0.132/` | **稳定证书** | 内核 `read-path.md` 修复、提示词/工具/MCP 与实际一致、附件缺失标记;SHA-256 `651cc8bd…8509`(未在真机实测) |
+| 3.0.0.132 | 已提交并推送 | `3.0.0.132/` | **稳定证书** | 内核 `read-path.md` 修复、提示词/工具/MCP 与实际一致、附件缺失标记;SHA-256 `651cc8bd…8509`(未在真机实测) |
+| 3.0.0.133 | 内容并入 135 | `3.0.0.133/` | **稳定证书** | worktree 任务、diff 行评论与单处撤销、Rewind 还原文件(内核)、快速询问悬浮面板 |
+| 3.0.0.134 | 内容并入 135 | `3.0.0.134/` | **稳定证书** | 内核含 CLI 界面改版与阿里四个入口的模型信息、思考等级;`alibaba` 显示为国际站;SHA-256 `caa0fed5…863d`(未在真机实测) |
+| 3.0.0.135 | 已提交并推送(分支 `3.0.0.135`) | `3.0.0.135/` | **稳定证书** | 内核含 CLI 右侧栏额度、设置页二级菜单、面板式弹窗;Desktop 前端相对 134 未改;SHA-256 `dae2b473…a1f5`(未在真机实测) |
 
 打包流程(每次都这样,别改顺序):
 
@@ -39,7 +42,7 @@
 4. `bundle_dmg.sh --skip-jenkins --volname "NPi Desktop" --app-drop-link 480 170 <输出> <含 .app 的目录>`(Tauri 自带的 dmg 步骤会被 Finder 拒绝)
 5. `hdiutil verify`、挂载后 `codesign --verify --deep --strict`、`shasum -a 256`
 
-内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-04 10:47,包含图片 `description` 字段。
+内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-05 13:52。
 
 稳定签名证书 `NPi Desktop Local`(自签名,有效期到 2036 年,在登录钥匙串)用于保住通知授权;换电脑、重置钥匙串或重装系统后要重跑 `scripts/macos-local-signing.sh`。建议把它连私钥导出成 `.p12` 备份。
 
@@ -87,16 +90,18 @@
 
 ### CLI(omp TUI)
 
-阶段 1、2 已做、阶段 3 部分已做(用户消息左竖线、状态行上下文用量、rail 输入框、选项卡对齐);**未做**:右侧 Context 栏、会话标签条;阶段 4 可选。macOS Option 键映射已修。精简提示词与 lite 提示词配置(Gemini Flash/Lite)已做。均未在真实终端逐项确认。
+阶段 1、2、3 已做(用户消息左竖线、rail 输入框、选项卡对齐、连续探索折叠、底部信息逐级降级、右侧栏,设置 `tui.sidePanel`);**未做**:会话标签条;阶段 4 可选。右侧栏只画在屏幕的可变区域,不写进终端回滚区。macOS Option 键映射已修。精简提示词与 lite 提示词配置(Gemini Flash/Lite)已做。均未在真实终端逐项确认。
 
 ### 已清理 / 已决定
 
 - 2026-11-05 已清理构建缓存:删了 `target/debug`、残留 `rw.*.dmg`、已合并 agent worktree 与旧临时目录,磁盘可用 20G→59G。保留 release 增量缓存、`omp/target`、cargo registry、node_modules。
 - 不换 Chromium/CEF:已评估并决定不做(见下文 2026-11-05 之后)。
-- 只做 macOS。
+- 只做 macOS。例外(2026-11-05 决定):CLI 可以做 Windows amd64 适配,改动放 `omp`;Desktop 和其他部分不做。
 
 ### 2026-11-05 之后(未提交)
 
+- 快速询问改成悬浮面板(Option+Space):不激活 App(NSPanel)、独立持有一个普通会话、消息与工具卡片复用主窗口组件、底部胶囊切模式/模型/思考、"在窗口中继续"。页面用假后端验证,**原生部分只编译过**。详见 `desktop/docs/architecture/quick-ask.md`。
+- Code 对标 Codex/Claude Code 第一批:每个任务一个 worktree(`worktree.rs`,放在 `~/.local/share/npi/worktrees/`,侧栏分支按钮新建,标签归在原项目下,Git 浏览器里合并、开 PR、删除);diff 行评论一次发给 Agent、单处改动撤销(`git_browser/hunk.rs`);Rewind 可同时还原文件(在内核 `session/file-checkpoints.ts`,CLI 和 Desktop 共用,存 `<agent 目录>/checkpoints/`,发提示前快照,最多等 2 秒,保留 200 个,上限 2 GiB;Desktop 用 RPC `plan_file_restore`、`restore_files`,CLI 用 Esc Esc)。Rust 用真实 git 测试,界面用假后端在浏览器验证。**未在真实 App 里验证**:新建 worktree 标签、Rewind 还原、评论发送。详见 `desktop/docs/architecture/worktree-tasks.md`。
 - **用户已实测通过(3.0.0.124):** Reader 看 PDF 页、右侧文献栏、macOS 通知授权。其余项(快速询问、Cmd+W、独立窗口、Chat 转交、左图右文、图片 429、OCR、摘要与对照表、MCP)仍在测试中。
 
 - 阅读器改为看 PDF 原页(PDF.js 4.10.38,Apache-2.0,已入库 `src/vendor/pdfjs/`):文字层可选、缩放、页码框;搜索命中与锚点跳转到页并标出引文;"文字"标签保留。
@@ -183,7 +188,7 @@
 1. **真实模型与真实数据**:所有 Copilot 工具(含新增 5 个)、Crossref、PDF 首页规则只有单元测试;`set_host_tools` 握手和模型的实际用法是最大未知。
 2. **OCR 只验证了最简单的样本**。
 3. **Chat 首字速度的上限在模型通道**(`google-antigravity` 一次性返回),界面侧能做的有限。
-4. 内核二进制来自 omp 提交 `4ed05d0a68`(含 `read-path.md` 修复,已提交并推送)。
+4. 内核二进制来自 omp 提交 `b2b044ce14`(分支 `kernel.2.0.10-universal`,已推送到自己的 `origin`)。
 5. **自签名证书只在本机有效**:不能分发给别人安装。
 
 ## 6. 对 `PLAN.md` 需要的修订(待做)

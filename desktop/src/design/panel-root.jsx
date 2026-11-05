@@ -9,6 +9,7 @@ function PanelRoot() {
   // The same theme as the main window: the tweaks live in the shared localStorage.
   const [t] = window.useTweaks(window.TWEAK_DEFAULTS);
   window.useThemeEffect(t);
+  if (kind === "quick") return <QuickWindow bridge={window.OMP_BRIDGE} />;
   if (kind === "librarian") return <LibrarianWindow bridge={window.OMP_BRIDGE} project={project} onClose={close} />;
   if (kind === "reader") return <ReaderWindow bridge={window.OMP_BRIDGE} project={project} anchor={anchor} path={path} onClose={close} />;
   if (kind === "write") return <WriteWindow bridge={window.OMP_BRIDGE} project={project} profile={profile} onClose={close} />;

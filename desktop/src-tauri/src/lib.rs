@@ -69,6 +69,7 @@ mod text;
 mod updater;
 mod widgets;
 mod workspace;
+mod worktree;
 mod writing;
 
 use agent::AgentBridge;
@@ -116,6 +117,8 @@ struct StartSessionArgs {
     /// Which omp profile this tab runs under (`None`/`"default"` = omp's own
     /// `~/.omp/agent` tree); resolved by `profiles::ProfileStore::resolve`.
     profile: Option<String>,
+    /// The mode of this session when it is not the app's (the quick-ask panel).
+    app_mode: Option<String>,
 }
 
 fn strip_compaction_section(yaml: &str) -> &str {
@@ -171,7 +174,10 @@ fn start_session(
         .allocate_if_available(&args.session_id)
         .map_err(|e| format!("browser: {e}"))?;
 
-    let app_mode = app.state::<app_mode::AppModeStore>().get();
+    let app_mode = match args.app_mode.as_deref() {
+        Some(mode) => app_mode::AppMode::parse(mode).ok_or("unknown mode")?,
+        None => app.state::<app_mode::AppModeStore>().get(),
+    };
     match app_mode.compaction_overlay() {
         Some(compaction) => {
             if let Some(path) = &overlay {
@@ -1072,7 +1078,7 @@ async fn list_project_files(
 
 /// The folder of a space (`Code`, `Academic`): `~/Documents/NPi/<space>`,
 /// created on demand. Where the folder picker opens and new work goes.
-fn workspace_dir(app: &tauri::AppHandle, space: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn workspace_dir(app: &tauri::AppHandle, space: &str) -> Option<std::path::PathBuf> {
     use tauri::Manager;
     let dir = app.path().document_dir().ok()?.join("NPi").join(space);
     std::fs::create_dir_all(&dir).ok()?;
@@ -1330,6 +1336,40 @@ async fn workspace_accept(path: String, rel_path: String) -> Result<(), String> 
 #[tauri::command]
 async fn workspace_reject(path: String, rel_path: String) -> Result<(), String> {
     off_ipc(move || workspace::reject(Path::new(&path), &rel_path)).await?
+}
+
+/// Undo one change of a file, leaving its other edits — see `git_browser::discard_hunk`.
+#[tauri::command]
+async fn workspace_discard_hunk(
+    path: String,
+    rel_path: String,
+    old: Option<u32>,
+    new: Option<u32>,
+    text: String,
+) -> Result<(), String> {
+    off_ipc(move || git_browser::discard_hunk(Path::new(&path), &rel_path, old, new, &text)).await?
+}
+
+/// A new worktree and branch for a task in the project at `path` — see `worktree::create`.
+#[tauri::command]
+async fn worktree_create(path: String) -> Result<worktree::Created, String> {
+    off_ipc(move || worktree::create(Path::new(&path))).await?
+}
+
+/// `None` unless `path` is a worktree NPi made — see `worktree::info`.
+#[tauri::command]
+async fn worktree_info(path: String) -> Result<Option<worktree::Info>, String> {
+    off_ipc(move || worktree::info(Path::new(&path))).await?
+}
+
+#[tauri::command]
+async fn worktree_merge(path: String) -> Result<worktree::Info, String> {
+    off_ipc(move || worktree::merge(Path::new(&path))).await?
+}
+
+#[tauri::command]
+async fn worktree_remove(path: String, force: bool) -> Result<(), String> {
+    off_ipc(move || worktree::remove(Path::new(&path), force)).await?
 }
 
 /// Widget config, approvals, active view and runs — see
@@ -2125,6 +2165,11 @@ pub fn run() {
             screen_capture::capture_screen_to_tmp,
             workspace_accept,
             workspace_reject,
+            workspace_discard_hunk,
+            worktree_create,
+            worktree_info,
+            worktree_merge,
+            worktree_remove,
             widgets_state,
             widgets_reload,
             widgets_approve,
@@ -2167,7 +2212,8 @@ pub fn run() {
             hide_main_window,
             panel_window::open_panel_window,
             clipboard::clipboard_write,
-            quick_ask::quickask_submit,
+            quick_ask::quickask_continue,
+            quick_ask::quickask_folder,
             quick_ask::quickask_hide,
             quick_ask::quickask_resize,
             python_runtime::python_runtime_status,

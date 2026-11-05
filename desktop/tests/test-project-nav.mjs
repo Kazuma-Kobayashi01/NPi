@@ -87,6 +87,14 @@ check("pathless tabs never merge, and keep their own name", () => {
   assert.equal(groups[0].path, null);
 });
 
+check("a worktree task groups under the project it came from", () => {
+  const task = { ...tab("b", "/wt/task-1"), worktree: { main: "/x/proj", branch: "npi/task-1" } };
+  const groups = N.groupTabs([tab("a", "/x/proj"), task]);
+  assert.equal(groups.length, 1);
+  assert.deepEqual([groups[0].name, groups[0].path], ["proj", "/x/proj"]);
+  assert.equal(N.groupTabs([task])[0].path, "/x/proj", "a task alone still shows its project");
+});
+
 check("group order follows each project's first appearance", () => {
   const groups = N.groupTabs([tab("a", "/x"), tab("b", "/y"), tab("c", "/x"), tab("d", "/z")]);
   assert.deepEqual(groups.map(g => g.name), ["x", "y", "z"]);

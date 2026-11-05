@@ -76,6 +76,8 @@ const DELTA_EVENT_FILTER: &str =
 const ALLOWED_COMMAND_TYPES: &[&str] = &[
     "extension_ui_response",
     "get_session_stats",
+    "plan_file_restore",
+    "restore_files",
     "get_state",
     "get_messages",
     "get_available_models",

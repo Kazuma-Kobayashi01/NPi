@@ -1,10 +1,11 @@
 //! The quick-ask window and the menu-bar (tray) icon.
 //!
-//! Option+Space opens a small always-on-top window (`src/quickask.html`) with
-//! one prompt field. Sending it hands the text to the main window (event
-//! `quickask://submit`, handled in `live.js`), which opens a new chat or
-//! continues the current tab. The quick-ask page is plain HTML: it holds no
-//! secrets and calls only [`quickask_submit`] and [`quickask_hide`].
+//! Option+Space shows a floating panel that answers without bringing the app
+//! forward, like Spotlight: on macOS it is a non-activating panel
+//! (`quick_ask_glass.rs`), so whatever the user was in stays the active app. The
+//! page is `index.html?panel=quick` (`design/quick/quick-window.jsx`), which runs
+//! `live.js` for one ordinary conversation of its own. That conversation is saved
+//! like any other, and [`quickask_continue`] hands it to the main window.
 //!
 //! The tray icon is how the app is reached once its window is closed with
 //! Cmd+W or the red button (`lib.rs` `hides_on_close`): on macOS the Dock icon
@@ -17,15 +18,21 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-pub const QUICK_LABEL: &str = "quickask";
-const WIDTH: f64 = 720.0;
-const HEIGHT: f64 = 92.0;
-/// Extra height while the "New Chat / Current chat" menu is open below the bar.
-const MENU_HEIGHT: f64 = 120.0;
-/// Whether a native blur view backs the bar (`quick_ask_glass.rs`); the page draws the glass itself (`quickask.css`).
-const NATIVE_BACKDROP: bool = true;
-/// The longest prompt the quick-ask window may hand over.
-const MAX_PROMPT_BYTES: usize = 20_000;
+/// A `panel-…` label: it takes the main window's capabilities and navigation rule (`panel_window.rs`).
+pub const QUICK_LABEL: &str = "panel-quick";
+const PAGE: &str = "index.html?panel=quick";
+const WIDTH: f64 = 760.0;
+/// The height before the page reports its own.
+const HEIGHT: f64 = 140.0;
+const MIN_HEIGHT: f64 = 80.0;
+/// Input, 380 pt of messages, footer and capsule, with the page's margins.
+const MAX_HEIGHT: f64 = 700.0;
+/// The window's transparent margin around the glass, for its glow (`quick.css` `--quick-margin`).
+const MARGIN: f64 = 20.0;
+const CORNER_RADIUS: f64 = 22.0;
+
+/// The screen the window was last opened on.
+static SCREEN: std::sync::Mutex<Option<Area>> = std::sync::Mutex::new(None);
 
 fn shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::ALT), Code::Space)
@@ -50,20 +57,8 @@ pub fn main_hidden(app: &AppHandle) {
     let _ = app;
 }
 
-/// The page, told which native backdrop (if any) is behind it: `?backdrop=glass` or `vibrancy`.
-fn page() -> &'static str {
-    #[cfg(target_os = "macos")]
-    if NATIVE_BACKDROP {
-        match crate::quick_ask_glass::available() {
-            crate::quick_ask_glass::Backdrop::Vibrancy => return "quickask.html?backdrop=vibrancy",
-            crate::quick_ask_glass::Backdrop::None => {}
-        }
-    }
-    "quickask.html"
-}
-
 fn build_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
-    let window = WebviewWindowBuilder::new(app, QUICK_LABEL, WebviewUrl::App(page().into()))
+    let window = WebviewWindowBuilder::new(app, QUICK_LABEL, WebviewUrl::App(PAGE.into()))
         .title("Quick Ask")
         .inner_size(WIDTH, HEIGHT)
         .decorations(false)
@@ -77,35 +72,85 @@ fn build_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
         .build()
         .map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
-    if NATIVE_BACKDROP {
-        // The bar is inset from the window edge (the page's body padding) and has 22 pt corners.
+    {
         let target = window.clone();
         let _ = window.run_on_main_thread(move || {
             if let Ok(ns_window) = target.ns_window() {
-                crate::quick_ask_glass::apply(ns_window, WIDTH, HEIGHT, 14.0, 24.0);
+                crate::quick_ask_glass::make_panel(ns_window);
+                crate::quick_ask_glass::apply(ns_window, WIDTH, HEIGHT, MARGIN, CORNER_RADIUS);
             }
         });
     }
     Ok(window)
 }
 
-/// Puts the window in the upper third of the screen the pointer is on.
-fn place(window: &tauri::WebviewWindow) {
-    let monitor = window
-        .app_handle()
-        .cursor_position()
-        .ok()
-        .and_then(|p| window.app_handle().monitor_from_point(p.x, p.y).ok().flatten())
-        .or_else(|| window.current_monitor().ok().flatten());
-    let Some(monitor) = monitor else { return };
-    let scale = monitor.scale_factor();
-    let (size, origin) = (monitor.size(), monitor.position());
-    let x = f64::from(origin.x) + (f64::from(size.width) - WIDTH * scale) / 2.0;
-    let y = f64::from(origin.y) + f64::from(size.height) * 0.22;
-    let _ = window.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+/// The usable part of a screen, in physical pixels.
+#[derive(Clone, Copy)]
+struct Area {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    scale: f64,
 }
 
-/// Option+Space: show the quick-ask window, or hide it when it is already up.
+/// `(x, y)` of a window `width` by `height` points, centred both ways on `area`. One taller than
+/// the area stays on it, top first.
+fn position(area: Area, width: f64, height: f64) -> (i32, i32) {
+    let x = f64::from(area.x) + (f64::from(area.width) - width * area.scale) / 2.0;
+    let y = f64::from(area.y) + ((f64::from(area.height) - height * area.scale) / 2.0).max(0.0);
+    (x.round() as i32, y.round() as i32)
+}
+
+/// The usable area of the screen the pointer is on, past the menu bar and the Dock.
+fn pointer_area(window: &tauri::WebviewWindow) -> Option<Area> {
+    let app = window.app_handle();
+    let monitor = app
+        .cursor_position()
+        .ok()
+        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+        .or_else(|| window.current_monitor().ok().flatten())?;
+    let work = monitor.work_area();
+    Some(Area {
+        x: work.position.x,
+        y: work.position.y,
+        width: work.size.width,
+        height: work.size.height,
+        scale: monitor.scale_factor(),
+    })
+}
+
+/// Puts the window on the screen the pointer is on.
+fn place(window: &tauri::WebviewWindow) {
+    let Some(area) = pointer_area(window) else {
+        return;
+    };
+    let height = window
+        .inner_size()
+        .map_or(HEIGHT, |size| f64::from(size.height) / area.scale);
+    let (x, y) = position(area, WIDTH, height);
+    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    SCREEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .replace(area);
+}
+
+/// Makes the window the key window, without activating the app, with the keyboard on its page.
+fn show(window: &tauri::WebviewWindow) {
+    let _ = window.show();
+    #[cfg(target_os = "macos")]
+    {
+        let _ = window.with_webview(|webview| {
+            crate::quick_ask_glass::focus_view(webview.ns_window(), webview.inner());
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window.set_focus();
+    let _ = window.emit("quickask://focus", ());
+}
+
+/// Option+Space: show the quick-ask window, or hide it when it is up.
 pub fn toggle(app: &AppHandle) {
     let window = match app.get_webview_window(QUICK_LABEL) {
         Some(w) => w,
@@ -114,15 +159,12 @@ pub fn toggle(app: &AppHandle) {
             Err(e) => return eprintln!("quick ask window: {e}"),
         },
     };
-    if window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false) {
+    if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
         return;
     }
-    let _ = window.set_size(tauri::LogicalSize::new(WIDTH, HEIGHT));
     place(&window);
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = window.emit("quickask://focus", ());
+    show(&window);
 }
 
 /// A click outside the quick-ask window puts it away.
@@ -132,12 +174,14 @@ pub fn on_blur(app: &AppHandle) {
     }
 }
 
-/// Grows the window downward for the target menu, and back (the bar stays put).
+/// The page's height changed: the window follows and stays centred.
 #[tauri::command]
-pub fn quickask_resize(app: AppHandle, open: bool) {
+pub fn quickask_resize(app: AppHandle, height: f64) {
     if let Some(window) = app.get_webview_window(QUICK_LABEL) {
-        let height = if open { HEIGHT + MENU_HEIGHT } else { HEIGHT };
-        let _ = window.set_size(tauri::LogicalSize::new(WIDTH, height));
+        let _ = window.set_size(tauri::LogicalSize::new(
+            WIDTH,
+            height.clamp(MIN_HEIGHT, MAX_HEIGHT),
+        ));
     }
 }
 
@@ -146,21 +190,47 @@ pub fn quickask_hide(app: AppHandle) {
     on_blur(&app);
 }
 
-/// Sends a prompt from the quick-ask window to the main window: `target` is
-/// `new` (a new chat) or `current` (the tab on screen).
+/// The folder a quick conversation of `mode` runs in: the mode's own space.
 #[tauri::command]
-pub fn quickask_submit(app: AppHandle, text: String, target: String) -> Result<(), String> {
-    let text = text.trim();
-    if text.is_empty() || text.len() > MAX_PROMPT_BYTES {
-        return Err("the prompt is empty or too long".to_string());
-    }
-    if !["new", "current"].contains(&target.as_str()) {
-        return Err("unknown target".to_string());
+pub fn quickask_folder(app: AppHandle, mode: String) -> Result<String, String> {
+    let dir = match crate::app_mode::AppMode::parse(&mode).ok_or("unknown mode")? {
+        crate::app_mode::AppMode::Chat => app
+            .state::<crate::chat_space::ChatSpace>()
+            .ensure_dir()?
+            .to_path_buf(),
+        crate::app_mode::AppMode::Code => {
+            crate::workspace_dir(&app, "Code").ok_or("no Code folder")?
+        }
+        crate::app_mode::AppMode::Academic => {
+            crate::workspace_dir(&app, "Academic").ok_or("no Academic folder")?
+        }
+    };
+    dir.to_str()
+        .map(str::to_string)
+        .ok_or_else(|| "not a UTF-8 path".to_string())
+}
+
+/// Opens the panel's conversation in the main window, which brings the app forward, and puts the
+/// panel away. The caller has closed its own process on the file first.
+#[tauri::command]
+pub fn quickask_continue(
+    app: AppHandle,
+    session_file: String,
+    profile: Option<String>,
+    cwd: String,
+    mode: String,
+) -> Result<(), String> {
+    if crate::app_mode::AppMode::parse(&mode).is_none() {
+        return Err("unknown mode".to_string());
     }
     on_blur(&app);
     show_main(&app);
-    app.emit_to("main", "quickask://submit", json!({ "text": text, "target": target }))
-        .map_err(|e| e.to_string())
+    app.emit_to(
+        "main",
+        "quickask://continue",
+        json!({ "sessionFile": session_file, "profile": profile, "cwd": cwd, "mode": mode }),
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Registers Option+Space and builds the tray icon. Neither failing stops the app.
@@ -180,13 +250,20 @@ pub fn setup(app: &AppHandle) {
     if let Err(e) = build_tray(app) {
         eprintln!("tray icon: {e}");
     }
+    // Built ahead: the first Option+Space must not wait for the page to load.
+    if let Err(e) = build_window(app) {
+        eprintln!("quick ask window: {e}");
+    }
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open NPi Desktop", true, None::<&str>)?;
     let ask = MenuItem::with_id(app, "ask", "Quick Ask      ⌥Space", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit NPi Desktop", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &ask, &PredefinedMenuItem::separator(app)?, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &ask, &PredefinedMenuItem::separator(app)?, &quit],
+    )?;
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
     TrayIconBuilder::with_id("main")
         .icon(icon)
@@ -221,6 +298,39 @@ mod tests {
     #[test]
     fn the_shortcut_is_option_space() {
         assert_eq!(shortcut().to_string().to_lowercase(), "alt+space");
+    }
+
+    #[test]
+    fn the_window_is_centred_both_ways() {
+        let area = Area {
+            x: 0,
+            y: 0,
+            width: 2880,
+            height: 1800,
+            scale: 2.0,
+        };
+        assert_eq!(position(area, 760.0, 140.0), (680, 760));
+        let left = Area {
+            x: -1920,
+            y: 100,
+            width: 1920,
+            height: 1000,
+            scale: 1.0,
+        };
+        assert_eq!(position(left, 760.0, 140.0), (-1340, 530));
+    }
+
+    #[test]
+    fn a_window_stays_centred_as_it_grows_and_never_leaves_the_top() {
+        let area = Area {
+            x: 0,
+            y: 0,
+            width: 1440,
+            height: 900,
+            scale: 1.0,
+        };
+        assert_eq!(position(area, 760.0, 600.0).1, 150);
+        assert_eq!(position(area, 760.0, 2000.0).1, 0);
     }
 
     #[test]

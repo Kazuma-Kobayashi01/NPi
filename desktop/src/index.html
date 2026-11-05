@@ -252,6 +252,7 @@
        app/use-git-browser.jsx and app-live.jsx destructure
        window.OMP_GIT_BROWSER at top level, so it must load before them. -->
   <script src="app/git-browser.js"></script>
+  <script src="app/review-comments.js"></script>
 
   <!-- Widths of the resizable columns beside the chat (#41): bounds, the
        fit to the window, drag and keyboard steps, CHAT_MIN. Dependency-free
@@ -466,6 +467,8 @@
        window.Icon at top level. app-live.jsx renders it from live.js's
        closeConfirm snapshot field. -->
   <script type="text/babel" src="design/confirm-close.jsx"></script>
+  <script type="text/babel" src="design/rewind-dialog.jsx"></script>
+  <script type="text/babel" src="design/quick/quick-window.jsx"></script>
   <!-- Conversation tree pane: rows (formatters, graph, meter) → detail
        footer → pane; the detail and the pane destructure the earlier
        files' window exports at top level, so keep this order. -->

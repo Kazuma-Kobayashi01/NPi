@@ -34,7 +34,7 @@
     zai: "Z.AI",
     minimax: "MiniMax",
     "alibaba-cn": "Alibaba(China)",
-    alibaba: "Alibaba(China)",
+    alibaba: "Alibaba (International)",
     dashscope: "Alibaba(China)",
   };
 

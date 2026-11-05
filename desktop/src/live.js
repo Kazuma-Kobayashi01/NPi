@@ -388,6 +388,9 @@
   // Snapshot `sessions[]`: the registry entries plus each tab's run state.
   // Active tab reads live state; background tabs read their cached snapshot
   // (never activated yet = "idle" defaults).
+  // The quick-ask panel: a window of its own, running one conversation (quick_ask.rs).
+  const _QUICK_PANEL = window.OMP_PANEL?.kind === "quick";
+
   function _sessionsView() {
     return [...sessionRegistry.values()].map(s => ({
       ...s,
@@ -759,6 +762,7 @@
   }
 
   async function _flushLayout() {
+    if (_QUICK_PANEL) { _layoutPending = null; return; }
     _layoutWriting = true;
     while (_layoutPending) {
       const layout = _layoutPending;
@@ -1229,7 +1233,7 @@
     settledListeners.set(id, settled);
     await settled.ready;
     const approvalMode = await window.__TAURI__.core.invoke("start_session", {
-      args: { sessionId: id, cwd: cwd ?? "", resume, profile },
+      args: { sessionId: id, cwd: cwd ?? "", resume, profile, appMode: sessionRegistry.get(id)?.appMode ?? null },
     });
     // Queue preferences before any prompt can be sent to this new process.
     await window.__TAURI__.core.invoke("send_command", {
@@ -1705,7 +1709,7 @@
    *  not unit-tested directly; its one pure decision (the `tabName`
    *  derivation) now lives in, and is proven by, `_tabNameFor`. */
   async function _startProjectSession(cwd, {
-    resume = null, name = null, profile, activate = true, remember = true,
+    resume = null, name = null, profile, activate = true, remember = true, appMode = null,
   }) {
     _lastSessionMs = Math.max(Date.now(), _lastSessionMs + 1);
     const id = `session-${_lastSessionMs}`;
@@ -1714,7 +1718,7 @@
     // Register in tab list before starting omp so the tab shows immediately.
     // Register with null branch — chip hidden until git resolves.
     sessionRegistry.set(id, {
-      id, name: tabName, path: cwd ?? "", color, branch: null, profile,
+      id, name: tabName, path: cwd ?? "", color, branch: null, profile, appMode,
       // The approval mode `start_session` spawned this tab's current omp
       // with (set by `_spawnSession`); null while no process runs it.
       approvalMode: null,
@@ -1767,8 +1771,12 @@
       notify();
       throw e;
     }
+    // A worktree task (worktree.rs) groups under the project it came from,
+    // and is no project of its own to list among the recents.
+    const worktree = cwd ? await _invokeSafe("worktree_info", { path: cwd }, null) : null;
+    if (worktree && sessionRegistry.has(id)) sessionRegistry.set(id, { ...sessionRegistry.get(id), worktree });
     // Only a folder that actually spawned is remembered.
-    if (cwd && remember) void _touchRecent(cwd, profile);
+    if (cwd && remember && !worktree) void _touchRecent(cwd, profile);
     if (activate) await _switchToSession(id);
     else notify(); // tab list changed
     return id;
@@ -3165,7 +3173,7 @@
    *  built-in tree while the next `openSession` spawned into the ticked
    *  profile - and `resumeSession` must match whatever was listed. */
   function _activeProfileId() {
-    if (window.OMP_PANEL) return window.OMP_PANEL.profile;
+    if (window.OMP_PANEL && !_QUICK_PANEL) return window.OMP_PANEL.profile;
     return _resolveProfile(sessionRegistry.get(activeSessionId), _noTabProfile(), profiles);
   }
 
@@ -3242,7 +3250,7 @@
   /** Record `path` as opened under `profile`. The backend canonicalises it
    *  and refuses a folder that no longer exists; `_invokeSafe` logs that. */
   function _touchRecent(path, profile) {
-    if (!path) return Promise.resolve();
+    if (!path || _QUICK_PANEL) return Promise.resolve();
     return _recentsCall("recent_projects_touch", { path, profile });
   }
 
@@ -3323,7 +3331,7 @@
   /** Arm Rust's close guard exactly while a close would need confirming;
    *  called on every notify, so it only sends a change. */
   function _syncCloseGuard(sessions) {
-    if (_quitting) return;
+    if (_quitting || _QUICK_PANEL) return;
     const armed = PREFS.closeGuardArmed(sessionPrefs, sessions);
     if (armed === _closeGuardSent) return;
     _closeGuardSent = armed;
@@ -4264,6 +4272,56 @@
       await _invokeSafe("workspace_accept", { path, relPath });
     },
 
+    /** Undo one change of a file: `line` is a changed `Line` of its FileView
+     *  (git_browser/hunk.rs). Resolves like the other git browser calls. */
+    workspaceDiscardHunk(relPath, line) {
+      return _gitBrowserInvoke("workspace_discard_hunk", { relPath, old: line.old, new: line.new, text: line.text });
+    },
+
+    // ── Worktree tasks (worktree.rs) ─────────────────────────────────────
+    /** A new tab on a new worktree and branch of the project at `path`. */
+    async newWorktreeTask(path, profile = _activeProfileId()) {
+      const made = await _invokeResult("worktree_create", { path });
+      if (!made.ok) { _reportOpenFailure(made.error); return null; }
+      return _openReported(made.value.path, { profile, remember: false });
+    },
+    /** The active tab's worktree (`Info`, value null when it is on none). */
+    worktreeInfo() {
+      return _gitBrowserInvoke("worktree_info", {});
+    },
+    /** Merges the active tab's branch into the main checkout's branch. */
+    worktreeMerge() {
+      return _gitBrowserInvoke("worktree_merge", {});
+    },
+    /** Closes the tabs on the active tab's worktree, then removes it and its
+     *  branch. The caller has confirmed anything `force` loses. */
+    async worktreeRemove(force) {
+      const path = _activeProjectPath();
+      const tabs = [...sessionRegistry.values()].filter(s => s.path === path);
+      for (const tab of tabs) {
+        if (!(await window.OMP_BRIDGE.closeSessionGuarded(tab.id))) return { ok: false, cancelled: true };
+      }
+      return _invokeResult("worktree_remove", { path, force });
+    },
+
+    // ── Quick-ask panel (design/quick/quick-window.jsx) ──────────────────
+    /** Replaces the panel's conversation with a new one in `mode`. */
+    async quickNewSession(mode) {
+      for (const id of [...sessionRegistry.keys()]) await window.OMP_BRIDGE.closeSession(id);
+      const path = await window.__TAURI__.core.invoke("quickask_folder", { mode });
+      return _startProjectSession(path, { profile: _activeProfileId(), remember: false, appMode: mode });
+    },
+    /** Hands the panel's conversation to the main window: its process goes
+     *  first, so the file has one writer. */
+    async quickContinue(mode) {
+      const entry = sessionRegistry.get(activeSessionId);
+      if (!entry?.sessionFile) return false;
+      const { sessionFile, profile, path: cwd } = entry;
+      await window.OMP_BRIDGE.closeSession(entry.id);
+      await window.__TAURI__.core.invoke("quickask_continue", { sessionFile, profile, cwd, mode });
+      return true;
+    },
+
     /** Discard a file's working-tree changes (deletes it if untracked —
      *  see workspace.rs::reject's doc comment for the destructive case). */
     async workspaceReject(relPath) {
@@ -4612,10 +4670,12 @@
     branchAt(entryId) {
       return _moveToNewFile(() => _sendWithResponse({ type: "branch", entryId }));
     },
-    /** Rewind to a user message of this tab's conversation: finds its entry by
-     *  text (`dup`: how many earlier prompts had the same text), then `branchAt`.
-     *  Resolves like `branchAt` (`{ ok, text }` / `{ ok: false, error }`). */
-    async rewindToPrompt(text, dup = 0) {
+    /** What a Rewind to a user message would do: finds its entry by text
+     *  (`dup`: how many earlier prompts had the same text) and asks omp what
+     *  the file snapshot taken just before it would change. Resolves to
+     *  `{ ok: true, entryId, changes }` (`changes`: null with no snapshot, as
+     *  with an omp that has no checkpoints) or `{ ok: false, error }`. */
+    async rewindPlan(text, dup = 0) {
       const entry = sessionRegistry.get(activeSessionId);
       if (!entry?.sessionFile) return { ok: false, error: "This conversation has no saved file yet." };
       const res = await _invokeResult("conversation_tree", { sessionFile: entry.sessionFile, profile: entry.profile });
@@ -4623,7 +4683,21 @@
       const same = (res.value.entries ?? []).filter(e => e.kind === "user" && !e.agent && e.inCurrent && String(e.text ?? "").trim() === String(text ?? "").trim());
       const hit = same[dup] ?? same[same.length - 1];
       if (!hit) return { ok: false, error: "Could not find that message in the saved conversation." };
-      return _moveToNewFile(() => _sendWithResponse({ type: "branch", entryId: hit.id }));
+      const plan = await _sendWithResponse({ type: "plan_file_restore", entryId: hit.id }).catch(() => null);
+      return { ok: true, entryId: hit.id, changes: plan?.changes ?? null };
+    },
+    /** Rewind to `entryId`; with `files`, they go back to its snapshot first.
+     *  Resolves like `branchAt`. */
+    async rewindTo(entryId, files = false) {
+      if (state.isStreaming) return { ok: false, error: "Wait for the current turn to finish." };
+      if (files) {
+        try {
+          await _sendWithResponse({ type: "restore_files", entryId });
+        } catch (e) {
+          return { ok: false, error: String(e?.message ?? e) };
+        }
+      }
+      return _moveToNewFile(() => _sendWithResponse({ type: "branch", entryId }));
     },
     /** Continue after a message (a turn's last reply): same move as
      *  `branchAt`, nothing to re-ask. omp refuses (`session_busy`) unless idle. */
@@ -5078,7 +5152,14 @@
   // ── Connect to Tauri IPC ──────────────────────────────────────────────────
   // A secondary window (app/panel-mode.js) only calls commands: the tabs,
   // listeners and close guard below belong to the main window.
-  if (window.__TAURI__ && window.OMP_PANEL) {
+  // The quick-ask panel is the exception that runs tabs: its one conversation is
+  // its own, and the main window's open-tabs list, recents and close guard are
+  // left to the main window (`_QUICK_PANEL` above).
+  if (window.__TAURI__ && _QUICK_PANEL) {
+    document.documentElement.classList.add("tauri-native");
+    void _refreshApprovalModes();
+    _refreshProfiles().catch(e => console.error("[live] quick panel profile load failed:", e));
+  } else if (window.__TAURI__ && window.OMP_PANEL) {
     document.documentElement.classList.add("tauri-native");
   } else if (window.__TAURI__) {
     document.documentElement.classList.add("tauri-native");
@@ -5092,19 +5173,14 @@
       const id = event.payload?.sessionId;
       if (typeof id === "string") void window.OMP_BRIDGE.activateSession(id);
     }).catch(error => console.error("[live] notification click listener failed:", error));
-    // The quick-ask window (Option+Space, quick_ask.rs): a prompt for a new chat or the tab on screen.
-    window.__TAURI__.event.listen("quickask://submit", async event => {
-      const { text, target } = event.payload ?? {};
-      if (typeof text !== "string" || !text.trim()) return;
+    // "Continue in window" of the quick-ask panel (quick_ask.rs): its conversation, as a tab here.
+    window.__TAURI__.event.listen("quickask://continue", async event => {
+      const { sessionFile, profile, cwd, mode } = event.payload ?? {};
+      if (typeof sessionFile !== "string" || !sessionFile) return;
+      window.dispatchEvent(new CustomEvent("npi:show-mode", { detail: mode }));
       try {
-        if (target === "new" || !activeSessionId) {
-          const dir = await window.OMP_BRIDGE.chatDir();
-          if (!dir) return;
-          window.dispatchEvent(new CustomEvent("npi:show-chat"));
-          await window.OMP_BRIDGE.openSession(dir);
-        }
-        await window.OMP_BRIDGE.send(text);
-      } catch (error) { console.error("[live] quick ask failed:", error); }
+        await window.OMP_BRIDGE.resumeSession({ path: sessionFile, profile, cwd });
+      } catch (error) { console.error("[live] continuing a quick chat failed:", error); }
     }).catch(error => console.error("[live] quick ask listener failed:", error));
     // Chat's offer to continue as Code or Academic (chat_handoff.rs): the page shows it as a card.
     window.__TAURI__.event.listen("chat://handoff", event => {

@@ -9,7 +9,32 @@
 const { Icon: _GV_Icon, CopyButton: _GV_Copy, GIT_STATUS_META: _GV_META } = window;
 const { hunkStarts: _GV_hunkStarts, splitPath: _GV_splitPath, diffText: _GV_diffText } = window.OMP_GIT_BROWSER;
 
-function GitFileView({ path, file, error, commit, onStage, onDiscard }) {
+/** The box a review comment is typed in. */
+function _GVCommentBox({ onAdd, onCancel }) {
+  const T = window.OMP_I18N.t;
+  const [text, setText] = React.useState("");
+  const add = () => { if (text.trim()) onAdd(text.trim()); };
+  const onKey = e => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); }
+  };
+  return (
+    <div className="gitb-comment-box">
+      <textarea autoFocus rows={3} value={text} onChange={e => setText(e.target.value)} onKeyDown={onKey}
+        placeholder={T("What should change here?")} aria-label={T("Review comment")} />
+      <div className="gitb-comment-acts">
+        <button type="button" className="btn ghost" onClick={onCancel}>{T("Cancel")}</button>
+        <button type="button" className="btn primary" disabled={!text.trim()} onClick={add}>{T("Add comment")}</button>
+      </div>
+    </div>
+  );
+}
+
+function GitFileView({ path, file, error, commit, onStage, onDiscard, onDiscardHunk, comments, onComments }) {
+  const T = window.OMP_I18N.t;
+  const R = window.OMP_REVIEW;
+  const [draftAt, setDraftAt] = React.useState(null);
+  React.useEffect(() => { setDraftAt(null); }, [path, commit?.id]);
   const bodyRef = React.useRef(null);
   const scrollToLine = i => bodyRef.current?.querySelector(`[data-line="${i}"]`)?.scrollIntoView({ block: "center" });
   const [hunk, setHunk] = React.useState(0);
@@ -50,6 +75,9 @@ function GitFileView({ path, file, error, commit, onStage, onDiscard }) {
   const meta = file?.status ? _GV_META[file.status] : null;
   // Stage/discard only act on the working tree, and only on a change.
   const actions = Boolean(onStage && meta);
+  // Only a modified file has changes that can go one at a time (git_browser/hunk.rs).
+  const undoable = Boolean(onDiscardHunk && file?.status === "Modified" && !file.truncated);
+  const shownPath = file?.path ?? path;
 
   return (
     <div className="gitb-pane gitb-view">
@@ -97,12 +125,23 @@ function GitFileView({ path, file, error, commit, onStage, onDiscard }) {
         {lines && (
           <div className="gitb-lines">
             {lines.map((l, i) => (
-              <div key={i} data-line={i} className={`gitb-line k-${l.kind}`}>
-                <span className="gitb-ln">{l.old ?? ""}</span>
-                <span className="gitb-ln">{l.new ?? ""}</span>
-                <span className="diff-mark">{l.kind === "add" ? "+" : l.kind === "rem" ? "−" : " "}</span>
-                <span className="gitb-code">{l.text}</span>
-              </div>
+              <React.Fragment key={i}>
+                <div data-line={i} className={`gitb-line k-${l.kind}`}>
+                  <span className="gitb-ln">{l.old ?? ""}</span>
+                  <span className="gitb-ln">{l.new ?? ""}</span>
+                  <span className="diff-mark">{l.kind === "add" ? "+" : l.kind === "rem" ? "−" : " "}</span>
+                  <span className="gitb-code">{l.text}</span>
+                  {comments && <button type="button" className="gitb-line-act" title={T("Comment on this line")} aria-label={T("Comment on this line")} onClick={() => setDraftAt(i)}>+</button>}
+                  {undoable && hunks.includes(i) && <button type="button" className="gitb-line-act undo" title={T("Undo this change")} aria-label={T("Undo this change")} onClick={() => onDiscardHunk(l)}>↩</button>}
+                </div>
+                {comments?.filter(c => R.isOn(c, shownPath, l)).map(c => (
+                  <div key={c.id} className="gitb-comment">
+                    <span>{c.text}</span>
+                    <button type="button" className="btn ghost icon" aria-label={T("Delete comment")} onClick={() => onComments(R.remove(comments, c.id))}><_GV_Icon name="close" size={9} /></button>
+                  </div>
+                ))}
+                {draftAt === i && <_GVCommentBox onCancel={() => setDraftAt(null)} onAdd={text => { onComments(R.add(comments, shownPath, l, text)); setDraftAt(null); }} />}
+              </React.Fragment>
             ))}
           </div>
         )}

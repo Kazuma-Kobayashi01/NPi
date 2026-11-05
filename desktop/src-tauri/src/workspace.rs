@@ -174,7 +174,7 @@ pub fn weakly_canonicalize(path: &Path) -> std::io::Result<PathBuf> {
 /// Every `git` invocation in this module goes through here. Subcommand-level
 /// flags (`--cached`, `-M`, …) stay at their call sites. `Err` when no `git`
 /// is found.
-fn git(work_dir: &Path) -> Result<Command, String> {
+pub(crate) fn git(work_dir: &Path) -> Result<Command, String> {
     git_in(&child_path_dirs(), work_dir)
 }
 
@@ -190,7 +190,7 @@ fn git_in(dirs: &[PathBuf], work_dir: &Path) -> Result<Command, String> {
 
 /// Run a `git` subcommand and return its stdout, mapping both a spawn
 /// failure and a non-zero exit into a `label`-prefixed error string.
-fn git_output(work_dir: &Path, args: &[&str], label: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn git_output(work_dir: &Path, args: &[&str], label: &str) -> Result<Vec<u8>, String> {
     let output = crate::spawn_gate::output(git(work_dir)?.args(args))
         .map_err(|e| format!("failed to run git {label}: {e}"))?;
     if !output.status.success() {
@@ -227,7 +227,7 @@ pub fn commit_all(dir: &Path, message: &str) -> Result<bool, String> {
 /// answer (an unborn `HEAD`, a path absent from `HEAD`) rather than a
 /// failure — printing their stderr would surface spurious-looking
 /// "fatal:" lines for perfectly normal code paths.
-fn git_succeeds(work_dir: &Path, args: &[&str], label: &str) -> Result<bool, String> {
+pub(crate) fn git_succeeds(work_dir: &Path, args: &[&str], label: &str) -> Result<bool, String> {
     crate::spawn_gate::status(
         git(work_dir)?
             .args(args)

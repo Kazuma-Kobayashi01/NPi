@@ -21,11 +21,13 @@
 mod commit;
 mod file;
 mod graph;
+mod hunk;
 mod log;
 pub(crate) mod status;
 
 pub use commit::{commit, commit_file, CommitView};
 pub use file::{file, is_binary, FileView};
+pub use hunk::discard_hunk;
 pub use log::{log, LogView};
 pub use status::{status, StatusView};
 

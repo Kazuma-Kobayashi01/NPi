@@ -280,6 +280,16 @@ fn omp_args(
     args
 }
 
+/// What a Chat session starts with: its tools, and no thinking, which conversation does not need
+/// and which delays the first word. A resumed chat keeps the level the user last chose.
+fn chat_flags(resume: Option<&str>) -> Vec<String> {
+    let mut flags = vec![format!("--tools={CHAT_TOOLS}")];
+    if resume.is_none_or(str::is_empty) {
+        flags.push("--thinking=off".to_string());
+    }
+    flags
+}
+
 /// A tool-free in-memory session must not discover project or profile capabilities.
 const SIDECHAT_FLAGS: &[&str] = &[
     "--no-session",
@@ -397,7 +407,7 @@ pub(crate) fn spawn_omp(
         // host and UI tools omp always keeps. The coding tools, MCP servers and
         // skills' tool schemas stay out of every request.
         let at = args.len() - usize::from(config.is_some());
-        args.insert(at, format!("--tools={CHAT_TOOLS}"));
+        args.splice(at..at, chat_flags(resume));
     }
     if let Some(text) = prompt {
         // Replaces omp's default prompt (omp still adds the skills list). Before the `--config` token, which stays last.
@@ -661,6 +671,13 @@ mod tests {
                 "--config=/tmp/o.yml",
             ]
         );
+    }
+
+    #[test]
+    fn a_new_chat_starts_without_thinking_and_a_resumed_one_keeps_its_level() {
+        assert!(super::chat_flags(None).contains(&"--thinking=off".to_string()));
+        assert!(super::chat_flags(Some("")).contains(&"--thinking=off".to_string()));
+        assert_eq!(super::chat_flags(Some("/s.jsonl")).len(), 1);
     }
 
     #[test]
