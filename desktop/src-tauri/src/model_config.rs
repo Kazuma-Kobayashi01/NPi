@@ -1,4 +1,4 @@
-//! The model catalog and the default model, through omp's own CLI.
+//! The model catalog, the default model and the model roster, through omp's own CLI.
 //!
 //! No session is needed for either: `omp models --json` lists every chat
 //! model omp can use right now (the providers it is logged in to, plus the
@@ -87,6 +87,50 @@ pub fn default_set(profile: Option<&str>, selector: &str) -> Result<Option<Strin
     roles.insert(DEFAULT_ROLE.to_string(), Value::String(selector.to_string()));
     crate::omp_cli::run(&set_args(profile, &roles)?, OMP_CONFIG)?;
     read_roles(profile).map(|roles| default_of(&roles))
+}
+
+/// The roster (omp's `config/model-roster.ts`): four tiers subagents are scheduled onto, then the
+/// arbiter of a multi-expert review.
+pub const ROSTER_ROLES: [&str; 5] = ["flagship", "high", "standard", "economy", "arbiter"];
+/// Built-in roles that follow a tier while they have no model of their own (omp's resolver).
+pub const FOLLOWING_ROLES: [&str; 3] = ["smol", "task", "slow"];
+
+/// The roster of `profile`: each of [`ROSTER_ROLES`] and [`FOLLOWING_ROLES`] with its own model,
+/// or null when unset (a tier then falls back; a following role follows its tier).
+pub fn roster_get(profile: Option<&str>) -> Result<Value, String> {
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    read_roles(profile).map(|roles| roster_of(&roles))
+}
+
+/// Set (`Some`) or clear (`None`) one roster or following role, keeping every other role; returns
+/// the roster re-read after the write. Clearing a following role makes it follow its tier.
+pub fn roster_set(profile: Option<&str>, role: &str, selector: Option<&str>) -> Result<Value, String> {
+    if !ROSTER_ROLES.contains(&role) && !FOLLOWING_ROLES.contains(&role) {
+        return Err(format!("not a roster role: {role:?}"));
+    }
+    let selector = selector.map(str::trim).filter(|s| !s.is_empty());
+    if let Some(sel) = selector {
+        if !valid_selector(sel) {
+            return Err(format!("not a model selector: {sel:?}"));
+        }
+    }
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut roles = read_roles(profile)?;
+    match selector {
+        Some(sel) => roles.insert(role.to_string(), Value::String(sel.to_string())),
+        None => roles.remove(role),
+    };
+    crate::omp_cli::run(&set_args(profile, &roles)?, OMP_CONFIG)?;
+    read_roles(profile).map(|roles| roster_of(&roles))
+}
+
+fn roster_of(roles: &Map<String, Value>) -> Value {
+    let own = |role: &str| roles.get(role).and_then(Value::as_str).filter(|s| !s.is_empty()).map_or(Value::Null, |s| json!(s));
+    let mut out = Map::new();
+    for role in ROSTER_ROLES.iter().chain(FOLLOWING_ROLES.iter()) {
+        out.insert((*role).to_string(), own(role));
+    }
+    Value::Object(out)
 }
 
 fn default_of(roles: &Map<String, Value>) -> Option<String> {
@@ -233,6 +277,23 @@ mod tests {
         let roles = parse_roles(out).unwrap();
         assert_eq!(default_of(&roles).as_deref(), Some("a/b:medium"));
         assert_eq!(roles.len(), 2);
+    }
+
+    #[test]
+    fn the_roster_lists_every_tier_and_following_role_with_null_for_unset() {
+        let roles = parse_roles(br#"{"value":{"default":"a/b","flagship":"x/top:high","task":"y/own","high":""}}"#).unwrap();
+        let roster = roster_of(&roles);
+        assert_eq!(roster["flagship"], "x/top:high");
+        assert_eq!(roster["task"], "y/own");
+        assert!(roster["high"].is_null() && roster["economy"].is_null() && roster["smol"].is_null());
+        assert!(roster.get("default").is_none(), "the default model is its own row");
+        assert_eq!(roster.as_object().unwrap().len(), ROSTER_ROLES.len() + FOLLOWING_ROLES.len());
+    }
+
+    #[test]
+    fn only_roster_roles_and_real_selectors_are_written() {
+        assert!(roster_set(None, "default", Some("a/b")).unwrap_err().contains("not a roster role"));
+        assert!(roster_set(None, "flagship", Some("no-slash")).unwrap_err().contains("not a model selector"));
     }
 
     #[test]

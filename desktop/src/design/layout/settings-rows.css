@@ -144,3 +144,10 @@
 .st-fav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-fav-id { flex: none; color: var(--fg-4); font-size: var(--d-text-xs); }
 @media (max-width: 720px) { .st-fav-grid { grid-template-columns: minmax(0, 1fr); } .st-fav-item:nth-child(2) { border-top: 1px solid var(--line-soft); } .st-fav-item:nth-child(odd) { border-right: 0; } }
+
+/* Settings → Models → Model roster (design/settings/rows-models.jsx). */
+.st-roster { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.st-roster-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.st-roster-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-roster-name small { color: var(--fg-3); font-size: var(--d-text-xs); }
+.st-roster-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--fg-3); font-size: var(--d-text-xs); }

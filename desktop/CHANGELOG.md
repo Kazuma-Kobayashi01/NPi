@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Model roster in Settings → Models: flagship, high, standard, economy and arbiter roles; unset fast, subtask and thinking roles follow their corresponding tiers. Auto subagent batches naming one configured tier can dispatch directly.
+- Academic `expert_review`: parallel model-roster experts and an anonymous arbiter for titles, ideas, contributions and manuscripts. The App requires a confirmation card showing models, providers and estimated tokens; MCP callers must obtain consent before declaring confirmation. Simulated reports are saved in the project's research database.
+- The assistant can look back at past conversations (`search_conversations`): every chat in Chat, the project's conversations in Code and Academic, or everything when asked. Only what was said is searched, never tool output, Chinese included.
+- A profile of how you like to work in each mode, kept by the assistant: `~/.local/share/npi/USER-CHAT.md`, `USER-CODE.md`, `USER-ACADEMIC.md`, shown and editable in Settings → Memory.
+- Memory shows how full it is, in the prompt and in Settings: notes of the limit, characters of the prompt, and what was left out.
+- In Code and Academic the assistant may save the steps of a long task as a skill; each new one is shown with Undo, and Settings → Skills lists them with Delete (moved aside, not erased).
 - Alibaba's international pay-as-you-go provider is listed as `Alibaba (International)`, separate from `Alibaba(China)`.
 - Quick ask (Option+Space) is now a floating panel that answers in place: it takes the keyboard without bringing the app forward, keeps its conversation, shows messages, tool calls and approvals, and switches mode, model and thinking from a capsule along its bottom edge. "Continue in window" opens the same conversation in the main window.
 - Worktree tasks in Code: a project's branch button opens a tab on its own worktree and branch, so tasks do not touch each other's files. The git browser shows how far it is from the main checkout's branch and merges it, asks the Agent for a PR, or removes it.
@@ -46,12 +52,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
 ### Changed
 
+- One memory: the kernel's own memory pipeline and its per-folder notes no longer run in the app's tabs whatever the CLI's config says; in Code and Academic it may still write skills from what worked (Settings → Memory → Write skills from what worked), and turning Memory off stops that too. Each note the assistant keeps about you shows for a moment at the bottom of the window, with Undo. Memory now fits as many Chinese notes in a prompt as English ones, and remembers which conversation wrote each note.
+- Files moved beside the command line's: settings to `~/.local/share/npi/desktop`, the Chat profile and instructions to `~/.local/share/npi`, caches to `~/.cache/npi/desktop`, worktree tasks to `~/Documents/NPi/Code/.worktrees`. Interface settings are kept in `~/.local/share/npi/desktop/ui-state.json` too. The old folders are moved over on the first start.
 - New Chat conversations start with thinking off; it can still be raised per conversation.
 - Academic sessions have a prompt of their own (research work and evidence rules) instead of only a coding prompt, and one guide to the project's tools. The Copilot's prompt no longer leaves out its tools or denies the network it has, and tool descriptions are shorter.
 - The Copilot can read `write/`.
 
 ### Fixed
 
+- Settings → Skills listed none of the skills the assistant had written: it looked in omp's folder instead of NPi's.
 - The model is no longer told to read a memory summary that does not exist, to work in a paper repository that has not been set up, or to use memory tools it does not have; files that moved are marked missing in library tool answers; `.mcp.json` follows the app when it moves.
 - Librarian: the group checkboxes no longer stretch and scatter their labels, and a long style name no longer pushes "Copy as…" out of its popover.
 - Host tools no longer stop for approval: omp asked about them in `write` mode, though the Copilot's pane has no prompt to answer.

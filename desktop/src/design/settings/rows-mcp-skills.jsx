@@ -180,6 +180,14 @@
       _invokeMcp("skill_open", { path });
     };
 
+    // A skill the agent wrote is set aside (mcp_skills.rs), after a second click.
+    const [armed, setArmed] = React.useState(null);
+    const handleDelete = (name) => {
+      if (armed !== name) { setArmed(name); return; }
+      setArmed(null);
+      _invokeMcp("skill_delete_managed", { name }).then(res => { if (res.ok) loadSkills(); else setError(res.error); });
+    };
+
     return (
       <Row stack label={row.label} desc={row.desc} query={query}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
@@ -190,7 +198,7 @@
           )}
 
           {!loading && skills.length === 0 && (
-            <div className="st-dim" style={{ fontSize: "var(--d-text-xs)" }}>No skills found in ~/.omp/agent/skills.</div>
+            <div className="st-dim" style={{ fontSize: "var(--d-text-xs)" }}>No skills found in ~/.local/share/npi/agent/skills.</div>
           )}
 
           {skills.map(s => (
@@ -208,10 +216,15 @@
                   {s.description}
                 </div>
               </div>
-              <div>
+              <div style={{ display: "flex", gap: 6 }}>
                 <Button onClick={() => handleOpen(s.path)} title="Open SKILL.md in external editor">
                   Open <Icon name="external" size={10} />
                 </Button>
+                {s.source === "managed" && (
+                  <Button onClick={() => handleDelete(s.id)} title={window.OMP_I18N.t("Written by the agent. Delete moves it to ~/.cache/npi/desktop/skill-trash.")}>
+                    {armed === s.id ? window.OMP_I18N.t("Delete?") : window.OMP_I18N.t("Delete")}
+                  </Button>
+                )}
               </div>
             </div>
           ))}

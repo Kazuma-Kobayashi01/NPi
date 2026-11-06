@@ -306,31 +306,28 @@ pub async fn library_meta(
 }
 
 /// The folder of the user's own `.csl` styles.
-fn styles_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    use tauri::Manager;
-    app.path()
-        .app_config_dir()
+fn styles_dir() -> Result<PathBuf, String> {
+    crate::npi_dirs::config_dir()
         .map(|d| d.join("csl-styles"))
         .map_err(|e| format!("no config folder: {e}"))
 }
 
 /// Built-in citation styles, then the user's own.
 #[tauri::command]
-pub async fn library_styles(app: tauri::AppHandle) -> Result<Vec<StyleInfo>, String> {
-    let dir = styles_dir(&app)?;
+pub async fn library_styles() -> Result<Vec<StyleInfo>, String> {
+    let dir = styles_dir()?;
     crate::off_ipc(move || styles(&dir)).await
 }
 
 /// The references (all, or those in `ids`) as a reference list and in-text citations in `style`.
 #[tauri::command]
 pub async fn library_format(
-    app: tauri::AppHandle,
     space: Space<'_>,
     project: String,
     style: String,
     ids: Option<Vec<i64>>,
 ) -> Result<Formatted, String> {
-    let dir = styles_dir(&app)?;
+    let dir = styles_dir()?;
     with_library(&space, &project, move |lib| {
         let mut entries = lib.list()?;
         if let Some(ids) = &ids {
@@ -345,7 +342,7 @@ pub async fn library_format(
 #[tauri::command]
 pub async fn library_style_add_pick(app: tauri::AppHandle) -> Result<Option<StyleInfo>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let dir = styles_dir(&app)?;
+    let dir = styles_dir()?;
     let (tx, rx) = std::sync::mpsc::channel();
     app.dialog()
         .file()
@@ -395,7 +392,7 @@ pub async fn library_cite_draft(
     style: String,
 ) -> Result<Option<DraftResult>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let dir = styles_dir(&app)?;
+    let dir = styles_dir()?;
     let (tx, rx) = std::sync::mpsc::channel();
     app.dialog()
         .file()

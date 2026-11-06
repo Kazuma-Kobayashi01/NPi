@@ -34,8 +34,8 @@ fn fail(app: &AppHandle, sid: &str, error: &str) {
 }
 /// Bounded breadcrumb trail in the app cache: a failed indicator is otherwise
 /// invisible, since nothing of it reaches the transcript.
-fn trace(app: &AppHandle, line: &str) {
-    let Ok(dir) = app.path().app_cache_dir() else { return };
+fn trace(line: &str) {
+    let Ok(dir) = crate::npi_dirs::cache_dir() else { return };
     let _ = std::fs::create_dir_all(&dir);
     let path = dir.join("computer-use-overlay.log");
     if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 256 * 1024) {
@@ -82,7 +82,7 @@ fn dispatch(app: &AppHandle, action: impl FnOnce(&AppHandle) + Send + 'static) {
 }
 
 pub fn setup(app: &AppHandle) -> Result<(), String> {
-    trace(app, "setup native indicator");
+    trace("setup native indicator");
     windows::remember_exit_hook(app);
     // The share outlives individual operations; a slow tick retires it once the
     // hold window lapses, so the border never stays on screen forever.

@@ -98,5 +98,31 @@
     return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
   }
 
-  window.OMP_MODELS = { vendorLabel, keyOf, pickerModels, groupByVendor, toggleFavorite };
+  // The model roster (src-tauri model_config.rs, omp's config/model-roster.ts): four tiers subagents
+  // are scheduled onto, then the arbiter of a multi-expert review.
+  const ROSTER = [
+    ["flagship", "Flagship", "Design decisions, hard debugging, judgment calls"],
+    ["high", "High", "Substantial implementation and analysis, careful review"],
+    ["standard", "Standard", "Routine, well-specified work"],
+    ["economy", "Economy", "Search, reading, summaries, bulk work"],
+    ["arbiter", "Arbiter", "Judges a multi-expert review (Academic); the flagship when unset"],
+  ];
+  // Built-in roles that follow a tier while they have no model of their own.
+  const FOLLOWING = [["smol", "Fast (smol)", "economy"], ["task", "Subtask (task)", "standard"], ["slow", "Thinking (slow)", "flagship"]];
+
+  /**
+   * What Settings shows of `roster` (`{ role: selector | null }`): `rows` for the tiers and the
+   * arbiter, `overrides` for the built-in roles set apart from their tier, and `oneVendor` when
+   * every set tier is from the same vendor (a multi-expert review then has little to compare).
+   */
+  function rosterView(roster) {
+    const r = roster ?? {};
+    const rows = ROSTER.map(([role, label, use]) => ({ role, label, use, selector: r[role] || "" }));
+    const overrides = FOLLOWING.filter(([role]) => r[role]).map(([role, label, tier]) => ({ role, label, tier, selector: r[role] }));
+    const vendors = new Set(rows.slice(0, 4).filter(x => x.selector).map(x => vendorLabel(x.selector.split("/")[0])));
+    const set = rows.slice(0, 4).filter(x => x.selector).length;
+    return { rows, overrides, oneVendor: set >= 2 && vendors.size === 1 };
+  }
+
+  window.OMP_MODELS = { vendorLabel, keyOf, pickerModels, groupByVendor, toggleFavorite, rosterView };
 })();

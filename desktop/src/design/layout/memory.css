@@ -1,11 +1,27 @@
 /* Settings → Memory (design/settings/rows-memory.jsx). */
 .st-mem { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.st-mem-sub { display: flex; align-items: flex-start; gap: 10px; color: var(--fg-3); font-size: var(--d-text-sm); }
+.st-mem-usage { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--fg-3); font-size: var(--d-text-xs); }
+.st-mem-profile { display: flex; flex-direction: column; gap: 4px; }
+.st-mem-profile-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.st-mem-when.over { color: var(--danger, #d9534f); }
 .st-mem-kind { margin: 4px 0; color: var(--fg-1); font-size: var(--d-text-sm); font-weight: 600; }
 .st-mem-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .st-mem-note { display: grid; grid-template-columns: minmax(90px, 150px) minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in oklab, var(--fg-4) 18%, transparent); }
 .st-mem-title { overflow: hidden; color: var(--fg-1); white-space: nowrap; text-overflow: ellipsis; }
 .st-mem-text { padding: 0; overflow: hidden; border: 0; background: none; color: var(--fg-3); font: inherit; text-align: left; white-space: nowrap; text-overflow: ellipsis; cursor: text; }
 .st-mem-when { color: var(--fg-4); font-size: var(--d-text-xs); white-space: nowrap; }
+
+/* A note the model just wrote (design/memory-notice.jsx). */
+.memory-notice {
+  position: fixed; left: 50%; bottom: 18px; z-index: 40; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; max-width: min(560px, calc(100vw - 32px)); padding: 6px 8px 6px 12px;
+  border: 1px solid var(--line-bright); border-radius: 10px; background: var(--bg-elevated); box-shadow: var(--shadow-window);
+  font-size: var(--d-text-sm);
+}
+.memory-notice-what { color: var(--fg-3); white-space: nowrap; }
+.memory-notice-text { min-width: 0; overflow: hidden; color: var(--fg-1); white-space: nowrap; text-overflow: ellipsis; }
+.memory-notice-text b { font-weight: 600; }
 
 /* Settings → Usage: the subscription bars (design/settings/rows-usage.jsx). */
 .st-quota { display: flex; flex-direction: column; gap: 16px; width: 100%; }

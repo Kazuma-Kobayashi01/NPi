@@ -1290,6 +1290,7 @@ function App() {
                     <HandoffCard offer={handoffs[activeSessionId]} onAccept={handleAcceptHandoff}
                       onDismiss={() => dropHandoff(activeSessionId)} />
                   )}
+                  <ReviewCard sessionId={activeSessionId} bridge={bridge} />
                   <Composer
                     sessionId={planKey}
                     sessionIds={sessionIds}
@@ -1536,6 +1537,7 @@ function App() {
       {closeConfirm && (
         <ConfirmCloseDialog confirm={closeConfirm} onAnswer={handleCloseAnswer} />
       )}
+      <MemoryNotice bridge={bridge} />
     </_AL_MdLinkCtx.Provider>
     </_AL_MdMediaCtx.Provider>
   );

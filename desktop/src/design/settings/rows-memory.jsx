@@ -1,6 +1,8 @@
 /* design/settings/rows-memory.jsx — Settings → Memory's custom row `memory` (window.OMP_SETTINGS_ROWS): the
    switch, and every note the model keeps, by kind, to edit or delete. All of it is Rust's
-   (src-tauri/src/memory/). A change reaches a session when it next starts. */
+   (src-tauri/src/memory/), how full memory is, the profile of each mode (USER-<MODE>.md), and
+   whether Code and Academic sessions write skills (omp's autolearn, pinned per session by app_mode.rs
+   `session_policy`). A change reaches a session when it next starts. */
 
 function _SRMem_Note({ note, onSave, onDelete }) {
   const T = key => window.OMP_I18N.t(key);
@@ -23,6 +25,27 @@ function _SRMem_Note({ note, onSave, onDelete }) {
   );
 }
 
+/** One mode's profile (USER-<MODE>.md): the model's summary of how the user likes to work there. */
+function _SRMem_Profile({ mode, label, text, limit, onSave }) {
+  const T = key => window.OMP_I18N.t(key);
+  const [draft, setDraft] = React.useState(text);
+  React.useEffect(() => setDraft(text), [text]);
+  const count = [...draft].length;
+  return (
+    <div className="st-mem-profile">
+      <div className="st-mem-profile-head">
+        <h4 className="st-mem-kind">{T(label)}</h4>
+        <span className={`st-mem-when${count > limit ? " over" : ""}`}>{window.OMP_MEMORY.share(count, limit)}</span>
+      </div>
+      <textarea className="st-textarea selectable" rows={3} value={draft} aria-label={T(label)}
+        placeholder={T("Empty. The assistant fills this in as it learns how you like to work here.")}
+        onChange={e => setDraft(e.target.value)} onBlur={() => { if (draft !== text) onSave(mode, draft); }} />
+    </div>
+  );
+}
+
+const _SRMem_PROFILES = [["chat", "How you work in Chat"], ["code", "How you work in Code"], ["academic", "How you work in Academic"]];
+
 function _SRMem_Memory({ row, ctx, query }) {
   const { SettingsRow: Row, SettingsToggle: Toggle, SettingsButton: Button } = window;
   const T = key => window.OMP_I18N.t(key);
@@ -40,6 +63,23 @@ function _SRMem_Memory({ row, ctx, query }) {
     <Row stack label={row.label} desc={row.desc} query={query}>
       <div className="st-mem">
         <Toggle value={state?.enabled ?? true} label={row.label} onChange={on => call("set_enabled", { on })} />
+        {state?.enabled && (
+          <div className="st-mem-sub">
+            <Toggle value={state.skillLearning} label={T("Write skills from what worked")} onChange={on => call("set_skill_learning", { on })} />
+            <span><b>{T("Write skills from what worked")}</b> {T("In Code and Academic, after a task that took many steps, the agent may save the steps as a skill for next time. Each new skill is shown with Undo; all of them are in Settings → Skills. Chat never does.")}</span>
+          </div>
+        )}
+        {state?.usage && (
+          <div className="st-mem-usage">
+            <span>{T("Notes")} {window.OMP_MEMORY.share(state.usage.notes, state.usage.maxNotes)}</span>
+            <span>{T("In each prompt")} {window.OMP_MEMORY.share(state.usage.promptChars, state.usage.maxPromptChars)} {T("characters")}</span>
+            {state.usage.leftOut > 0 && <span>{T("{n} older notes left out of the prompt; the assistant can still look them up.").replace("{n}", state.usage.leftOut)}</span>}
+          </div>
+        )}
+        {state && _SRMem_PROFILES.map(([mode, label]) => (
+          <_SRMem_Profile key={mode} mode={mode} label={label} text={state.profiles?.[mode] ?? ""} limit={state.profileLimit}
+            onSave={(m, text) => call("set_profile", { mode: m, text })} />
+        ))}
         {error && <div className="lb-error" role="alert">{error}</div>}
         {state && groups.length === 0 && <div className="st-fav-empty">{T("Nothing yet. Notes appear here as you talk.")}</div>}
         {groups.map(g => (

@@ -263,3 +263,10 @@
 .handoff-peek { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--fg-2); font: inherit; font-size: 12px; cursor: pointer; }
 .handoff-peek:hover { color: var(--fg-0); }
 .handoff-brief { margin: 4px 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; font: inherit; font-size: 12px; color: var(--fg-1); }
+.review-card-models { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.review-card-models li { display: contents; }
+.review-card-models span { color: var(--fg-2); }
+.review-card-models code { overflow: hidden; color: var(--fg-1); text-overflow: ellipsis; white-space: nowrap; }
+.review-card-cost { margin-top: 4px; color: var(--fg-2); font-size: 12px; }
+.review-card-cost.heavy { color: var(--warning, #d39a2e); }
+.review-card-note { color: var(--fg-3); font-size: 12px; }

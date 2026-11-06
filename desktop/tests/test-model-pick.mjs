@@ -64,5 +64,15 @@ check("toggling a favourite adds it at the end or removes it", () => {
   assert.deepEqual(plain(M.toggleFavorite(undefined, "a/b")), ["a/b"]);
 });
 
+check("the roster shows each tier, the roles set apart from it, and a single vendor", () => {
+  const v = plain(M.rosterView({ flagship: "anthropic/opus:high", high: "anthropic/sonnet", standard: null, economy: "", arbiter: null, task: "openai-codex/gpt", smol: null }));
+  assert.deepEqual(v.rows.map(r => [r.role, r.selector]), [["flagship", "anthropic/opus:high"], ["high", "anthropic/sonnet"], ["standard", ""], ["economy", ""], ["arbiter", ""]]);
+  assert.deepEqual(v.overrides.map(o => [o.role, o.tier]), [["task", "standard"]]);
+  assert.equal(v.oneVendor, true);
+  assert.equal(M.rosterView({ flagship: "anthropic/opus", economy: "google-antigravity/flash" }).oneVendor, false);
+  assert.equal(M.rosterView({ flagship: "anthropic/opus" }).oneVendor, false, "one tier is not a comparison");
+  assert.equal(plain(M.rosterView(null)).rows.length, 5);
+});
+
 if (failed) process.exit(1);
-console.log("test-model-pick: 5 checks passed");
+console.log("test-model-pick: 6 checks passed");

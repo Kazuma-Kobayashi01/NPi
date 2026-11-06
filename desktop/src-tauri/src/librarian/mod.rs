@@ -7,7 +7,7 @@
 mod attach;
 mod bibtex;
 mod citekey;
-mod cjk;
+pub(crate) mod cjk;
 pub mod commands;
 mod csl;
 mod format;

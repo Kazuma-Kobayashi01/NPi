@@ -158,6 +158,7 @@
     { id: "models", icon: "bolt", title: "Models", blurb: "The default model, the ones the picker lists, and the vendors you can use.", groups: [
       { name: "Default", src: "omp config", rows: [
         custom("defaultModel", "Default model", "The model new conversations start on. It is omp's own default, so the terminal uses it too.", "model default start"),
+        custom("modelRoster", "Model roster", "Four tiers of models the assistant schedules subagents onto by how hard their work is, and the arbiter of a multi-expert review. In Auto subagent mode a batch on one tier starts without asking. Fast, Subtask and Thinking follow Economy, Standard and Flagship unless set apart. Shared with the terminal.", "model roster tier flagship high standard economy arbiter subagent schedule"),
       ] },
       { name: "Picker", rows: [
         custom("favoriteModels", "Favourite models", "The few models the small picker next to the prompt box lists. The others are under More models.", "favorite favourite common picker"),

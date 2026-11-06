@@ -247,11 +247,48 @@ pub fn skills_list(app: AppHandle) -> Result<Vec<SkillItem>, String> {
     if let Ok(home) = app.path().home_dir() {
         scan_skills_dir(&home.join(".omp/agent/skills"), "user", &mut items);
         scan_skills_dir(&home.join(".local/share/npi/agent/skills"), "npi", &mut items);
-        scan_skills_dir(&home.join(".omp/agent/managed-skills"), "managed", &mut items);
+        scan_skills_dir(&managed_skills_dir(&home), "managed", &mut items);
     }
     items.sort_by(|a, b| a.name.cmp(&b.name));
     items.dedup_by(|a, b| a.id == b.id);
     Ok(items)
+}
+
+/// Where the agent writes skills from what worked (omp's autolearn, `managed-skills/` beside the
+/// built-in profile's agent folder). User-authored skills are never in it.
+fn managed_skills_dir(home: &Path) -> PathBuf {
+    crate::profiles::agent_dir_for(home, None, std::env::var_os("PI_CODING_AGENT_DIR").as_deref()).join("managed-skills")
+}
+
+/// Moves the managed skill `name` out of `managed` into `trash` (kept, not erased) and returns
+/// where it went. Only a plain skill name inside `managed` is accepted.
+fn set_aside(managed: &Path, trash: &Path, name: &str) -> Result<PathBuf, String> {
+    let plain = !name.is_empty()
+        && name.len() <= 64
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !name.starts_with('-');
+    if !plain {
+        return Err(format!("not a managed skill name: {name}"));
+    }
+    let dir = managed.join(name);
+    if !dir.join("SKILL.md").is_file() {
+        return Err(format!("no managed skill named {name}"));
+    }
+    fs::create_dir_all(trash).map_err(|e| format!("skill trash: {e}"))?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let to = trash.join(format!("{name}-{stamp}"));
+    fs::rename(&dir, &to).map_err(|e| format!("set aside {name}: {e}"))?;
+    Ok(to)
+}
+
+/// Removes a skill the agent wrote: Undo on the notice, or Delete in Settings. It is moved to
+/// `~/.cache/npi/desktop/skill-trash/`, so a mistake can still be taken back by hand. A running
+/// session keeps it listed until it next refreshes its skills.
+#[tauri::command]
+pub fn skill_delete_managed(app: AppHandle, name: String) -> Result<String, String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let trash = crate::npi_dirs::cache_dir()?.join("skill-trash");
+    set_aside(&managed_skills_dir(&home), &trash, &name).map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -265,4 +302,27 @@ pub fn skill_open(path: String) -> Result<(), String> {
     crate::spawn_gate::status(&mut cmd)
         .map_err(|e| format!("open skill: {e}"))
         .and_then(|s| if s.success() { Ok(()) } else { Err("Failed to open skill in editor".to_string()) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::TempDir;
+
+    #[test]
+    fn a_managed_skill_is_set_aside_and_nothing_else_can_be() {
+        let d = TempDir::new("mcp-skills", "set-aside");
+        let managed = d.path().join("managed-skills");
+        let trash = d.path().join("trash");
+        fs::create_dir_all(managed.join("plan-trip")).unwrap();
+        fs::write(managed.join("plan-trip/SKILL.md"), "---\nname: plan-trip\n---\nbody").unwrap();
+        fs::write(d.path().join("SKILL.md"), "outside").unwrap();
+        for bad in ["", "..", "../x", "Plan", "-x", "a/b"] {
+            assert!(set_aside(&managed, &trash, bad).is_err(), "{bad:?}");
+        }
+        assert!(set_aside(&managed, &trash, "missing").is_err());
+        let moved = set_aside(&managed, &trash, "plan-trip").unwrap();
+        assert!(!managed.join("plan-trip").exists() && moved.join("SKILL.md").is_file());
+        assert!(d.path().join("SKILL.md").is_file());
+    }
 }

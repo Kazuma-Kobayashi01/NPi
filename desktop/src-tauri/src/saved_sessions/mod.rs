@@ -90,7 +90,7 @@ pub fn sessions_root_dir(app: &AppHandle, profile: Option<&str>) -> Option<PathB
 }
 
 /// Extract text content from a message content block array.
-fn extract_text_from_content(content: &serde_json::Value) -> Option<String> {
+pub fn extract_text_from_content(content: &serde_json::Value) -> Option<String> {
     if let Some(arr) = content.as_array() {
         for block in arr {
             if block.get("type").and_then(|t| t.as_str()) == Some("text") {
@@ -179,7 +179,7 @@ fn update_last_activity(current: &mut Option<String>, candidate: &str) {
 }
 
 /// Parse a single `.jsonl` session file and extract metadata.
-fn parse_session_file(path: &Path) -> Option<SavedSession> {
+pub fn parse_session_file(path: &Path) -> Option<SavedSession> {
     let file = File::open(path).ok()?;
     let reader = BufReader::new(file);
 
@@ -364,7 +364,7 @@ pub fn rename_session_file(path: &Path, new_title: &str) -> std::io::Result<()> 
 
 /// Normalize a `cwd` value for cross-platform comparison: forward slashes,
 /// no trailing slash, case-insensitive.
-fn normalize_cwd(cwd: &str) -> String {
+pub fn normalize_cwd(cwd: &str) -> String {
     cwd.replace('\\', "/").trim_end_matches('/').to_lowercase()
 }
 

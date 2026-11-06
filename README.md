@@ -160,9 +160,9 @@ Your things stay where you can see them.
 
 | What | Where |
 |---|---|
-| Settings, sign-ins, conversations, caches | `~/.local/share/npi` |
-| Your workspace, and the Chat folder | `~/Documents/NPi` |
-| The Chat assistant's profile and instructions | the app's config folder |
+| Settings, sign-ins, conversations, memory, the Chat profile | `~/.local/share/npi` (the app's own settings in `desktop/` inside it) |
+| Caches, Rewind's file snapshots | `~/.cache/npi` — safe to delete |
+| Your workspace, the Chat folder, worktree tasks | `~/Documents/NPi` (worktrees in `Code/.worktrees` and `Code/.agent-worktrees`) |
 | Project-local configuration | `.omp/` inside the project, as in omp |
 
 NPi keeps to itself. Its data is separate from a stock omp install. There is no

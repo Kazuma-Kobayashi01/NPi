@@ -24,7 +24,7 @@ const SHARED: &[&str] = &[
     "research_check_quote", "research_check_number", "research_check_table", "research_ocr", "research_summaries",
 ];
 
-const COPILOT_INSTRUCTIONS: &str = "The Academic Copilot of one research project, a separate agent with the project's literature tools. copilot_ask {task} hands it a task and returns its report; it may take minutes. It knows nothing of your conversation and cannot ask you anything, so say everything it needs.";
+const COPILOT_INSTRUCTIONS: &str = "The Academic Copilot of one research project, a separate agent with the project's literature tools. copilot_ask {task} hands it a task and returns its report; it may take minutes. It knows nothing of your conversation and cannot ask you anything, so say everything it needs. expert_review runs a simulated multi-expert review of a title, idea, the contributions or a manuscript on the model roster; it spends a great deal, so ask the user first and pass confirmed: true only after their yes.";
 
 /// What a run of this server answers with: the Librarian's tools, or `copilot_ask` when `ask` is set.
 struct Server<'a> {
@@ -91,7 +91,11 @@ fn handle(line: &str, server: &Server<'_>) -> Option<Value> {
             })
         }
         "ping" => json!({}),
-        "tools/list" => json!({ "tools": if server.ask.is_some() { vec![as_mcp(&crate::copilot_worker::definition())] } else { tools() } }),
+        "tools/list" => json!({ "tools": if server.ask.is_some() {
+            vec![as_mcp(&crate::copilot_worker::definition()), as_mcp(&crate::expert_review::definition(true))]
+        } else {
+            tools()
+        } }),
         "tools/call" => {
             let name = params.get("name").and_then(Value::as_str).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
@@ -126,7 +130,12 @@ fn tools() -> Vec<Value> {
 /// `None`: not a tool of this server.
 fn call(name: &str, args: &Value, server: &Server<'_>) -> Option<Result<String, String>> {
     if let Some(ask) = server.ask {
-        return (name == "copilot_ask").then(|| ask(args.get("task").and_then(Value::as_str).unwrap_or("")));
+        return match name {
+            "copilot_ask" => Some(ask(args.get("task").and_then(Value::as_str).unwrap_or(""))),
+            // No card over MCP: the caller asks the user and says so with `confirmed`.
+            "expert_review" => Some(crate::expert_review::call(server.root, None, &crate::expert_review::Consent::Declared, args)),
+            _ => None,
+        };
     }
     match name {
         n if LibraryTools::NAMES.contains(&n) => LibraryTools::new(server.root.to_path_buf()).call(n, args, server.lookup),
@@ -275,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn the_copilot_server_offers_one_tool_and_hands_it_the_task() {
+    fn the_copilot_server_hands_tasks_to_the_worker_and_keeps_library_tools_separate() {
         let d = TempDir::new("mcp", "copilot");
         let root = project(&d);
         let ask = |task: &str| if task == "fail" { Err("no model".to_string()) } else { Ok(format!("done: {task}")) };
@@ -293,7 +302,9 @@ mod tests {
         serve_with(&root, input.as_bytes(), &mut out, &Fake(vec![]), Some(&ask)).unwrap();
         let replies: Vec<Value> = String::from_utf8(out).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
         assert_eq!(replies[0]["result"]["serverInfo"]["name"], "npi-copilot");
-        assert_eq!(replies[1]["result"]["tools"].as_array().unwrap().len(), 1);
+        let tools = replies[1]["result"]["tools"].as_array().unwrap();
+        assert!(tools.iter().any(|tool| tool["name"] == "copilot_ask"));
+        assert!(tools.iter().any(|tool| tool["name"] == "expert_review"));
         assert!(replies[1]["result"]["tools"][0]["inputSchema"].is_object());
         assert_eq!(text_of(&replies[2]), "done: tidy");
         assert_eq!((replies[3]["result"]["isError"].clone(), text_of(&replies[3])), (json!(true), "no model".to_string()));

@@ -19,9 +19,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// A run longer than this is stopped.
-const DEADLINE: Duration = Duration::from_secs(10 * 60);
+const DEADLINE: Duration = Duration::from_mins(10);
 /// Runs at once in this process: a model may ask for many in parallel, and each is a whole agent.
-const MAX_RUNS: usize = 2;
+/// Runs at once: two Copilot asks, or one multi-expert review's four experts (`expert_review`).
+const MAX_RUNS: usize = 6;
 const MAX_TASK_CHARS: usize = 8_000;
 static RUNNING: AtomicUsize = AtomicUsize::new(0);
 
@@ -148,7 +149,53 @@ pub fn convert(root: &Path, profile: Option<&str>, prompt: &str, text: &str) -> 
     run(root, profile, prompt, None, text)
 }
 
-pub(crate) fn run(root: &Path, profile: Option<&str>, prompt: &str, host: Option<Arc<dyn HostTools>>, task: &str) -> Result<String, String> {
+pub fn run(root: &Path, profile: Option<&str>, prompt: &str, host: Option<Arc<dyn HostTools>>, task: &str) -> Result<String, String> {
+    run_on(root, profile, None, prompt, host, task)
+}
+
+/// A model for one run: `provider/id`, with an optional `:level` of thinking (a model role's value).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pick {
+    pub provider: String,
+    pub id: String,
+    pub thinking: Option<String>,
+}
+
+const THINKING_LEVELS: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+impl Pick {
+    /// `provider/id[:level]`; a trailing `:word` is a thinking level only when it names one, since
+    /// model ids may hold colons of their own (`qwen/qwen3-coder:exacto`).
+    pub fn parse(selector: &str) -> Option<Self> {
+        let (provider, rest) = selector.trim().split_once('/')?;
+        let (id, thinking) = match rest.rsplit_once(':') {
+            Some((id, level)) if THINKING_LEVELS.contains(&level) => (id, Some(level.to_string())),
+            _ => (rest, None),
+        };
+        (!provider.is_empty() && !id.is_empty()).then(|| Self { provider: provider.to_string(), id: id.to_string(), thinking })
+    }
+
+    pub fn label(&self) -> String {
+        format!("{}/{}", self.provider, self.id)
+    }
+}
+
+/// Waits for omp's answer to the command sent with `id`, setting the run's model before the task.
+fn await_response(rx: &std::sync::mpsc::Receiver<String>, id: &str, until: Instant) -> Result<(), String> {
+    loop {
+        let line = rx.recv_timeout(until.saturating_duration_since(Instant::now())).map_err(|_| "the worker did not answer".to_string())?;
+        let Ok(frame) = serde_json::from_str::<Value>(&line) else { continue };
+        if frame.get("type").and_then(Value::as_str) == Some("response") && frame.get("id").and_then(Value::as_str) == Some(id) {
+            if frame.get("success") == Some(&json!(true)) {
+                return Ok(());
+            }
+            return Err(frame.get("error").and_then(Value::as_str).unwrap_or("refused").to_string());
+        }
+    }
+}
+
+/// [`run`] on `pick`'s model (and thinking) instead of the profile's default.
+pub fn run_on(root: &Path, profile: Option<&str>, pick: Option<&Pick>, prompt: &str, host: Option<Arc<dyn HostTools>>, task: &str) -> Result<String, String> {
     let _slot = Slot::take()?;
     let dir = root.join(".npi-academic").join("copilot-run");
     let config = write_policy(&dir)?;
@@ -185,11 +232,24 @@ pub(crate) fn run(root: &Path, profile: Option<&str>, prompt: &str, host: Option
             }
         }
     });
+    let until = Instant::now() + DEADLINE;
+    if let Some(pick) = pick {
+        write_line(&stdin, &json!({ "id": "pick-model", "type": "set_model", "provider": pick.provider, "modelId": pick.id }));
+        let picked = await_response(&rx, "pick-model", until).map_err(|e| format!("{}: {e}", pick.label()));
+        let thought = picked.and_then(|()| pick.thinking.as_ref().map_or(Ok(()), |level| {
+            write_line(&stdin, &json!({ "id": "pick-thinking", "type": "set_thinking_level", "level": level }));
+            await_response(&rx, "pick-thinking", until).map_err(|e| format!("{} thinking {level}: {e}", pick.label()))
+        }));
+        if let Err(e) = thought {
+            supervisor.kill_tree();
+            let _ = child.wait();
+            return Err(e);
+        }
+    }
     if let Some(host) = &host {
         write_line(&stdin, &json!({ "type": "set_host_tools", "tools": host.definitions() }));
     }
     write_line(&stdin, &json!({ "type": "prompt", "message": task }));
-    let until = Instant::now() + DEADLINE;
     let mut answer = None;
     let outcome = loop {
         let line = match rx.recv_timeout(until.saturating_duration_since(Instant::now())) {
@@ -307,12 +367,11 @@ mod tests {
 
     #[test]
     fn only_a_few_runs_go_at_once_and_a_slot_comes_back() {
-        let first = Slot::take().unwrap();
-        let second = Slot::take().unwrap();
+        let mut slots: Vec<_> = (0..MAX_RUNS).map(|_| Slot::take().unwrap()).collect();
         assert!(Slot::take().unwrap_err().contains("wait"));
-        drop(first);
-        let third = Slot::take().unwrap();
-        drop((second, third));
+        drop(slots.pop());
+        let replacement = Slot::take().unwrap();
+        drop((slots, replacement));
     }
 
     #[test]

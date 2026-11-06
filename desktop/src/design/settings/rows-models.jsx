@@ -1,6 +1,8 @@
 /* ═════════════════════════════════════════════════════════════════════
    design/settings/rows-models.jsx — Settings → Models (window.OMP_SETTINGS_ROWS)
      defaultModel    the model new tabs start on (omp's `modelRoles.default`)
+     modelRoster     the four tiers subagents are scheduled onto, and the arbiter
+                     (omp's `modelRoles.flagship` … `arbiter`; OMP_MODELS.rosterView)
      favoriteModels  which models the small picker lists (an app setting)
      vendors         the vendors omp can use now, and signing in to more
 
@@ -69,6 +71,72 @@ function _SRM_Default({ row, ctx, query }) {
       </Row>
       {(error || cat.error) && <div className="st-row-error">{error || cat.error}</div>}
     </>
+  );
+}
+
+/** One role's model and effort; an empty model clears the role. */
+function _SRM_RolePicker({ label, selector, models, groups, onSave }) {
+  const M = window.OMP_MODELS;
+  const T = window.OMP_I18N.t;
+  const [key, level = ""] = (selector || "").split(":");
+  const model = models.find(m => M.keyOf(m) === key);
+  const levels = model?.thinking ?? [];
+  return (
+    <div className="st-modelsel">
+      <select value={model ? key : ""} aria-label={label} onChange={e => onSave(e.target.value || null)} disabled={models.length === 0}>
+        <option value="">{selector && !model ? selector : T("Not set")}</option>
+        {groups.map(g => (
+          <optgroup key={g.vendor} label={g.vendor}>
+            {g.models.map(m => <option key={M.keyOf(m)} value={M.keyOf(m)}>{m.name}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      {model && levels.length > 0 && (
+        <select value={levels.includes(level) ? level : ""} aria-label={`${label} effort`} onChange={e => onSave(e.target.value ? `${key}:${e.target.value}` : key)}>
+          <option value="">{T("Effort: model default")}</option>
+          {levels.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+function _SRM_Roster({ row, ctx, query }) {
+  const { SettingsRow: Row, SettingsButton: Button } = window;
+  const M = window.OMP_MODELS;
+  const T = window.OMP_I18N.t;
+  const cat = _SRM_useCatalog(ctx);
+  const groups = React.useMemo(() => M.groupByVendor(cat.models), [cat.models]);
+  const [roster, setRoster] = React.useState(null);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    ctx.bridge?.modelRoster?.().then(r => { if (r?.ok) setRoster(r.value); else if (r) setError(String(r.error ?? "")); });
+  }, [ctx.bridge, ctx.profileId]);
+  const save = async (role, selector) => {
+    setError("");
+    const r = await ctx.bridge?.setRosterRole?.(role, selector);
+    if (r?.ok) setRoster(r.value); else if (r) setError(String(r.error ?? "could not save"));
+  };
+  const view = M.rosterView(roster);
+  return (
+    <Row stack label={row.label} desc={row.desc} query={query}>
+      <div className="st-roster">
+        {view.rows.map(x => (
+          <div key={x.role} className="st-roster-row">
+            <div className="st-roster-name"><b>{T(x.label)}</b><small>{T(x.use)}</small></div>
+            <_SRM_RolePicker label={T(x.label)} selector={x.selector} models={cat.models} groups={groups} onSave={sel => save(x.role, sel)} />
+          </div>
+        ))}
+        {view.overrides.map(o => (
+          <div key={o.role} className="st-roster-note">
+            <span>{T("{role} has its own model ({model}), so it does not follow the {tier} tier.").replace("{role}", T(o.label)).replace("{model}", o.selector).replace("{tier}", T(o.tier.charAt(0).toUpperCase() + o.tier.slice(1)))}</span>
+            <Button onClick={() => save(o.role, null)}>{T("Follow the roster")}</Button>
+          </div>
+        ))}
+        {view.oneVendor && <div className="st-roster-note">{T("Every tier is from one vendor: a multi-expert review compares more when the tiers come from different vendors.")}</div>}
+        {(error || cat.error) && <div className="st-row-error">{error || cat.error}</div>}
+      </div>
+    </Row>
   );
 }
 
@@ -205,6 +273,7 @@ function _SRM_Vendors({ row, ctx, query }) {
 
 Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
   defaultModel: _SRM_Default,
+  modelRoster: _SRM_Roster,
   favoriteModels: _SRM_Favorites,
   vendors: _SRM_Vendors,
 });

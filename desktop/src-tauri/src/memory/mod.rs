@@ -4,6 +4,8 @@
 //! Memory shows every note and can edit, delete or turn the whole thing off (on by default).
 
 pub mod commands;
+pub mod profile;
+pub mod prompt;
 pub mod tools;
 
 use rusqlite::{params, Connection, OptionalExtension};
@@ -11,13 +13,14 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 pub const KINDS: [&str; 4] = ["you", "topic", "area", "person"];
-const MAX_NOTES: i64 = 300;
+pub const MAX_NOTES: i64 = 300;
 const MAX_TITLE_CHARS: usize = 60;
 const MAX_TEXT_CHARS: usize = 300;
-/// What of the notes goes into a prompt, newest first; the rest stay reachable with a search.
-const MAX_PROMPT_BYTES: usize = 4096;
+/// What of the notes goes into a prompt, newest first, in characters (not bytes: a Chinese note
+/// would otherwise take three times the room); the rest stay reachable with a search.
+pub const MAX_PROMPT_CHARS: usize = 3000;
 const MAX_FOUND: usize = 20;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -29,8 +32,23 @@ pub struct Note {
     pub text: String,
     /// The mode it was last written in: chat, code, academic or user.
     pub mode: String,
+    /// The tab session that last wrote it; `None` for an edit in Settings or an older note.
+    pub session: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+/// How full memory is, as the prompt and Settings both show it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Usage {
+    pub notes: usize,
+    pub max_notes: i64,
+    /// Characters of notes the prompt carries, of `max_prompt_chars`.
+    pub prompt_chars: usize,
+    pub max_prompt_chars: usize,
+    /// Notes the prompt leaves out for lack of room (still found by a lookup).
+    pub left_out: usize,
 }
 
 pub struct Store {
@@ -41,12 +59,27 @@ fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0))
 }
 
+const SELECT_NOTE: &str = "SELECT id, kind, title, text, mode, created_at, updated_at, session FROM notes";
+
+fn note_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
+    Ok(Note {
+        id: r.get(0)?,
+        kind: r.get(1)?,
+        title: r.get(2)?,
+        text: r.get(3)?,
+        mode: r.get(4)?,
+        created_at: r.get(5)?,
+        updated_at: r.get(6)?,
+        session: r.get(7)?,
+    })
+}
+
 fn sql(e: rusqlite::Error) -> String {
     format!("memory: {e}")
 }
 
 /// A long unbroken run of letters and digits, or a known key prefix: not something to keep in a note.
-fn looks_secret(text: &str) -> bool {
+pub fn looks_secret(text: &str) -> bool {
     text.contains("-----BEGIN")
         || text.split(|c: char| c.is_whitespace() || "\"'`,;:()".contains(c)).any(|word| {
             let keyish = ["sk-", "ghp_", "gho_", "AKIA", "xoxb-", "AIza"].iter().any(|p| word.starts_with(p));
@@ -99,12 +132,17 @@ impl Store {
                  mode TEXT NOT NULL,
                  created_at INTEGER NOT NULL,
                  updated_at INTEGER NOT NULL,
+                 session TEXT,
                  UNIQUE (title)
              );
-             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-             PRAGMA user_version = 1;",
+             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
         )
         .map_err(sql)?;
+        // Version 1 made `notes` without `session`; a new file has it from the CREATE above.
+        if version == 1 {
+            conn.execute_batch("ALTER TABLE notes ADD COLUMN session TEXT;").map_err(sql)?;
+        }
+        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};")).map_err(sql)?;
         Ok(Self { conn })
     }
 
@@ -128,8 +166,19 @@ impl Store {
         self.set_meta("enabled", if on { "1" } else { "0" })
     }
 
-    /// Writes the note `title`, replacing what it said. Returns whether it already existed.
-    pub fn save(&self, kind: &str, title: &str, text: &str, mode: &str) -> Result<bool, String> {
+    /// Whether Code and Academic sessions may write skills from what worked (omp's autolearn,
+    /// `managed-skills/`) while Memory is on. On unless the user turned it off.
+    pub fn skill_learning(&self) -> bool {
+        self.meta("skill-learning").ok().flatten().is_none_or(|v| v != "0")
+    }
+
+    pub fn set_skill_learning(&self, on: bool) -> Result<(), String> {
+        self.set_meta("skill-learning", if on { "1" } else { "0" })
+    }
+
+    /// Writes the note `title`, replacing what it said; `session` is the tab that wrote it. Returns
+    /// the note as saved and whether it already existed.
+    pub fn save(&self, kind: &str, title: &str, text: &str, mode: &str, session: Option<&str>) -> Result<(Note, bool), String> {
         if !KINDS.contains(&kind) {
             return Err(format!("`kind` is one of {}", KINDS.join(", ")));
         }
@@ -141,32 +190,38 @@ impl Store {
         let time = now();
         let changed = self
             .conn
-            .execute("UPDATE notes SET kind = ?1, text = ?2, mode = ?3, updated_at = ?4 WHERE title = ?5", params![kind, text, mode, time, title])
+            .execute(
+                "UPDATE notes SET kind = ?1, text = ?2, mode = ?3, updated_at = ?4, session = ?6 WHERE title = ?5",
+                params![kind, text, mode, time, title, session],
+            )
             .map_err(sql)?;
         if changed > 0 {
-            return Ok(true);
+            return self.by_title(&title).map(|n| (n, true));
         }
         let count: i64 = self.conn.query_row("SELECT COUNT(*) FROM notes", [], |r| r.get(0)).map_err(sql)?;
         if count >= MAX_NOTES {
             return Err("the memory is full: merge notes, or use forget_memory on one that no longer matters".into());
         }
         self.conn
-            .execute("INSERT INTO notes (kind, title, text, mode, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)", params![kind, title, text, mode, time])
+            .execute(
+                "INSERT INTO notes (kind, title, text, mode, created_at, updated_at, session) VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6)",
+                params![kind, title, text, mode, time, session],
+            )
             .map_err(sql)?;
-        Ok(false)
+        self.by_title(&title).map(|n| (n, false))
+    }
+
+    fn by_title(&self, title: &str) -> Result<Note, String> {
+        self.conn.query_row(&format!("{SELECT_NOTE} WHERE title = ?1"), [title], note_row).map_err(sql)
     }
 
     /// Every note, newest first.
     pub fn list(&self) -> Result<Vec<Note>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, kind, title, text, mode, created_at, updated_at FROM notes ORDER BY updated_at DESC, id DESC")
+            .prepare(&format!("{SELECT_NOTE} ORDER BY updated_at DESC, id DESC"))
             .map_err(sql)?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok(Note { id: r.get(0)?, kind: r.get(1)?, title: r.get(2)?, text: r.get(3)?, mode: r.get(4)?, created_at: r.get(5)?, updated_at: r.get(6)? })
-            })
-            .map_err(sql)?;
+        let rows = stmt.query_map([], note_row).map_err(sql)?;
         rows.collect::<Result<_, _>>().map_err(sql)
     }
 
@@ -194,7 +249,10 @@ impl Store {
     /// The user's own edit of a note.
     pub fn update(&self, id: i64, text: &str) -> Result<(), String> {
         let text = clean_text(text)?;
-        self.conn.execute("UPDATE notes SET text = ?2, mode = 'user', updated_at = ?3 WHERE id = ?1", params![id, text, now()]).map(|_| ()).map_err(sql)
+        self.conn
+            .execute("UPDATE notes SET text = ?2, mode = 'user', session = NULL, updated_at = ?3 WHERE id = ?1", params![id, text, now()])
+            .map(|_| ())
+            .map_err(sql)
     }
 
     pub fn clear(&self) -> Result<(), String> {
@@ -211,22 +269,31 @@ impl Store {
             if !fact.is_empty() && !fact.starts_with('#') {
                 let title: String = fact.chars().take(30).collect();
                 // A line too long or that looks like a key stays in the old file, which is not deleted.
-                let _ = self.save("you", &title, fact, "chat");
+                let _ = self.save("you", &title, fact, "chat", None);
             }
         }
         self.set_meta("chat-memory-imported", "1")
+    }
+
+    pub fn usage(&self) -> Result<Usage, String> {
+        let notes = self.list()?.len();
+        let (lines, left_out) = self.prompt_lines()?;
+        Ok(Usage { notes, max_notes: MAX_NOTES, prompt_chars: lines.chars().count(), max_prompt_chars: MAX_PROMPT_CHARS, left_out })
     }
 
     /// The notes as a prompt shows them, newest first, within the size limit.
     fn prompt_lines(&self) -> Result<(String, usize), String> {
         let notes = self.list()?;
         let mut out = String::new();
+        let mut used = 0;
         let mut left_out = 0;
         for n in &notes {
             let line = format!("- [{}] {}: {}\n", n.kind, n.title, n.text);
-            if out.len() + line.len() > MAX_PROMPT_BYTES {
+            let chars = line.chars().count();
+            if used + chars > MAX_PROMPT_CHARS {
                 left_out += 1;
             } else {
+                used += chars;
                 out.push_str(&line);
             }
         }
@@ -247,8 +314,9 @@ mod tests {
     fn a_note_is_saved_then_replaced_under_its_title() {
         let d = TempDir::new("memory", "save");
         let s = store(&d);
-        assert!(!s.save("area", "Paper Agent", "Builds an agent for papers.", "code").unwrap());
-        assert!(s.save("topic", "paper agent", "Builds an agent  for\npapers, in Rust.", "chat").unwrap());
+        assert!(!s.save("area", "Paper Agent", "Builds an agent for papers.", "code", Some("tab-1")).unwrap().1);
+        let (note, existed) = s.save("topic", "paper agent", "Builds an agent  for\npapers, in Rust.", "chat", Some("tab-2")).unwrap();
+        assert!(existed && note.session.as_deref() == Some("tab-2"), "the note names the tab that last wrote it");
         let notes = s.list().unwrap();
         assert_eq!(notes.len(), 1, "the same title whatever the case");
         assert_eq!((notes[0].kind.as_str(), notes[0].text.as_str(), notes[0].mode.as_str()), ("topic", "Builds an agent for papers, in Rust.", "chat"));
@@ -258,12 +326,12 @@ mod tests {
     fn what_is_not_a_note_is_refused_with_the_reason() {
         let d = TempDir::new("memory", "refuse");
         let s = store(&d);
-        assert!(s.save("nonsense", "T", "x", "chat").unwrap_err().contains("kind"));
-        assert!(s.save("you", " ", "x", "chat").unwrap_err().contains("title"));
-        assert!(s.save("you", "T", "  ", "chat").unwrap_err().contains("text"));
-        assert!(s.save("you", "T", &"x ".repeat(200), "chat").unwrap_err().contains("300"));
+        assert!(s.save("nonsense", "T", "x", "chat", None).unwrap_err().contains("kind"));
+        assert!(s.save("you", " ", "x", "chat", None).unwrap_err().contains("title"));
+        assert!(s.save("you", "T", "  ", "chat", None).unwrap_err().contains("text"));
+        assert!(s.save("you", "T", &"x ".repeat(200), "chat", None).unwrap_err().contains("300"));
         for secret in ["my key is sk-abcdefghijklmnop1234", "token: 0123456789abcdef0123456789abcdef0123", "-----BEGIN PRIVATE KEY-----"] {
-            assert!(s.save("you", "T", secret, "chat").unwrap_err().contains("key"), "{secret}");
+            assert!(s.save("you", "T", secret, "chat", None).unwrap_err().contains("key"), "{secret}");
         }
         assert!(s.list().unwrap().is_empty());
         assert!(!looks_secret("studying abroad in Osaka, works on electrical impedance tomography"));
@@ -273,8 +341,8 @@ mod tests {
     fn a_search_needs_every_word_and_notes_can_be_changed_and_removed() {
         let d = TempDir::new("memory", "search");
         let s = store(&d);
-        s.save("topic", "Travel", "Plans a Hokkaido trip in winter.", "chat").unwrap();
-        s.save("you", "Study", "Studies in Osaka.", "chat").unwrap();
+        s.save("topic", "Travel", "Plans a Hokkaido trip in winter.", "chat", None).unwrap();
+        s.save("you", "Study", "Studies in Osaka.", "chat", None).unwrap();
         assert_eq!(s.search("hokkaido TRIP").unwrap().len(), 1);
         assert!(s.search("hokkaido osaka").unwrap().is_empty());
         let id = s.search("osaka").unwrap()[0].id;
@@ -283,7 +351,7 @@ mod tests {
         assert!(s.forget("travel").unwrap());
         assert!(!s.forget("travel").unwrap());
         s.delete(id).unwrap();
-        s.save("you", "A", "b", "chat").unwrap();
+        s.save("you", "A", "b", "chat", None).unwrap();
         s.clear().unwrap();
         assert!(s.list().unwrap().is_empty());
     }
@@ -312,10 +380,49 @@ mod tests {
         let d = TempDir::new("memory", "prompt");
         let s = store(&d);
         for i in 0..60 {
-            s.save("topic", &format!("Note {i}"), &"word ".repeat(40), "chat").unwrap();
+            s.save("topic", &format!("Note {i}"), &"word ".repeat(40), "chat", None).unwrap();
         }
         let (text, left_out) = s.prompt_lines().unwrap();
-        assert!(text.len() <= MAX_PROMPT_BYTES && left_out > 0);
+        assert!(text.chars().count() <= MAX_PROMPT_CHARS && left_out > 0);
+    }
+
+    #[test]
+    fn chinese_notes_get_the_same_room_as_english_ones() {
+        let d = TempDir::new("memory", "cjk");
+        let s = store(&d);
+        for i in 0..20 {
+            s.save("topic", &format!("笔记{i}"), &"在大阪研究电阻抗成像".repeat(10), "chat", None).unwrap();
+        }
+        let (text, _) = s.prompt_lines().unwrap();
+        // Twenty notes of about 115 characters: all fit in characters; in UTF-8 bytes barely ten would.
+        assert_eq!(text.lines().count(), 20);
+    }
+
+    #[test]
+    fn a_version_1_file_gains_the_session_column_and_keeps_its_notes() {
+        let d = TempDir::new("memory", "v1");
+        let path = d.path().join("memory.db");
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL COLLATE NOCASE, text TEXT NOT NULL,
+                     mode TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (title));
+                 INSERT INTO notes (kind, title, text, mode, created_at, updated_at) VALUES ('you', 'Home', 'Lives in Osaka.', 'chat', 1, 1);
+                 PRAGMA user_version = 1;",
+            )
+            .unwrap();
+        let s = Store::open(&path).unwrap();
+        assert_eq!(s.list().unwrap()[0].session, None);
+        s.save("you", "Home", "Lives in Kyoto.", "code", Some("t")).unwrap();
+        assert_eq!(Store::open(&path).unwrap().list().unwrap()[0].session.as_deref(), Some("t"));
+    }
+
+    #[test]
+    fn skill_learning_is_on_until_turned_off() {
+        let d = TempDir::new("memory", "skill-learning");
+        assert!(store(&d).skill_learning());
+        store(&d).set_skill_learning(false).unwrap();
+        assert!(!store(&d).skill_learning());
     }
 
     #[test]

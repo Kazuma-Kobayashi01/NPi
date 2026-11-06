@@ -24,4 +24,19 @@ check("how long ago", () => {
   assert.deepEqual(plain(M.age(1000, 1000 + 3 * day)), { key: "Updated {n} days ago", n: 3 });
   assert.equal(M.age(2000, 1000).key, "Updated today", "a clock that moved back");
 });
+check("a notice offers Undo only for something new", () => {
+  assert.deepEqual(plain(M.noticeOf({ note: { id: 4, title: "Home", text: "Osaka" }, replaced: false })),
+    { what: "Remembered", title: "Home", text: "Osaka", undo: { note: 4 } });
+  assert.equal(M.noticeOf({ note: { id: 4, title: "Home", text: "Kyoto" }, replaced: true }).undo, null);
+  assert.deepEqual(plain(M.noticeOf({ skill: "plan-build", replaced: false }).undo), { skill: "plan-build" });
+  assert.equal(M.noticeOf({ skill: "plan-build", replaced: true }).what, "Skill updated");
+  const p = M.noticeOf({ profile: "academic", text: "Pages for every claim." });
+  assert.equal(p.title, "Academic"); assert.equal(p.undo, null);
+  assert.equal(M.noticeOf({ profile: "elsewhere" }), null);
+  assert.equal(M.noticeOf({}), null);
+});
+check("usage reads as a count of a limit", () => {
+  assert.equal(M.share(1474, 3000), "1,474 / 3,000");
+  assert.equal(M.share(undefined, 300), "0 / 300");
+});
 console.log(`test-memory: ${n} checks passed`);

@@ -2765,6 +2765,11 @@
     }
 
     if (type === "tool_execution_end") {
+      // A skill the agent just wrote from what worked (omp's autolearn): the page shows it with Undo.
+      const skill = ev.toolName === "manage_skill" && !ev.isError ? ev.result?.details : null;
+      if (skill && (skill.action === "create" || skill.action === "update") && typeof skill.name === "string") {
+        window.dispatchEvent(new CustomEvent("npi:memory-noted", { detail: { skill: skill.name, replaced: skill.action === "update" } }));
+      }
       const idx = activeToolCards.get(ev.toolCallId);
       if (idx !== undefined) {
         const card = state.messages[idx];
@@ -3789,6 +3794,14 @@
     /** Makes `selector` the profile's default model; new tabs start on it. */
     setDefaultModel(selector, profile = _activeProfileId()) {
       return _invokeResult("model_default_set", { profile, selector });
+    },
+    /** The model roster (model_config.rs): each tier, the arbiter and smol/task/slow with their own model or null. */
+    modelRoster(profile = _activeProfileId()) {
+      return _invokeResult("model_roster_get", { profile });
+    },
+    /** Sets one roster role (null clears it: a tier falls back, smol/task/slow follow their tier). */
+    setRosterRole(role, selector, profile = _activeProfileId()) {
+      return _invokeResult("model_roster_set", { profile, role, selector });
     },
 
     /** omp's auto-continue setting for `profile` (src-tauri goal_config.rs):
@@ -5026,9 +5039,18 @@
 
     /** A Settings command of Memory (src-tauri/src/memory/commands.rs): `memory_<name>`. Only the listed names go through. */
     memory(name, args) {
-      const NAMES = ["state", "set_enabled", "update", "delete", "clear"];
+      const NAMES = ["state", "set_enabled", "set_skill_learning", "set_profile", "update", "delete", "clear"];
       if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown memory command: ${name}` });
       return _invokeResult(`memory_${name}`, args ?? {});
+    },
+
+    /** The user's answer to a review's card (expert_review); nothing is sent before a yes. */
+    answerReview(id, accept) {
+      return _invokeResult("expert_review_answer", { id, accept });
+    },
+    /** Sets aside a skill the agent wrote (mcp_skills.rs `skill_delete_managed`). */
+    deleteManagedSkill(name) {
+      return _invokeResult("skill_delete_managed", { name });
     },
 
     /** A command of the paper of one Academic project (writing/commands.rs): `write_<name>`. Only the listed names go through. */
@@ -5182,6 +5204,14 @@
         await window.OMP_BRIDGE.resumeSession({ path: sessionFile, profile, cwd });
       } catch (error) { console.error("[live] continuing a quick chat failed:", error); }
     }).catch(error => console.error("[live] quick ask listener failed:", error));
+    // A multi-expert review waiting for the user's go-ahead (expert_review): the page shows a card.
+    window.__TAURI__.event.listen("review://confirm", event => {
+      window.dispatchEvent(new CustomEvent("npi:review-confirm", { detail: event.payload }));
+    }).catch(error => console.error("[live] review listener failed:", error));
+    // A note the model just wrote (memory/tools.rs): the page shows it for a moment.
+    window.__TAURI__.event.listen("memory://noted", event => {
+      window.dispatchEvent(new CustomEvent("npi:memory-noted", { detail: event.payload }));
+    }).catch(error => console.error("[live] memory listener failed:", error));
     // Chat's offer to continue as Code or Academic (chat_handoff.rs): the page shows it as a card.
     window.__TAURI__.event.listen("chat://handoff", event => {
       window.dispatchEvent(new CustomEvent("npi:handoff", { detail: event.payload }));

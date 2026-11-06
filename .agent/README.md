@@ -55,7 +55,7 @@
   - **Desktop 桌面端**：通用版本为 `x.y.z.w` 四位（如 `1.3.1.0`）；若需针对特定操作系统单独适配，使用 `x.y.z.w-os`（如 `1.3.1.0-windows`）。
   - **Kernel 内核（`omp` 独立仓库）**：统一格式为 `kernel.x.y.z-platform`；通用内核为 `kernel.x.y.z-universal`，专用平台适配为 `kernel.x.y.z-platform`（如当前 `kernel.1.3.0-server`）。
   - **微更新与补丁标识**：在代系内发布小更新或热修时采用 `(CxxEPxx)` 形式标记（`C` 锚定次版本代系如 `C03`，`EP` 为微迭代递增序号如 `EP01`、`EP02`）。
-- 产物格式与归集规则：每次构建仅生成 macOS `app` 和 `dmg` 镜像（跳过生成 zip）；统一仅将构建输出的 `.dmg` 放置到根目录下的 `dist/{version}/` 文件夹中（如 `dist/1.2.0-client/`），根目录 `dist/` 已被 `.gitignore` 忽略，不可直接提交大体积二进制。
+- 产物格式与归集规则：每次构建仅生成 macOS `app` 和 `dmg` 镜像（跳过生成 zip）；统一仅将构建输出的 `.dmg` 放置到根目录下的 `dist/{version}/` 文件夹中（如 `dist/1.2.0-client/`），根目录 `dist/` 已被 `.gitignore` 忽略，不可直接提交大体积二进制。打包并校验通过后，只在 `dist/{version}/` 保留 dmg：删除 `desktop/src-tauri/target/release/bundle/` 下的源 dmg、`.app` 及 `rw.*.dmg` 等中间产物；`release/deps`、`build` 等增量编译缓存以及 `bundle/dmg/bundle_dmg.sh`、`icon.icns`（第 4 步要用）保留。
 - 分支安全：每次进行文件编辑、代码重构、删除或编译操作前，必须首先显式确认当前 Git 分支处于目标工作分支（`git branch --show-current`），严防跨分支混写。
 - 克制验证：坚决不进行过度测试与反复验收等浪费系统资源且收益微弱的操作，以精准的单向回归和核心链路冒烟为主。
 ## 文档与发布

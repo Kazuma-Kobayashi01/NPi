@@ -84,3 +84,14 @@ Sections as a tree (flat per paper, in reading order), digests and `Digest`/`Art
 The reader's PDF tab (`design/librarian/pdf-pane.jsx`) renders the paper's pages with PDF.js (`src/vendor/pdfjs/`, Apache-2.0 licence kept beside it and in `docs/licenses/`; version 4.10.38, CMaps and standard fonts included for CJK). PDF.js is loaded by `vendor/pdfjs/loader.mjs` as a module script (the release CSP allows only same-origin scripts) and handed to the classic scripts as `window.OMP_PDFJS`. The bytes come from `research_pdf` (a binary IPC response; the path is the project's own `papers/` entry for that paper id, at most 64 MB). Pages render when they scroll near the viewport and are released when far away; a jump takes `page` + `quote` and marks the quote's spans in the text layer (case, spacing and hyphens ignored); if it cannot be found the page is still shown with a note.
 
 `research_ocr(path, pages)` (Copilot) and `academic_ocr(project, path, pages)` (main Academic tab) return OCR text for at most 6 pages per call, labelled as a recognition, and store nothing; indexing a scanned PDF (`research_search`, "Index project") runs OCR itself.
+
+## Simulated multi-expert review (3.0.0.136)
+
+`expert_review/mod.rs` adds `expert_review` to Academic host tools and the `npi-copilot` MCP server, not to the tool-free review workers. Inputs are `kind` (`title`, `idea`, `novelty`, `paper`), `subject`, optional `text`, project-relative `file`, and a user-selected `arbiter`. Material is limited to 120,000 characters; manuscripts and contribution reviews require material. Paths use `copilot::resolve_in`, including canonical containment.
+
+The configured model roster supplies one expert per tier: flagship/domain, high/method, standard/evidence and statistics, economy/skeptic. At least two configured tiers and two successful answers are required. All expert threads start before any is joined. The arbiter uses the explicit selector, configured arbiter, flagship, then the first configured expert; it sees anonymous reviews and at most 12,000 material characters. Each worker uses its selected model/thinking, has no tools, and is stopped after ten minutes. Copilot and review workers share six process slots.
+
+Before a tab sends material, Rust emits `review://confirm` with the models, providers and approximate token count. Only `expert_review_answer` accepts the card; timeout, failed presentation or rejection starts no workers (`expert_review/confirm.rs`). MCP instead requires the caller to obtain consent and send `confirmed: true`; this is a caller-declared contract, not the native card gate.
+
+`Library::save_review` stores the experts (including failures) and verdict in `artifacts` with `kind = review`, using the existing schema. The report is explicitly simulated, not evidence verification or real peer review. Unit coverage does not establish real-model quality or actual App confirmation behavior.
+

@@ -15,5 +15,32 @@
     return { key: "Updated {n} days ago", n: days };
   }
 
-  window.OMP_MEMORY = { grouped, age };
+  const MODE_LABELS = { chat: "Chat", code: "Code", academic: "Academic" };
+
+  /**
+   * What the bottom notice says about one change the agent made (`memory://noted` from Rust, or a
+   * `manage_skill` result seen in live.js): `{ what, title, text, undo }`, where `undo` is
+   * `{ note: id }` or `{ skill: name }` for something new, else null. Null for a payload it does
+   * not know.
+   */
+  function noticeOf(d) {
+    if (d?.note?.title) {
+      return { what: d.replaced ? "Memory updated" : "Remembered", title: d.note.title, text: d.note.text ?? "", undo: d.replaced ? null : { note: d.note.id } };
+    }
+    if (typeof d?.profile === "string" && MODE_LABELS[d.profile]) {
+      return { what: "Profile updated", title: MODE_LABELS[d.profile], text: d.text ?? "", undo: null };
+    }
+    if (typeof d?.skill === "string" && d.skill) {
+      return { what: d.replaced ? "Skill updated" : "New skill", title: d.skill, text: "", undo: d.replaced ? null : { skill: d.skill } };
+    }
+    return null;
+  }
+
+  /** "1,474 / 3,000": a count of a limit, as the usage line shows it. */
+  function share(used, limit) {
+    const n = v => Number(v ?? 0).toLocaleString("en-US");
+    return `${n(used)} / ${n(limit)}`;
+  }
+
+  window.OMP_MEMORY = { grouped, age, noticeOf, share };
 })();

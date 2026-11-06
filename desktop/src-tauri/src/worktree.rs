@@ -1,7 +1,8 @@
 //! One Git worktree per task: a Code tab can run in its own checkout on its own branch, so several
-//! tasks in one project do not touch each other's files. The worktrees NPi makes live under
-//! `~/.local/share/npi/worktrees/` (not omp's `~/.omp/wt`, which `npi worktree clear` empties). What
-//! a worktree is comes from Git itself and that folder, so there is no registry to fall out of step.
+//! tasks in one project do not touch each other's files. The worktrees the app makes hold the user's
+//! work, so they live beside the Code projects, in `~/Documents/NPi/Code/.worktrees/<repo>/<task>`
+//! (not the command line's sibling `.agent-worktrees`, which `npi worktree clear` empties). What a
+//! worktree is comes from Git itself and that folder, so there is no registry to fall out of step.
 
 use crate::workspace::{git_output, git_succeeds};
 use serde::Serialize;
@@ -35,7 +36,7 @@ pub struct Info {
 
 fn base_dir() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".local/share/npi/worktrees"))
+    Ok(PathBuf::from(home).join("Documents/NPi/Code/.worktrees"))
 }
 
 fn text(bytes: &[u8]) -> String {

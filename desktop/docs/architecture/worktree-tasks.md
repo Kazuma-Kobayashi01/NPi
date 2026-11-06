@@ -6,7 +6,7 @@ Three parts of working with an agent on code: keep tasks apart, review what they
 
 The branch button on a Code project's sidebar row (`handleNewWorktree` → `newWorktreeTask`) runs `git worktree add -b npi/task-<base36 time>` from `HEAD` and opens a tab there. A tab's cwd is fixed at spawn, so this is an ordinary tab on another folder and omp knows nothing about it. omp's own `/wt` also runs in RPC mode, but it moves the session without telling the desktop: `live.js` keeps `entry.path`, so the git browser, terminal and checkpoints would stay on the old folder. Do not route this through `/wt` without reporting the move first.
 
-- Location: `~/.local/share/npi/worktrees/<repo>-<hash>/<slug>`, not omp's `~/.omp/wt`, which `npi worktree clear` empties.
+- Location: `~/Documents/NPi/Code/.worktrees/<repo>-<hash>/<slug>`: worktrees hold the user's work, so they sit beside the Code projects. Not the command line's sibling `.agent-worktrees` (PR checkouts, task isolation), which `npi worktree clear` empties. Worktrees made by builds before 3.0.0.136 stay in `~/.local/share/npi/worktrees/` (Git records their paths, so they are not moved) and are no longer grouped as tasks.
 - Uncommitted changes stay in the main checkout. Ignored files (`.env`, `node_modules`) are not copied: the agent sets them up.
 - There is no registry. `worktree_info` answers from that folder and Git; a worktree the user made elsewhere is an ordinary project.
 - `_startProjectSession` stores the answer as the tab's `worktree`. `project-nav.js` `homeOf` groups the tab under `worktree.main`, and it is not added to the recent projects. `findProjectTab` still matches exact paths, so a recent project never opens onto a worktree tab.

@@ -267,8 +267,42 @@ pub fn tool_definitions() -> Value {
     ])
 }
 
-/// Panics when a text names a `library_*`, `research_*` or `academic_*` tool outside `offered`: a tool
-/// the model is told about and does not have is a failed call.
+/// A project-relative path resolved inside `root`: no absolute path, no `..`, nothing outside
+/// `dirs` (or the project itself when `dirs` is empty), and a symlink may not lead out.
+///
+/// # Errors
+/// Returns an error for a forbidden path, a missing file, or a symlink outside the project.
+pub fn resolve_in(root: &Path, rel: &str, dirs: &[&str]) -> Result<PathBuf, String> {
+    let rel_path = Path::new(rel);
+    if rel.is_empty() || rel_path.is_absolute() {
+        return Err("use a project-relative path".into());
+    }
+    if rel_path
+        .components()
+        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return Err("the path may not contain '..'".into());
+    }
+    let first = rel_path
+        .components()
+        .find_map(|c| match c {
+            Component::Normal(s) => s.to_str(),
+            _ => None,
+        })
+        .unwrap_or("");
+    if !dirs.is_empty() && !dirs.contains(&first) {
+        return Err(format!("only {} are available", dirs.join(", ")));
+    }
+    let full = root.join(rel_path);
+    let resolved = full
+        .canonicalize()
+        .map_err(|_| format!("{rel}: not found"))?;
+    if !resolved.starts_with(root) {
+        return Err("the path leaves the project".into());
+    }
+    Ok(resolved)
+}
+
 #[cfg(test)]
 pub fn assert_names_exist(texts: &[String], offered: &[String]) {
     for text in texts {
@@ -791,34 +825,7 @@ impl CopilotHost {
     /// no `..`, nothing outside `dirs` (or the project itself when `dirs` is
     /// empty), and a symlink may not lead out.
     fn resolve(&self, rel: &str, dirs: &[&str]) -> Result<PathBuf, String> {
-        let rel_path = Path::new(rel);
-        if rel.is_empty() || rel_path.is_absolute() {
-            return Err("use a project-relative path".into());
-        }
-        if rel_path
-            .components()
-            .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
-        {
-            return Err("the path may not contain '..'".into());
-        }
-        let first = rel_path
-            .components()
-            .find_map(|c| match c {
-                Component::Normal(s) => s.to_str(),
-                _ => None,
-            })
-            .unwrap_or("");
-        if !dirs.is_empty() && !dirs.contains(&first) {
-            return Err(format!("only {} are available", dirs.join(", ")));
-        }
-        let full = self.root.join(rel_path);
-        let real = full
-            .canonicalize()
-            .map_err(|_| format!("{rel}: not found"))?;
-        if !real.starts_with(&self.root) {
-            return Err("the path leaves the project".into());
-        }
-        Ok(real)
+        resolve_in(&self.root, rel, dirs)
     }
 
     fn files(&self) -> Vec<PathBuf> {

@@ -23,7 +23,7 @@ Code: `src/app/settings-schema.js` (`window.OMP_SETTINGS`), `src/app/settings-ta
 
 | What | Where |
 |---|---|
-| tweak rows, `widget:*` toggles, column widths, `terminalHeight`, `skippedUpdate` | `localStorage` `omp-desktop:tweaks` via `useTweaks` (`design/tweaks/use-tweaks.js`); `OMP_TWEAKS_STORE.read()` for code that runs before React (`live.js` at load) |
+| tweak rows, `widget:*` toggles, column widths, `terminalHeight`, `skippedUpdate` | `localStorage` `omp-desktop:tweaks` via `useTweaks` (`design/tweaks/use-tweaks.js`), written through to `<app config>/ui-state.json` by `app/ui-store.js` (`ui_state.rs`; `<app config>` = `~/.local/share/npi/desktop`, `npi_dirs.rs`); `OMP_TWEAKS_STORE.read()` for code that runs before React (`live.js` at load) |
 | shell | `<app config>/terminal.json` (`terminal.md`) |
 | approval mode default + project overrides | `<app config>/approval-mode.json` (`approval-mode.md`) |
 | startup profile | `<app config>/profiles.json` (`setStartupProfile`) |
@@ -74,3 +74,10 @@ Settings (`design/settings/settings-window.jsx`), the Librarian, the git browser
 A section shows only if `MERGED` gathers it: an authored section with no destination is dropped silently, so `UNPLACED` lists any and a test keeps it empty.
 
 `rows-usage.jsx`: the subscription bars (`bridge.usageLimits`, the same `usage_limits` the side panel reads; `app/usage-limits.js` names and orders them, drops a repeated shared quota and any limit with no fraction) and `UsageStatsBody` from `usage-stats-panel.jsx`, which the usage window also shows.
+
+## Model roster (3.0.0.136)
+
+Settings → Models (`rows-models.jsx`, `model_config.rs`) edits profile-owned `modelRoles` through `roster_get` / `roster_set`, preserving other roles. Four tiers (`flagship`, `high`, `standard`, `economy`) and `arbiter` hold `provider/model[:thinking]` selectors. Clearing a role removes its assignment. This is kernel configuration, not a UI tweak.
+
+In the kernel, unset `smol`, `task`, and `slow` follow configured economy, standard, and flagship respectively; an explicit assignment wins. In Auto subagent mode, a batch explicitly naming the same configured tier (for example `@economy`) dispatches on it without the model-selection question; mixed or unconfigured tiers keep the existing selection path. This changes model selection, not tool approval. Academic's simulated expert review also consumes this roster; see `research-core.md`.
+

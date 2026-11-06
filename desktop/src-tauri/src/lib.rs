@@ -18,10 +18,13 @@ pub mod librarian;
 mod chat_image;
 mod mcp_skills;
 mod notify;
+mod npi_dirs;
 mod quick_ask;
 #[cfg(target_os = "macos")]
 mod quick_ask_glass;
 mod screen_capture;
+mod session_search;
+mod expert_review;
 mod session_actions;
 mod approval_mode;
 mod browser;
@@ -66,6 +69,7 @@ mod terminal;
 #[cfg(test)]
 mod test_support;
 mod text;
+mod ui_state;
 mod updater;
 mod widgets;
 mod workspace;
@@ -121,14 +125,71 @@ struct StartSessionArgs {
     app_mode: Option<String>,
 }
 
-fn strip_compaction_section(yaml: &str) -> &str {
-    if yaml.starts_with("compaction:") {
-        ""
-    } else if let Some(idx) = yaml.find("\ncompaction:") {
-        yaml[..idx].trim_end()
-    } else {
-        yaml.trim_end()
+/// The browser section of a tab's overlay without the Desktop's session policy (from
+/// `app_mode::SESSION_POLICY_MARK`, or a bare `compaction:` section that older builds wrote).
+fn strip_session_policy(yaml: &str) -> &str {
+    let cut = yaml
+        .find(app_mode::SESSION_POLICY_MARK)
+        .or_else(|| yaml.strip_prefix("compaction:").map(|_| 0))
+        .or_else(|| yaml.find("\ncompaction:"));
+    cut.map_or(yaml, |i| &yaml[..i]).trim_end()
+}
+
+/// Writes the Desktop's part of a tab's `--config` overlay (`policy`: compaction, the kernel's own
+/// memory) after the browser section of `overlay`, replacing what a respawn under the same tab
+/// left; without a browser overlay, into its own file in the app cache. Returns the overlay's path.
+fn write_session_overlay(overlay: Option<PathBuf>, session_id: &str, policy: &str) -> Result<PathBuf, String> {
+    if let Some(path) = overlay {
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let base = strip_session_policy(&existing);
+        let merged = if base.is_empty() { policy.to_string() } else { format!("{base}\n\n{policy}") };
+        private_fs::write_private_file(&path, merged.as_bytes()).map_err(|e| format!("overlay merge: {e}"))?;
+        return Ok(path);
     }
+    let dir = npi_dirs::cache_dir().map_err(|e| format!("cache dir: {e}"))?.join("overlays");
+    let _ = private_fs::private_dirs(true).create(&dir);
+    let path = dir.join(format!("{session_id}.yml"));
+    private_fs::write_private_file(&path, policy.as_bytes()).map_err(|e| format!("session overlay: {e}"))?;
+    Ok(path)
+}
+
+/// A session's memory (`memory/`): its tools on top of the session's own host tools, and the block
+/// for its prompt. `None` when a folder it needs can't be resolved: the session starts without it.
+fn memory_host(
+    app: &AppHandle,
+    store: &memory::Store,
+    inner: &Arc<dyn copilot::HostTools>,
+    mode: &'static str,
+    session_id: &str,
+    cwd: Option<&str>,
+    profile: Option<&str>,
+) -> Option<(Arc<dyn copilot::HostTools>, String)> {
+    let db = memory::Store::default_path().ok()?;
+    let root = npi_dirs::data_root().ok()?;
+    let search = conversation_search(app, mode, cwd, profile);
+    let block = memory::prompt::block(store, &root, mode, search.is_some());
+    // Each change the model makes is shown to the user as it lands (`memory://noted`).
+    let emitter = app.clone(); // the host outlives this call
+    let tab = session_id.to_string(); // the host keeps its own copy too
+    let noticed: memory::tools::Noticed = Box::new(move |mut change| {
+        change["sessionId"] = serde_json::Value::String(tab.clone()); // each event carries it
+        let _ = emitter.emit("memory://noted", change);
+    });
+    let cx = memory::tools::Context { db, root, mode, session: session_id.to_string(), search, noticed: Some(noticed) };
+    Some((Arc::new(memory::tools::MemoryHost::new(Arc::clone(inner), cx)), block))
+}
+
+/// What `search_conversations` sees as `here`: every chat folder in Chat, the tab's folder in Code
+/// and Academic. `None` (no tool) without a folder or a sessions directory.
+fn conversation_search(app: &AppHandle, mode: &str, cwd: Option<&str>, profile: Option<&str>) -> Option<memory::tools::Search> {
+    let root = saved_sessions::sessions_root_dir(app, profile)?;
+    let index = npi_dirs::cache_dir().ok()?.join("session-index.db");
+    let cwds = if mode == "chat" {
+        app.state::<chat_space::ChatSpace>().dirs().iter().map(|d| saved_sessions::normalize_cwd(&d.to_string_lossy())).collect()
+    } else {
+        vec![saved_sessions::normalize_cwd(cwd?)]
+    };
+    Some(memory::tools::Search { index, here: session_search::Scope { root, cwds: Some(cwds) } })
 }
 
 /// Register the tab with the terminal, start an omp process for it, then
@@ -169,7 +230,7 @@ fn start_session(
     // without `--config`; a tab whose browser can't be set up (a respawn
     // racing the tab's close: "still closing") fails to start, and the
     // frontend's rollback closes it.
-    let mut overlay = app
+    let overlay = app
         .state::<browser::BrowserManager>()
         .allocate_if_available(&args.session_id)
         .map_err(|e| format!("browser: {e}"))?;
@@ -178,46 +239,15 @@ fn start_session(
         Some(mode) => app_mode::AppMode::parse(mode).ok_or("unknown mode")?,
         None => app.state::<app_mode::AppModeStore>().get(),
     };
-    match app_mode.compaction_overlay() {
-        Some(compaction) => {
-            if let Some(path) = &overlay {
-                let existing = std::fs::read_to_string(path).unwrap_or_default();
-                let base = strip_compaction_section(&existing).trim_end();
-                let merged = if base.is_empty() {
-                    compaction.trim().to_string()
-                } else {
-                    format!("{base}\n\n{}", compaction.trim())
-                };
-                private_fs::write_private_file(path, format!("{merged}\n").as_bytes())
-                    .map_err(|e| format!("overlay merge: {e}"))?;
-            } else {
-                let dir = app
-                    .path()
-                    .app_cache_dir()
-                    .map_err(|e| format!("cache dir: {e}"))?
-                    .join("overlays");
-                let _ = private_fs::private_dirs(true).create(&dir);
-                let path = dir.join(format!("{}.yml", args.session_id));
-                private_fs::write_private_file(&path, format!("{}\n", compaction.trim()).as_bytes())
-                    .map_err(|e| format!("compaction overlay: {e}"))?;
-                overlay = Some(path);
-            }
-        }
-        None => {
-            if let Some(path) = &overlay {
-                let existing = std::fs::read_to_string(path).unwrap_or_default();
-                if existing.contains("compaction:") {
-                    let base = strip_compaction_section(&existing).trim_end();
-                    let trimmed = if base.is_empty() {
-                        String::new()
-                    } else {
-                        format!("{base}\n")
-                    };
-                    let _ = private_fs::write_private_file(path, trimmed.as_bytes());
-                }
-            }
-        }
-    }
+    // Notes about the user (Desktop Memory), opened once for the overlay below and the prompt; a
+    // failure costs only the notes, the session starts without them.
+    let notes = memory::Store::open_default().and_then(|store| {
+        store.import_chat_memory(&app.state::<chat_space::ChatSpace>().memory())?;
+        Ok(store)
+    });
+    let memory_on = notes.as_ref().is_ok_and(memory::Store::enabled);
+    let kernel_learning = memory_on && notes.as_ref().is_ok_and(memory::Store::skill_learning);
+    let overlay = Some(write_session_overlay(overlay, &args.session_id, &app_mode.session_policy(kernel_learning))?);
 
     // Chat replaces omp's coding prompt with its own (plus the user's profile,
     // instructions and memory); Code leaves omp's default untouched.
@@ -246,7 +276,14 @@ fn start_session(
     let research: Arc<dyn copilot::HostTools> = if app_mode == app_mode::AppMode::Chat {
         Arc::new(chat_handoff::ChatHandoff::new(app.clone(), args.session_id.clone()))
     } else if let Some(project) = &academic_project {
-        Arc::new(copilot_worker::MainHost::new(project.clone(), profile))
+        // The project's tools, and a multi-expert review that starts only on the user's yes to a card.
+        let emitter = app.clone(); // the host outlives this call
+        let tab = args.session_id.clone(); // each card names its tab
+        let consent = expert_review::Consent::Card(Box::new(move |id, card| {
+            emitter.emit("review://confirm", serde_json::json!({ "sessionId": tab, "id": id, "card": card })).is_ok()
+        }));
+        let main: Arc<dyn copilot::HostTools> = Arc::new(copilot_worker::MainHost::new(project.clone(), profile));
+        Arc::new(expert_review::ReviewHost::new(main, project.clone(), profile, consent))
     } else {
         Arc::new(copilot::ResearchHub::new(space))
     };
@@ -259,29 +296,19 @@ fn start_session(
     } else {
         app_mode::DESKTOP_RICH_OUTPUT_HINT.to_string()
     };
-    // Notes about the user, in every mode, unless they turned Memory off. A failure here costs only the
-    // notes: the session starts without them.
-    let notes = memory::Store::open_default().and_then(|store| {
-        store.import_chat_memory(&app.state::<chat_space::ChatSpace>().memory())?;
-        Ok(store)
-    });
-    let (research, append_prompt) = match notes {
-        Ok(store) if store.enabled() => {
-            let mode = match app_mode {
-                app_mode::AppMode::Chat => "chat",
-                app_mode::AppMode::Code => "code",
-                app_mode::AppMode::Academic => "academic",
-            };
-            // The prompt speaks of the tools only when the tools are there.
-            match memory::Store::default_path() {
-                Ok(path) => {
-                    let block = memory::tools::prompt(&store);
-                    (Arc::new(memory::tools::MemoryHost::new(Arc::clone(&research), path, mode)) as Arc<dyn copilot::HostTools>, format!("{append_prompt}\n{block}"))
-                }
-                Err(_) => (research, append_prompt),
-            }
-        }
-        _ => (research, append_prompt),
+    // Notes about the user, the mode's profile and past conversations, unless Memory is off.
+    let mode_name = match app_mode {
+        app_mode::AppMode::Chat => "chat",
+        app_mode::AppMode::Code => "code",
+        app_mode::AppMode::Academic => "academic",
+    };
+    let (research, append_prompt) = match notes
+        .ok()
+        .filter(|_| memory_on)
+        .and_then(|store| memory_host(&app, &store, &research, mode_name, &args.session_id, cwd_opt, profile))
+    {
+        Some((host, block)) => (host, format!("{append_prompt}\n{block}")),
+        None => (research, append_prompt),
     };
     bridge.start_session_with_host(
         // Owned by the bridge's map; the widget hook below still needs the id.
@@ -291,11 +318,7 @@ fn start_session(
             resume: args.resume.as_deref(),
             profile,
             mode,
-            app_mode: match app_mode {
-                app_mode::AppMode::Chat => "chat",
-                app_mode::AppMode::Code => "code",
-                app_mode::AppMode::Academic => "academic",
-            },
+            app_mode: mode_name,
             config: overlay.as_deref(),
             prompt: prompt.as_deref(),
             append_prompt: Some(&append_prompt),
@@ -310,11 +333,9 @@ fn start_session(
 }
 
 /// The cwd and `--config` policy of a worker that must not see any project:
-/// `<app cache>/<name>`, private, with workspace discovery switched off.
-fn isolated_workspace(app: &AppHandle, name: &str) -> Result<(PathBuf, PathBuf), String> {
-    let cwd = app
-        .path()
-        .app_cache_dir()
+/// `~/.cache/npi/desktop/<name>`, private, with workspace discovery switched off.
+fn isolated_workspace(name: &str) -> Result<(PathBuf, PathBuf), String> {
+    let cwd = npi_dirs::cache_dir()
         .map_err(|e| format!("{name} cache directory: {e}"))?
         .join(name);
     let config = copilot_worker::write_policy(&cwd)?;
@@ -336,7 +357,7 @@ fn sidechat_start(
     let profile = store.resolve(profile.as_deref())?;
     // Never inherit the app's project cwd, browser overlay, chat-space memory or
     // widgets. Keep the small runtime policy outside any selected worktree.
-    let (cwd, config) = isolated_workspace(&app, "sidechat")?;
+    let (cwd, config) = isolated_workspace("sidechat")?;
     let cwd_text = cwd
         .to_str()
         .ok_or_else(|| "SideChat workspace path is not UTF-8".to_string())?;
@@ -388,7 +409,7 @@ fn academic_copilot_start(
         .project(Path::new(&project))
         .ok_or_else(|| "not an Academic project".to_string())?;
     let profile = store.resolve(profile.as_deref())?;
-    let (cwd, config) = isolated_workspace(&app, "copilot")?;
+    let (cwd, config) = isolated_workspace("copilot")?;
     let cwd_text = cwd
         .to_str()
         .ok_or_else(|| "Copilot workspace path is not UTF-8".to_string())?;
@@ -620,7 +641,7 @@ fn end_tabs<S: AsRef<str> + Sync>(app: &AppHandle, ids: &[S]) {
     let watchers = app.state::<GitWatcherState>();
     for id in ids {
         let id = id.as_ref();
-        if let Ok(dir) = app.path().app_cache_dir() {
+        if let Ok(dir) = npi_dirs::cache_dir() {
             let _ = std::fs::remove_file(dir.join("overlays").join(format!("{id}.yml")));
         }
         bridge.stop_session(id, &rule_book);
@@ -1508,6 +1529,35 @@ async fn model_default_set(
     off_ipc(move || model_config::default_set(profile.as_deref(), &selector)).await?
 }
 
+/// The user's answer to a review's card (`expert_review::confirm`); false when none is waiting.
+#[tauri::command]
+fn expert_review_answer(id: String, accept: bool) -> bool {
+    expert_review::confirm::answer(&id, accept)
+}
+
+/// The model roster of `profile` (`model_config::roster_get`).
+#[tauri::command]
+async fn model_roster_get(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || model_config::roster_get(profile.as_deref())).await?
+}
+
+/// Set or clear (`selector: null`) one roster role of `profile`; returns the roster afterwards.
+/// Running tabs keep what they resolved; new tabs and new subagents use it.
+#[tauri::command]
+async fn model_roster_set(
+    profile: Option<String>,
+    role: String,
+    selector: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || model_config::roster_set(profile.as_deref(), &role, selector.as_deref())).await?
+}
+
 /// Shared profile-resolution and home-dir setup for the three keybindings
 /// commands. Returns `(home, resolved_profile, env_dir)` ready to pass to
 /// `keybindings::payload` / `keybindings::payload_with_overlay`.
@@ -1781,8 +1831,8 @@ fn holds_close(label: &str, armed: bool) -> bool {
     armed && label == "main"
 }
 
-/// The per-user folder the persistent stores live in, from Tauri's
-/// `app_config_dir()`. `None` when it can't be resolved or is relative:
+/// The per-user folder the persistent stores live in, `npi_dirs::config_dir()`
+/// (`~/.local/share/npi/desktop`). `None` when it can't be resolved or is relative:
 /// every store then keeps its state in memory for the app run. There is no
 /// fallback to a shared location such as the OS temp dir, where another
 /// local account could plant the files these stores trust (`open-tabs.json`
@@ -1813,36 +1863,40 @@ fn setup(app: &tauri::App) {
     if let Some(win) = app.get_webview_window("main") {
         win.open_devtools();
     }
+    // Settings and caches live beside the command line's (`npi_dirs`); move what
+    // the old Tauri folders held before any store below opens its file.
+    npi_dirs::migrate(
+        app.path().app_config_dir().ok().as_deref(),
+        app.path().app_cache_dir().ok().as_deref(),
+    );
     // Every store below is memory-only without it (see `config_dir`).
-    let resolved_config_dir = config_dir(app.path().app_config_dir());
+    let resolved_config_dir = config_dir(npi_dirs::config_dir());
     let config_file = |name: &str| resolved_config_dir.as_deref().map(|dir| dir.join(name));
-    // Rail widget plugins: <app_config_dir>/widgets.json and the approvals in
-    // <app_config_dir>/widget-approvals.json. No temp-dir fallback: a
+    // Rail widget plugins: <npi config>/widgets.json and the approvals in
+    // <npi config>/widget-approvals.json. No temp-dir fallback: a
     // `widgets.json` in a shared temp dir could be planted by another user,
     // so without a config dir widgets stay disabled (the snapshot's `fatal`).
     let (widget_config, widget_approvals) = resolved_config_dir
         .as_deref()
         .map(|dir| (dir.join("widgets.json"), dir.join("widget-approvals.json")))
         .unzip();
-    // Terminal tabs and the shell setting: <app_config_dir>/terminal.json.
+    // Terminal tabs and the shell setting: <npi config>/terminal.json.
     // No temp-dir fallback either: another account could plant the shell
     // this one runs; without a config dir the setting stays in memory.
     app.manage(Arc::new(terminal::TerminalManager::new(config_file(
         "terminal.json",
     ))));
     // Chat image cache + bounded transfer scheduler:
-    // <app_local_data_dir>/chat-images, private to this user. Without a
+    // ~/.cache/npi/desktop/chat-images, private to this user. Without a
     // resolved dir images still load, they are just never cached.
-    let chat_image_cache = app
-        .path()
-        .app_local_data_dir()
+    let chat_image_cache = npi_dirs::cache_dir()
         .ok()
         .map(|dir| dir.join("chat-images"));
     if chat_image_cache.is_none() {
         eprintln!("[omp-desktop] no app local data dir; chat images will not be cached");
     }
     app.manage(Arc::new(chat_image::ChatImageManager::new(chat_image_cache)));
-    // Approval mode: <app_config_dir>/approval-mode.json. No temp-dir
+    // Approval mode: <npi config>/approval-mode.json. No temp-dir
     // fallback: another account could plant a `yolo` there; without a config
     // dir the choice stays in memory.
     app.manage(app_mode::AppModeStore::new());
@@ -1851,7 +1905,7 @@ fn setup(app: &tauri::App) {
     let legacy_chats = app.path().app_data_dir().map_or_else(|_| std::env::temp_dir().join("npi"), |d| d).join("Chats");
     app.manage(chat_space::ChatSpace::new(
         app.path().document_dir().map_or_else(|_| legacy_chats.clone(), |d| d.join("NPi").join("Chat")),
-        app.path().app_config_dir().map_or_else(|_| std::env::temp_dir().join("npi-config"), |d| d),
+        npi_dirs::data_root().unwrap_or_else(|_| std::env::temp_dir().join("npi-config")),
     ).with_legacy(legacy_chats));
     app.manage(Arc::new(academic_space::AcademicSpace::new(
         app.path().document_dir().map_or_else(|_| std::env::temp_dir().join("npi-academic"), |d| d.join("NPi").join("Academic")),
@@ -1865,7 +1919,7 @@ fn setup(app: &tauri::App) {
         app.path().resource_dir().ok().as_deref(),
     ));
     // Approval-rule store: project-scoped grants persist under
-    // <app_config_dir>/approval-rules/<project-hash>.json. No temp-dir
+    // <npi config>/approval-rules/<project-hash>.json. No temp-dir
     // fallback: another account could plant grants there that approve
     // tools without asking; without a config dir they stay in memory.
     app.manage(Arc::new(
@@ -1879,9 +1933,7 @@ fn setup(app: &tauri::App) {
     // It lives under the per-user app cache dir (user-owned, unlike a shared
     // temp dir); without one the manager is unavailable and sessions start
     // without a managed browser.
-    let browser = app
-        .path()
-        .app_cache_dir()
+    let browser = npi_dirs::cache_dir()
         .map_err(|e| format!("no app cache dir: {e}"))
         .and_then(|dir| browser::BrowserManager::new(&dir.join("browser"), browser_store))
         .unwrap_or_else(|reason| {
@@ -1902,37 +1954,34 @@ fn setup(app: &tauri::App) {
     if let Err(e) = pruning {
         eprintln!("[omp-desktop] browser leftovers not pruned: {e}");
     }
-    // Profile list: <app_config_dir>/profiles.json. No temp-dir fallback for
+    // Profile list: <npi config>/profiles.json. No temp-dir fallback for
     // it or the stores below: another account could plant the profile tabs
     // start in, a rebind, or the folders the next launch opens.
     app.manage(Arc::new(profiles::ProfileStore::load(config_file(
         "profiles.json",
     ))));
-    // Keybinding overlay: <app_config_dir>/keybindings.json.
+    // Keybinding overlay: <npi config>/keybindings.json.
     app.manage(Arc::new(keybindings::overlay::OverlayStore::new(
         config_file("keybindings.json"),
     )));
     // Widget scheduler thread; it loads the config and approvals itself.
     // Each run executes private copies of the plugin's scripts under
-    // <app_cache_dir>/widget-runs (user-owned, unlike a shared temp dir).
+    // ~/.cache/npi/desktop/widget-runs (user-owned, unlike a shared temp dir).
     app.manage(Arc::new(widgets::WidgetHost::for_app(
         app.handle().clone(), // the host emits `widgets://` events for the app's lifetime
         widget_config,
         widget_approvals,
-        app.path()
-            .app_cache_dir()
-            .ok()
-            .map(|dir| dir.join("widget-runs")),
+        npi_dirs::cache_dir().ok().map(|dir| dir.join("widget-runs")),
     )));
-    // Recently opened projects: <app_config_dir>/recent-projects.json.
+    // Recently opened projects: <npi config>/recent-projects.json.
     app.manage(Arc::new(recent_projects::RecentProjectsStore::new(
         config_file("recent-projects.json"),
     )));
-    // Open-tab layout for the next launch: <app_config_dir>/open-tabs.json.
+    // Open-tab layout for the next launch: <npi config>/open-tabs.json.
     app.manage(Arc::new(open_tabs::OpenTabsStore::new(config_file(
         "open-tabs.json",
     ))));
-    // Phone remote access: settings in <app_config_dir>/remote.json, devices
+    // Phone remote access: settings in <npi config>/remote.json, devices
     // in remote-devices.json; started once from the saved settings.
 
     // A cold start *is* how Windows and Linux file managers open a
@@ -1991,6 +2040,7 @@ fn single_instance_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 fn with_plugins_and_state(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     builder
         .plugin(navigation_guard::init())
+        .plugin(ui_state::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AgentBridge::new())
@@ -1999,6 +2049,7 @@ fn with_plugins_and_state(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
         .manage(OpenProjectState::new())
         .manage(updater::UpdaterState::default())
         .manage(CloseGuard::default())
+        .manage(ui_state::UiStateStore::new())
 }
 
 /// Run the Tauri application. Panics if the runtime fails to initialise.
@@ -2083,7 +2134,10 @@ pub fn run() {
             librarian::commands::library_attach_pdf,
             librarian::commands::library_attach_pick,
             memory::commands::memory_state,
+            ui_state::ui_state_set,
             memory::commands::memory_set_enabled,
+            memory::commands::memory_set_skill_learning,
+            memory::commands::memory_set_profile,
             memory::commands::memory_update,
             memory::commands::memory_delete,
             memory::commands::memory_clear,
@@ -2155,6 +2209,7 @@ pub fn run() {
             mcp_skills::mcp_server_upsert,
             mcp_skills::skills_list,
             mcp_skills::skill_open,
+            mcp_skills::skill_delete_managed,
             notify::notify_configure,
             notify::notify_set_active,
             notify::notify_status,
@@ -2189,6 +2244,9 @@ pub fn run() {
             usage_limits,
             model_default_get,
             model_default_set,
+            model_roster_get,
+            expert_review_answer,
+            model_roster_set,
             list_project_files,
             list_profiles,
             create_profile,
@@ -2297,7 +2355,7 @@ fn announce_held_close(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{config_dir, holds_close, hides_on_close, strip_compaction_section, StartSessionArgs};
+    use super::{config_dir, holds_close, hides_on_close, strip_session_policy, StartSessionArgs};
     use std::path::PathBuf;
 
     #[test]
@@ -2375,19 +2433,14 @@ mod tests {
     }
 
     #[test]
-    fn strip_compaction_section_removes_compaction_or_returns_base() {
-        assert_eq!(strip_compaction_section(""), "");
-        assert_eq!(
-            strip_compaction_section("browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false\n"),
-            "browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false"
-        );
-        assert_eq!(
-            strip_compaction_section("browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false\n\ncompaction:\n  thresholdPercent: 70\n"),
-            "browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false"
-        );
-        assert_eq!(
-            strip_compaction_section("compaction:\n  thresholdPercent: 70\n"),
-            ""
-        );
+    fn strip_session_policy_keeps_only_the_browser_section() {
+        let browser = "browser:\n  cdpUrl: http://127.0.0.1:1\n  relay: false";
+        assert_eq!(strip_session_policy(""), "");
+        assert_eq!(strip_session_policy(&format!("{browser}\n")), browser);
+        let policy = crate::app_mode::AppMode::Chat.session_policy(true);
+        assert_eq!(strip_session_policy(&format!("{browser}\n\n{policy}")), browser);
+        assert_eq!(strip_session_policy(&policy), "");
+        assert_eq!(strip_session_policy(&format!("{browser}\n\ncompaction:\n  thresholdPercent: 70\n")), browser, "an older build's overlay");
+        assert_eq!(strip_session_policy("compaction:\n  thresholdPercent: 70\n"), "");
     }
 }

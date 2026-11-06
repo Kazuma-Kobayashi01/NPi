@@ -280,6 +280,21 @@ impl Library {
         rows.collect::<Result<_, _>>().map_err(sql)
     }
 
+    /// Keeps a multi-expert review (`expert_review`) as an artifact of kind `review`: `experts` (each
+    /// review with its angle and model) in `columns`, the arbiter's result in `rows`. Returns its id.
+    ///
+    /// # Errors
+    /// Returns an error when the review cannot be inserted into the project database.
+    pub fn save_review(&self, title: &str, subject: &str, experts: &Value, verdict: &Value) -> Result<i64, String> {
+        self.conn
+            .execute(
+                "INSERT INTO artifacts (kind, title, question, columns, rows, created_at) VALUES ('review', ?1, ?2, ?3, ?4, ?5)",
+                params![cut(title, 200), cut(subject, 300), experts.to_string(), verdict.to_string(), now()],
+            )
+            .map_err(sql)?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
     pub fn delete_comparison(&self, id: i64) -> Result<(), String> {
         self.conn.execute("DELETE FROM artifacts WHERE id = ?1", params![id]).map_err(sql)?;
         Ok(())

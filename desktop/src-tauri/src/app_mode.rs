@@ -6,6 +6,7 @@
 //! `start_session` when it spawns omp, so a mode change reaches a tab when its
 //! omp is (re)started.
 
+use std::fmt::Write as _;
 use std::sync::Mutex;
 
 /// The whole base system prompt of Chat mode (omp's own default is replaced,
@@ -115,6 +116,7 @@ They are connected under plain names: there is nothing to install, and no server
 const PROJECT_SESSION_HINT: &str = "\
 - Long literature work (a whole library, many papers): copilot_ask {task} runs the project's Copilot as a separate agent and returns its report, which keeps this context small. It knows nothing of this conversation and cannot ask you anything, so say everything it needs. Do short lookups yourself.
 - A project rule saying never to change the library gives way when the user asks you to organise it.
+- When the user asks you to judge their paper title, an idea or claim, the contributions or a manuscript (\"what do you think of this idea\", \"review my paper\"), offer expert_review, a simulated review by four expert models and an arbiter, and call it when they want it: the user sees the models and the cost before anything is sent. Say the result is simulated. For a quick opinion, answer yourself.
 ";
 
 /// Said only once the paper's repository exists: the Write window sets it up.
@@ -139,6 +141,10 @@ pub fn academic_prompt(project: Option<&std::path::Path>) -> String {
         None => format!("{ACADEMIC_PROMPT}\n{NO_PROJECT_HINT}"),
     }
 }
+
+/// Starts the Desktop's own part of a session's `--config` overlay; everything from it on is
+/// rewritten at each start (`lib.rs` `strip_session_policy`).
+pub const SESSION_POLICY_MARK: &str = "# npi-desktop session policy";
 
 pub const CHAT_COMPACTION_OVERLAY: &str = "\
 compaction:
@@ -176,6 +182,22 @@ impl AppMode {
             Self::Chat => Some(CHAT_PROMPT),
             Self::Code | Self::Academic => None,
         }
+    }
+
+    /// What a session of this mode pins in its `--config` overlay, after the browser section: the
+    /// mode's compaction, and the kernel's own memory. Notes about the user are Desktop Memory's
+    /// alone (`memory/`), so omp's memory backend is always off here, whatever the user's
+    /// `config.yml` says; omp's autolearn (skills written from what worked, `managed-skills/`)
+    /// runs in Code and Academic only, and only when `kernel_learning` (Memory on, and its skills
+    /// switch on). Chat's one-off errands do not become skills.
+    pub fn session_policy(self, kernel_learning: bool) -> String {
+        let mut out = format!("{SESSION_POLICY_MARK}\n");
+        if let Some(compaction) = self.compaction_overlay() {
+            out.push_str(compaction);
+        }
+        let learn = kernel_learning && self != Self::Chat;
+        let _ = write!(out, "memory:\n  backend: \"off\"\nautolearn:\n  enabled: {learn}\n");
+        out
     }
 
     /// Compaction configuration overlay snippet for this mode; `None` keeps omp defaults.
@@ -256,7 +278,7 @@ mod tests {
     fn an_academic_session_is_told_what_it_can_reach() {
         let project = crate::test_support::TempDir::new("app-mode", "academic");
         let inside = academic_prompt(Some(project.path()));
-        for tool in ["library_add", "library_attach", "library_merge", "research_check_quote", "copilot_ask"] {
+        for tool in ["library_add", "library_attach", "library_merge", "research_check_quote", "copilot_ask", "expert_review"] {
             assert!(inside.contains(tool), "{tool}");
         }
         assert!(!inside.contains("write/"), "no paper repository yet");
@@ -265,6 +287,7 @@ mod tests {
         let outside = academic_prompt(None);
         assert!(outside.contains("academic_projects") && outside.contains("Evidence"));
         assert!(!outside.contains("library_add") && !outside.contains("copilot_ask"), "not what it cannot call");
+        assert!(!outside.contains("expert_review"), "the review is a project tool");
     }
 
     #[test]
@@ -316,6 +339,19 @@ mod tests {
         assert!(AppMode::Academic
             .compaction_overlay()
             .is_some_and(|s| s.contains("keepRecentTokens: 30000") && s.contains("handoff")));
+    }
+
+    #[test]
+    fn the_kernel_memory_stays_off_and_skills_are_learned_outside_chat() {
+        for mode in [AppMode::Chat, AppMode::Code, AppMode::Academic] {
+            for learning in [false, true] {
+                let policy = mode.session_policy(learning);
+                assert!(policy.starts_with(SESSION_POLICY_MARK) && policy.contains("memory:\n  backend: \"off\""));
+                let on = mode != AppMode::Chat && learning;
+                assert!(policy.contains(&format!("autolearn:\n  enabled: {on}")), "{mode:?} {learning}");
+            }
+        }
+        assert!(AppMode::Chat.session_policy(true).contains("thresholdPercent: 85"));
     }
 
     #[test]
