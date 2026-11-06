@@ -33,8 +33,14 @@ body.wc-dragging, body.wc-dragging * { user-select: none !important; -webkit-use
    only drags. */
 html.panel-mode, html.panel-mode body, html.panel-mode #root { height: 100%; }
 html.panel-mode .bridge-scrim,
+html.panel-mode .gitb-scrim,
+html.panel-mode .kanban-scrim,
 html.panel-mode .st-overlay { position: fixed; inset: 0; display: block; padding: 0 !important; background: var(--bg-elevated); backdrop-filter: none; }
 html.panel-mode .stats-panel,
+html.panel-mode .rules-panel,
+html.panel-mode .bridge,
+html.panel-mode .kanban,
+html.panel-mode .gitb,
 html.panel-mode .st-modal {
   width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important;
   border: 0; border-radius: 0; box-shadow: none; transform: none !important;

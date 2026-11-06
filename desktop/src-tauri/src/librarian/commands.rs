@@ -69,6 +69,19 @@ pub async fn library_align(space: Space<'_>, project: String, citekey: String, a
     .await?
 }
 
+/// Page 1 of a reference's PDF read by the model (`page_one.rs`): its record and the blank fields it
+/// would fill; nothing is written. The window calls it only after the user confirmed sending the page.
+#[tauri::command]
+pub async fn library_page_one(space: Space<'_>, project: String, citekey: String, profile: Option<String>) -> Result<Value, String> {
+    let dir = project_of(&space, &project)?;
+    crate::off_ipc(move || {
+        let model = |prompt: &str, text: &str| crate::copilot_worker::convert(&dir, profile.as_deref(), prompt, text);
+        let p = super::page_one::propose(&dir, &citekey, model)?;
+        Ok(serde_json::json!({ "changes": p.changes, "csl": p.csl }))
+    })
+    .await?
+}
+
 /// Merges reference `other` into `keep`; `other` goes to the trash.
 #[tauri::command]
 pub async fn library_merge(space: Space<'_>, project: String, keep: i64, other: i64) -> Result<Entry, String> {

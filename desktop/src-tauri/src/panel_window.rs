@@ -1,16 +1,28 @@
-//! Secondary windows: Librarian and usage statistics open as their own OS
-//! windows (resizable, zoomable, closed with Cmd+W) instead of floating inside
-//! the main window.
+//! Secondary windows: Librarian, reader, Write, usage statistics, history,
+//! approval rules, plan and the git browser open as their own OS windows
+//! (resizable, zoomable, closed with Cmd+W) instead of floating inside the
+//! main window.
 //!
 //! A panel window loads `index.html?panel=<kind>&…` (`src/app/panel-mode.js`):
 //! the page then shows that one panel and keeps `live.js` inert, so a panel
-//! never touches the tabs the main window owns. Only the kinds in [`KINDS`]
-//! open, and the navigation guard lets only those windows load that URL.
+//! never touches the tabs the main window owns. The last four show the main
+//! window's tab and act on it through app events (`src/app/panel-link.js`),
+//! run by the main window. Only the kinds in [`KINDS`] open, and the
+//! navigation guard lets only those windows load that URL.
 
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-/// The panels that run without the main window's state: (kind, width, height).
-const KINDS: [(&str, f64, f64); 4] = [("librarian", 1400.0, 880.0), ("reader", 1360.0, 880.0), ("write", 900.0, 720.0), ("stats", 760.0, 660.0)];
+/// The panels: (kind, width, height).
+const KINDS: [(&str, f64, f64); 8] = [
+    ("librarian", 1400.0, 880.0),
+    ("reader", 1360.0, 880.0),
+    ("write", 900.0, 720.0),
+    ("stats", 760.0, 660.0),
+    ("history", 820.0, 640.0),
+    ("rules", 760.0, 640.0),
+    ("plan", 1100.0, 720.0),
+    ("git", 1320.0, 860.0),
+];
 pub const LABEL_PREFIX: &str = "panel-";
 
 /// Percent-encodes `s` for a query value.

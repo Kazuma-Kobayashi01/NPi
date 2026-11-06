@@ -392,7 +392,7 @@ const EDITABLE: &[&str] = &[
     "publisher-place", "DOI", "URL", "abstract", "type", "ISSN", "ISBN", "language", "keyword",
 ];
 
-fn blank(v: Option<&Value>) -> bool {
+pub(super) fn blank(v: Option<&Value>) -> bool {
     match v {
         None | Some(Value::Null) => true,
         Some(Value::String(s)) => s.trim().is_empty(),
@@ -421,7 +421,7 @@ fn merge(have: &Value, found: &Value, overwrite: bool) -> (Vec<(String, Value, V
 }
 
 /// One person as a CSL name: an object with `family` / `given` / `literal`, or "Family, Given" / "Given Family".
-fn person(v: &Value) -> Result<Value, String> {
+pub(super) fn person(v: &Value) -> Result<Value, String> {
     match v {
         Value::Object(_) => Ok(v.clone()),
         Value::String(line) => {
@@ -464,7 +464,7 @@ fn normal_field(key: &str, value: &Value) -> Result<(&'static str, Value), Strin
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use std::path::Path;
     use crate::test_support::TempDir;

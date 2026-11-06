@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `[anchor N]` in an answer of an Academic project's tab (Academic session or Copilot) is a link: a click opens the reader on that page with the passage marked. The project's tool guide asks the model to keep the anchors the research tools give beside the claims they support.
+- Librarian: "Read page 1 with the model…" for a reference whose PDF shows no DOI. After a confirmation saying what is sent, page 1's text goes to the profile's model (no tools); what it reads shows like an online lookup, blank fields ticked, and only Save writes it.
+- History, approvals, Todo and plan, and the git browser open as their own windows, like the Librarian. They show the main window's current tab and act on it there (`app/panel-link.js`); Settings stays inside the main window.
+
 - Model roster in Settings → Models: flagship, high, standard, economy and arbiter roles; unset fast, subtask and thinking roles follow their corresponding tiers. Auto subagent batches naming one configured tier can dispatch directly.
 - Academic `expert_review`: parallel model-roster experts and an anonymous arbiter for titles, ideas, contributions and manuscripts. The App requires a confirmation card showing models, providers and estimated tokens; MCP callers must obtain consent before declaring confirmation. Simulated reports are saved in the project's research database.
 - The assistant can look back at past conversations (`search_conversations`): every chat in Chat, the project's conversations in Code and Academic, or everything when asked. Only what was said is searched, never tool output, Chinese included.

@@ -5032,7 +5032,7 @@
      *  `library_<name>` with `project` (its folder name) and `args`. Resolves to
      *  `{ ok, value | error }`. Only the listed names go through. */
     library(name, project, args) {
-      const NAMES = ["list", "search", "mcp_register", "export_text", "align", "merge", "citekey", "pdf_dropped", "add", "update", "remove", "import", "export", "export_save", "import_pick", "groups", "group_add", "group_rename", "group_remove", "member", "meta", "styles", "format", "style_add_pick", "cite_draft", "pdf_pick", "add_pdf", "attach_pdf", "attach_pick", "attachment_open", "attachment_locate", "attachment_remove", "import_text", "lookup", "suggestion_resolve", "check_draft_pick", "trash", "restore"];
+      const NAMES = ["list", "search", "mcp_register", "export_text", "align", "page_one", "merge", "citekey", "pdf_dropped", "add", "update", "remove", "import", "export", "export_save", "import_pick", "groups", "group_add", "group_rename", "group_remove", "member", "meta", "styles", "format", "style_add_pick", "cite_draft", "pdf_pick", "add_pdf", "attach_pdf", "attach_pick", "attachment_open", "attachment_locate", "attachment_remove", "import_text", "lookup", "suggestion_resolve", "check_draft_pick", "trash", "restore"];
       if (!NAMES.includes(name)) return Promise.resolve({ ok: false, error: `unknown library command: ${name}` });
       return _invokeResult(`library_${name}`, { project, ...(args ?? {}) });
     },

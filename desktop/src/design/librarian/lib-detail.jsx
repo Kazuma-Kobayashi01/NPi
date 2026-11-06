@@ -3,7 +3,7 @@
    applies at once. The parent re-keys it by id and update time, so a saved or
    switched reference starts from what is stored. */
 
-function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpenLink, onCopyKey, onLocateAttachment, onSave, onMember, onDelete, onCite, onLookup, onAttach, onRename, onOpenAttachment, onReadAttachment, onRemoveAttachment, onAttachDuplicate, onDiscardDraft, onSuggestion }) {
+function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpenLink, onCopyKey, onLocateAttachment, onSave, onMember, onDelete, onCite, onLookup, onReadPageOne, onAttach, onRename, onOpenAttachment, onReadAttachment, onRemoveAttachment, onAttachDuplicate, onDiscardDraft, onSuggestion }) {
   const T = window.OMP_I18N.t;
   const L = window.OMP_LIBRARIAN;
   const isDraft = Boolean(draft);
@@ -62,6 +62,19 @@ function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpe
   const pickCandidate = index => setLookup(l => ({ ...l, picked: index,
     keys: new Set(L.lookupDiff(form, l.candidates[index]).filter(r => r.differs).map(r => r.key)) }));
   const toggleKey = key => setLookup(l => { const keys = new Set(l.keys); if (keys.has(key)) keys.delete(key); else keys.add(key); return { ...l, keys }; });
+  // Page 1 to the model: asked first ("confirm"), then "busy"; the record shows like a lookup's.
+  const [pageOne, setPageOne] = React.useState(null);
+  const readable = !isDraft && onReadPageOne && !form.doi.trim() ? entry.attachments.find(a => !a.missing) : null;
+  const runPageOne = async () => {
+    setPageOne("busy");
+    const res = await onReadPageOne(entry);
+    setPageOne(null);
+    if (!res.ok) return setLookup({ error: res.error });
+    const found = res.value.csl;
+    // Ticked: what the reference lacks; a value it has is offered, not taken.
+    const keys = L.lookupDiff(form, found).filter(r => r.differs && (!r.current || (r.key === "type" && r.current === "document"))).map(r => r.key);
+    setLookup({ candidates: [found], picked: 0, keys: new Set(keys), model: true });
+  };
   const applyLookup = () => { setForm(f => L.applyLookup(f, lookup.candidates[lookup.picked], [...lookup.keys])); setLookup(null); };
 
   return (
@@ -105,7 +118,22 @@ function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpe
             {lookup?.busy ? T("Looking up…") : T("Look up online…")}
           </button>
           <span className="lb-state">{T("Only when you click · Crossref, OpenAlex")}</span>
+          {readable && pageOne !== "confirm" && (
+            <button type="button" className="btn ghost" disabled={pageOne === "busy"} onClick={() => setPageOne("confirm")}
+              title={T("For a PDF that shows no DOI: the model reads page 1 and suggests the fields")}>
+              {pageOne === "busy" ? T("Reading page 1…") : T("Read page 1 with the model…")}
+            </button>
+          )}
         </div>
+        {pageOne === "confirm" && readable && (
+          <div className="lb-lookup" role="alertdialog" aria-label={T("Read page 1 with the model")}>
+            <span>{T("The text of page 1 of {name} is sent to the model of this profile. Its answer only fills the form; nothing is saved until you press Save.", { name: readable.path.split("/").pop() })}</span>
+            <div className="lb-lookup-foot">
+              <button type="button" className="btn outlined accent" onClick={runPageOne}>{T("Send page 1")}</button>
+              <button type="button" className="btn ghost" onClick={() => setPageOne(null)}>{T("Cancel")}</button>
+            </div>
+          </div>
+        )}
         {lookup?.error && <div className="lb-lookup lb-lookup-error" role="alert">{lookup.error}<button type="button" className="btn ghost" onClick={() => setLookup(null)}>{T("Close")}</button></div>}
         {lookup?.candidates && (
           <div className="lb-lookup" role="group" aria-label={T("Online result")}>
@@ -132,7 +160,7 @@ function LibDetail({ apiRef, entry, groups, draft, waiting, onSkipWaiting, onOpe
             <div className="lb-lookup-foot">
               <button type="button" className="btn outlined accent" disabled={lookup.keys.size === 0} onClick={applyLookup}>{T("Take the ticked fields")}</button>
               <button type="button" className="btn ghost" onClick={() => setLookup(null)}>{T("Close")}</button>
-              <span className="lb-state">{T("The form changes only; Save keeps it.")}</span>
+              <span className="lb-state">{lookup.model ? T("Read by the model from page 1: check each value against the PDF. The form changes only; Save keeps it.") : T("The form changes only; Save keeps it.")}</span>
             </div>
           </div>
         )}

@@ -310,6 +310,10 @@
        call window.useModalFocus at render time. -->
   <script src="design/ui/use-modal-focus.js"></script>
   <script src="app/panel-mode.js"></script>
+  <!-- The main window and the secondary windows that show its state talk through
+       app events (history, approval rules, plan, git browser): app-live.jsx publishes
+       and serves, panel-root.jsx subscribes and calls; read at render time. -->
+  <script src="app/panel-link.js"></script>
   <script src="design/ui/window-chrome.js"></script>
   <!-- Keyboard-driven popup lists: useActiveRowIntoView (composer.jsx's
        slash menu and mentions, history-modal.jsx, prompt-history-modal.jsx)

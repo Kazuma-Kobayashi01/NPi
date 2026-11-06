@@ -16,6 +16,7 @@ pub mod mcp;
 pub mod agent;
 mod organize;
 mod organize_tools;
+mod page_one;
 mod pdf_meta;
 mod pdf_tools;
 mod reader;

@@ -19,8 +19,8 @@ const { Icon: _RulesIcon, ApprovalModeSection: _RulesModeSection } = window;
 // closed, and the state below resets with it. `approvalModes` and `sessions` come
 // from the bridge snapshot (app-live.jsx); `activeProject` is the rendered
 // tab's entry, null with no tab open.
-function ApprovalRulesPanel({ onClose, activeProject, sessions, approvalModes }) {
-  const bridge = window.OMP_BRIDGE;
+// `bridge`: the main window's (default), or a secondary window's proxy to it (app/panel-link.js).
+function ApprovalRulesPanel({ onClose, activeProject, sessions, approvalModes, bridge = window.OMP_BRIDGE }) {
   const panelRef = React.useRef(null);
   const wc = window.useWindowChrome(onClose, panelRef);
   const [rules, setRules]     = React.useState([]);
@@ -57,7 +57,7 @@ function ApprovalRulesPanel({ onClose, activeProject, sessions, approvalModes })
         </div>
         <div className="rules-body">
           <div className="panel-sect-hd">tool approval mode</div>
-          <_RulesModeSection view={approvalModes} activeProject={activeProject} sessions={sessions} />
+          <_RulesModeSection view={approvalModes} activeProject={activeProject} sessions={sessions} bridge={bridge} />
           <div className="panel-sect-hd">standing rules</div>
           {loading && rules.length === 0 && <div className="panel-empty mono">loading…</div>}
           {!loading && rules.length === 0 && (

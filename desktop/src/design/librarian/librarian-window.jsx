@@ -4,7 +4,7 @@
    L1). The data is Rust's (library_* commands through `bridge.library`);
    what is shown and how it is filtered is app/librarian.js. */
 
-function LibrarianWindow({ bridge, project, onClose }) {
+function LibrarianWindow({ bridge, project, profile, onClose }) {
   const T = window.OMP_I18N.t;
   const L = window.OMP_LIBRARIAN;
   const { Icon } = window;
@@ -256,6 +256,8 @@ function LibrarianWindow({ bridge, project, onClose }) {
     await reload();
   };
   const lookup = args => call("lookup", args);
+  // Page 1 of the reference's PDF to the model (librarian/page_one.rs); the detail pane asked first.
+  const readPageOne = entry => call("page_one", { citekey: entry.citekey, profile: profile || null });
   const openTrash = async () => {
     const r = await call("trash");
     if (!r.ok) return say(r.error);
@@ -414,7 +416,7 @@ function LibrarianWindow({ bridge, project, onClose }) {
                 onSave={save} onLookup={lookup} onAttachDuplicate={attachDuplicate} onDiscardDraft={() => setDraft(null)} />
             : selected
               ? <LibDetail key={`${selected.id}:${selected.updatedAt}:${selected.attachments.length}:${selected.suggestions.length}`} apiRef={detail} entry={selected} groups={groups}
-                  onSave={save} onMember={member} onDelete={remove} onCite={cite} onLookup={lookup} onAttach={attachPick} onRename={rename}
+                  onSave={save} onMember={member} onDelete={remove} onCite={cite} onLookup={lookup} onReadPageOne={readPageOne} onAttach={attachPick} onRename={rename}
                   onOpenAttachment={openAttachment} onReadAttachment={readPdf} onLocateAttachment={locateAttachment} onRemoveAttachment={removeAttachment}
                   onSuggestion={resolveSuggestion} onOpenLink={url => bridge.openExternalUrl(url)} onCopyKey={copyKey} />
               : selectedMany.length > 1

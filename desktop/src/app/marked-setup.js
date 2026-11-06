@@ -389,6 +389,27 @@
         renderer(token) {
           return renderMath(token);
         }
+      },
+      {
+        // A Research Core citation, `[anchor 12]` or `(anchor 12)` as the
+        // research tools print it: a marker app-live.jsx opens in the reader.
+        // Plain markup, no handler (CSP); only the digits reach the attribute.
+        name: "researchAnchor",
+        level: "inline",
+        start(src) {
+          const m = /[[(]anchor \d/.exec(src);
+          return m ? m.index : undefined;
+        },
+        tokenizer(src) {
+          // `[anchor 3](url)` / `[anchor 3][ref]` stay the link the model wrote.
+          const m = /^(?:\[anchor (\d{1,12})\](?![([])|\(anchor (\d{1,12})\))/.exec(src);
+          if (!m) return undefined;
+          return { type: "researchAnchor", raw: m[0], id: m[1] ?? m[2] };
+        },
+        renderer(token) {
+          const tip = window.OMP_I18N ? window.OMP_I18N.t("Open in Reader") : "Open in Reader";
+          return '<span class="md-anchor" role="link" data-anchor="' + token.id + '" title="' + escapeHtml(tip) + '">anchor ' + token.id + '</span>';
+        }
       }
     ],
     renderer: {

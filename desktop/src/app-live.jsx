@@ -55,6 +55,8 @@ function App() {
   // Git browser: null, or { path, project } — the file it opens on (null =
   // the first changed file) and the project that path belongs to.
   const [gitOpen,     setGitOpen]     = React.useState(null);
+  const [gitTarget,   setGitTarget]   = React.useState(null);   // the git window's file to select: { path, project, seq }
+  const [linked,      setLinked]      = React.useState(() => new Set());   // secondary windows open now (app/panel-link.js)
   // The file preview (issue #39): `{ key, target }`, `key` the tab it was
   // opened in — it shows only while that tab is active.
   const [preview,     setPreview]     = React.useState(null);
@@ -370,7 +372,7 @@ function App() {
   // reads a relative path as repo-root-relative, so it goes over absolute.
   const gitProject = activeProject.path ?? null;
   const handleOpenFile = React.useCallback(
-    path => setGitOpen({ path: _gitAbsolutePath(gitProject, path), project: gitProject }),
+    path => openGit({ path: _gitAbsolutePath(gitProject, path), project: gitProject }),
     [gitProject]);
   const closeGit = React.useCallback(() => setGitOpen(null), []);
   // A read card's path: the preview, bound to this tab.
@@ -381,7 +383,7 @@ function App() {
   // The git browser refetches when this count rises; counted only while it
   // is open, and handed over as a number so streaming frames that finish no
   // edit leave the memoised browser alone.
-  const gitEdits = React.useMemo(() => (gitOpen ? _gitFinishedEdits(messages) : 0), [gitOpen, messages]);
+  const gitEdits = React.useMemo(() => (gitOpen || linked.has("git") ? _gitFinishedEdits(messages) : 0), [gitOpen, linked, messages]);
   // Collapse all / Expand all: one toggle per block in this tab, replacing
   // the tab's earlier ones; later blocks follow the modes again.
   const handleCollapseAll = (collapsed) => setCollapseOverrides(m => updateEntry(m, planKey, NO_COLLAPSE_OVERRIDES,
@@ -404,6 +406,20 @@ function App() {
     if (!ok) setStatsOpen(true);
   };
   const openSettings = section => setStab(s => window.OMP_SETTINGS_TAB.open(s, section));
+  // History, approval rules, plan and the git browser are secondary OS windows
+  // showing this tab (app/panel-link.js; the snapshots and calls are below the
+  // handlers they use). The in-app overlay is the fallback without a desktop shell.
+  const openLinked = async (kind, title, fallback) => {
+    if (!(await window.OMP_OPEN_PANEL(kind, { profile: activeProfileId, title }))) fallback();
+  };
+  const openHistory = () => openLinked("history", "History", () => setHistoryOpen(true));
+  const openRules = () => openLinked("rules", "Approvals", () => setRulesOpen(true));
+  const openPlan = () => openLinked("plan", "Todo and plan", () => setPlanOpen(true));
+  // `target`: `{ path, project }`, the file to select (an edit card's) or none; each open re-selects it.
+  const openGit = target => {
+    setGitTarget(g => ({ ...target, seq: (g?.seq ?? 0) + 1 }));
+    return openLinked("git", "Git", () => setGitOpen(target));
+  };
   const closeSettings = () => setStab(window.OMP_SETTINGS_TAB.close);
   // Another omp tab shown (opened, picked, restored) leaves the settings tab.
   React.useEffect(() => { setStab(window.OMP_SETTINGS_TAB.selectProject); setHome(false); }, [activeSessionId]);
@@ -462,13 +478,22 @@ function App() {
   // browser panel's localhost handler. Without this a relative link would
   // navigate the webview, which navigation_guard.rs silently blocks.
   const browserLinkClick = browser.onChatClick;
+  // A `[anchor N]` citation (marked-setup.js) in an Academic project's tab opens the reader on its page.
+  const anchorProject = appModeName === "academic" && isAcademicTab(activeProject) ? activeProject.path : "";
   const handleChatLinkClick = React.useCallback(e => {
+    const cite = anchorProject && e.button === 0 && typeof e.target?.closest === "function" ? e.target.closest(".md-content .md-anchor[data-anchor]") : null;
+    if (cite) {
+      e.preventDefault();
+      const name = window.OMP_PROJECT_NAV.basename(anchorProject);
+      window.OMP_OPEN_PANEL("reader", { project: name, profile: activeProfileId, title: `Reader · ${name}`, anchor: Number(cite.dataset.anchor) });
+      return;
+    }
     const file = _fpLinkClick(e, gitProject);
     if (!file) { browserLinkClick?.(e); return; }
     e.preventDefault();
     if (file.git) handleOpenFile(file.target.path);
     else handlePreviewFile(file.target);
-  }, [browserLinkClick, gitProject, handleOpenFile, handlePreviewFile]);
+  }, [anchorProject, activeProfileId, browserLinkClick, gitProject, handleOpenFile, handlePreviewFile]);
   const stageRef = React.useRef(null);
   // A chip click scrolls the panel to the annotated element — but only
   // when the panel is open and still on the page the chip was picked from
@@ -722,7 +747,7 @@ function App() {
     // composer, budget still to pick; Enter starts it. Blocked (plan mode,
     // a goal already open), the text still comes back.
     else if (c.name === "goal")      { goalUi.enter(); if (args) setPromptInsert({ text: args, nonce: Date.now() }); }
-    else if (c.name === "todo")      { setPlanOpen(true); }
+    else if (c.name === "todo")      { openPlan(); }
     else if (c.name === "browser")   { handleBrowserCommand(args); }
     else if (c.name === "compact")   { bridge?.compact(); }
     else if (c.name === "tree" || c.name === "branch") { setTreeOpen(true); }
@@ -731,7 +756,7 @@ function App() {
     else if (c.name === "model")     { openBridge("models"); }
     else if (c.name === "login")     { openBridge("login"); }
     else if (c.name === "new")       { bridge?.newSession(); }
-    else if (c.name === "history")   { setHistoryOpen(true); }
+    else if (c.name === "history")   { openHistory(); }
     else if (c.name === "shortcuts") { openSettings("general"); }
     else if (c.name === "collapse-all")  { handleCollapseAll(true); }
     else if (c.name === "expand-all")    { handleCollapseAll(false); }
@@ -758,7 +783,7 @@ function App() {
   const handleApprovePlan = () => {
     updatePlan(approvePlan);
     bridge?.followUp(APPROVAL_PROMPT);
-    setPlanOpen(true);
+    openPlan();
   };
 
   // Tab select — switches the active session; bridge resets all per-session state
@@ -955,9 +980,9 @@ function App() {
     "desktop.tab.prev":        () => cycleTabs(-1),
     "desktop.tab.moveLeft":    () => shiftActiveProject(-1),
     "desktop.tab.moveRight":   () => shiftActiveProject(1),
-    "desktop.panel.todo":      () => setPlanOpen(v => !v),
-    "desktop.panel.changes":   () => setGitOpen(v => (v ? null : { path: null })),
-    "desktop.panel.rules":     () => setRulesOpen(v => !v),
+    "desktop.panel.todo":      () => openPlan(),
+    "desktop.panel.changes":   () => openGit({ path: null, project: gitProject }),
+    "desktop.panel.rules":     () => openRules(),
     "desktop.panel.stats":     () => openStats(),
     "desktop.composer.promptHistory": () => setPromptHistoryOpen(v => !v),
     "desktop.session.compact": () => bridge?.compact(),
@@ -1082,6 +1107,25 @@ function App() {
   // while the tab is shown: behind a project tab the page stays mounted
   // with the last one (`active: false`), so streaming frames re-render
   // nothing there.
+  // The secondary windows of openLinked above: which are open, what they show, and the calls
+  // they make here (app/panel-link.js; bridge methods run on this window's bridge directly).
+  const panelLink = window.OMP_PANEL_LINK;
+  React.useEffect(() => panelLink.onPresence(setLinked), [panelLink]);
+  const focusMain = () => window.__TAURI__?.window?.getCurrentWindow().setFocus().catch(() => {});
+  panelLink.serve("history", { resume: async s => { const id = await handleResumeSession(s); focusMain(); return id ?? null; } });
+  panelLink.serve("plan", { abort: () => handleAbort() });
+  panelLink.serve("git", { sendToAgent: text => { handleSend(String(text ?? ""), []); focusMain(); } });
+  const rulesTab = activeProject.id ? activeProject : null;
+  React.useEffect(() => {
+    if (linked.has("history")) panelLink.publish("history", { activeCwd: activeProject?.path ?? null });
+    if (linked.has("rules")) panelLink.publish("rules", { activeProject: rulesTab, sessions, approvalModes });
+    if (linked.has("plan")) panelLink.publish("plan", { kanban, planMeta });
+    if (linked.has("git")) {
+      const path = gitTarget && gitTarget.project === gitProject ? gitTarget.path : null;
+      panelLink.publish("git", { project: gitProject ?? "", branch: activeProject.branch ?? null, edits: gitEdits, path, seq: gitTarget?.seq ?? 0 });
+    }
+  });
+
   const settingsCtx = stab.open ? {
     active: true, t, setTweak,
     bridge: bridge ? {
@@ -1106,7 +1150,7 @@ function App() {
     panes, terminalHeight: terminal.height,
     goal: { profileId: activeProfileId },
     computerUseSessionId: activeProject.id, computerUseAccentError,
-    openApprovals: () => setRulesOpen(true),
+    openApprovals: () => openRules(),
     openStats: () => { closeSettings(); openStats(); },
     openLogin: () => { closeSettings(); openBridge("login"); },
     onLogin: handlePickLogin,
@@ -1120,7 +1164,7 @@ function App() {
   const keyHint = id => window.OMP_KEYMAP?.hintFor(id) ?? "";
   const floatingOn = t.layout !== "focus";
   const moreItems = [
-    { label: "Todo and plan", icon: "plan", hint: todoCounts.total > 0 ? `${todoCounts.done}/${todoCounts.total}` : "", onClick: () => setPlanOpen(true) },
+    { label: "Todo and plan", icon: "plan", hint: todoCounts.total > 0 ? `${todoCounts.done}/${todoCounts.total}` : "", onClick: () => openPlan() },
     { label: "Conversation tree", icon: "branch", on: treeShown, onClick: toggleTree },
     { label: "Goal mode", icon: "goal", on: goalUi.mode, onClick: () => { if (!goalUi.goalBlocked || goalUi.mode) goalUi.toggle(); } },
     { label: "Details panel", icon: "radar", on: floatingOn, onClick: () => setTweak("layout", floatingOn ? "focus" : "rail") },
@@ -1176,7 +1220,7 @@ function App() {
               <ChromeToolbar
                 onTerminal={() => terminal.toggle(planKey)}
                 terminalOpen={_TERM_entryOf(terminal.state, planKey).open}
-                onChanges={() => setGitOpen({ path: null })}
+                onChanges={() => openGit({ path: null, project: gitProject })}
                 moreItems={moreItems}
                 chat={t.appMode === "chat"}
                 academic={appModeName === "academic"}
@@ -1235,7 +1279,7 @@ function App() {
                 onForgetRecent={handleForgetRecent}
                 onOpenFolder={handleNewProject}
                 onHide={toggleSidebar}
-                onHistory={() => setHistoryOpen(true)}
+                onHistory={openHistory}
                 onReorder={handleReorder}
                 footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} onClick={() => openSettings("account")} />}
               />
@@ -1310,7 +1354,7 @@ function App() {
                     onManageModels={() => openSettings("models")}
                     profileId={activeProfileId}
                     approvalMode={approvalCell}
-                    onApprovals={() => setRulesOpen(true)}
+                    onApprovals={openRules}
                     contextInfo={liveCtx}
                     usage={{ provider: model?.provider, quotas, stats: sessionStats }}
                     onToggleDetails={() => setTweak("layout", floatingOn ? "focus" : "rail")}
@@ -1455,7 +1499,7 @@ function App() {
       {settingsCtx && <SettingsWindow ctx={settingsCtx} onClose={closeSettings} />}
 
       {librarianOpen && copilotProject && (
-        <LibrarianWindow bridge={bridge} project={window.OMP_PROJECT_NAV.basename(copilotProject)} onClose={() => setLibrarianOpen(false)} />
+        <LibrarianWindow bridge={bridge} project={window.OMP_PROJECT_NAV.basename(copilotProject)} profile={activeProfileId} onClose={() => setLibrarianOpen(false)} />
       )}
 
       <CommandBridge

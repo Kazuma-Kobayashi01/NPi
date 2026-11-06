@@ -102,7 +102,7 @@ pub const LIBRARY_GUIDE: &str = "\
 # This project's tools
 They are connected under plain names: there is nothing to install, and no server to ask the user to connect. By task:
 - Which papers do we have: library_search {query}, then library_get {citekey}. A citekey looks like smith2020graph; copy it from a result, never write one from memory. Cite as [@citekey].
-- What does a paper say: research_search, then research_read. A PDF with no text: research_ocr, whose text may hold mistakes.
+- What does a paper say: research_search, then research_read. A PDF with no text: research_ocr, whose text may hold mistakes. Keep the [anchor N] a result gives beside the claim it supports: the user clicks it to open that page.
 - Is it right: research_check_quote, research_check_number, research_check_table against the page; library_check for a draft's citations.
 - Keep the result: research_summarize and research_compare for the reader (research_summaries reads back what is saved); research_save for notes, digests and artifacts, when asked or when it clearly helps.
 - Add a paper: library_add {doi}; its PDF is bound too if one under papers/ shows its DOI or title, or give pdf. A PDF for a reference already there: library_attach.

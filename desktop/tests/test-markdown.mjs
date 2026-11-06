@@ -256,4 +256,12 @@ check("project and public image references do not fetch directly from the webvie
   }
 });
 
+check("research anchors become reader markers; code and other brackets stay text", () => {
+  const out = marked.parse("The rate is 4% [anchor 12], see also (anchor 7).");
+  assert.match(out, /<span class="md-anchor" role="link" data-anchor="12"[^>]*>anchor 12<\/span>/);
+  assert.match(out, /data-anchor="7"/);
+  assert.doesNotMatch(marked.parse("`[anchor 12]`"), /md-anchor/);
+  assert.doesNotMatch(marked.parse("[anchor x] and [anchor 3](https://e.com)"), /md-anchor/);
+});
+
 console.log(`markdown: ${passed} checks passed`);

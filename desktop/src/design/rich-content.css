@@ -525,6 +525,20 @@
   color: var(--fg-3);
 }
 
+/* A Research Core citation (marked-setup.js `researchAnchor`): opens the reader. */
+.md-content .md-anchor {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.md-content .md-anchor:hover {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
 /* ── GFM Callouts ────────────────────────────────────────────────────── */
 .md-callout {
   margin: 12px 0;

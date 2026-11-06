@@ -2107,6 +2107,7 @@ pub fn run() {
             librarian::commands::library_list,
             librarian::commands::library_search,
             librarian::commands::library_align,
+            librarian::commands::library_page_one,
             librarian::commands::library_merge,
             librarian::commands::library_citekey,
             librarian::commands::library_pdf_dropped,

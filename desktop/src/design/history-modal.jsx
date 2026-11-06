@@ -19,7 +19,8 @@ function formatRelativeTime(ts) {
   return date.toLocaleDateString();
 }
 
-function HistoryModal({ open, onClose, onResume, activeCwd }) {
+// `bridge`: the main window's (default), or a secondary window's proxy to it (app/panel-link.js).
+function HistoryModal({ open, onClose, onResume, activeCwd, bridge = window.OMP_BRIDGE }) {
   const [sessions, setSessions]       = React.useState([]);
   const [loading, setLoading]         = React.useState(false);
   const [filterKey, setFilterKey]     = React.useState(null); // null = all, else a project key
@@ -29,10 +30,10 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
   const listRef                       = React.useRef(null);
 
   const fetchSessions = React.useCallback(async () => {
-    if (!window.OMP_BRIDGE?.listSavedSessions) return;
+    if (!bridge?.listSavedSessions) return;
     setLoading(true);
     try {
-      const list = await window.OMP_BRIDGE.listSavedSessions();
+      const list = await bridge.listSavedSessions();
       setSessions(list || []);
     } catch (err) {
       console.error("[HistoryModal] Failed to list sessions:", err);
@@ -40,7 +41,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [bridge]);
 
   // Fetch when opened
   React.useEffect(() => {
@@ -90,7 +91,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
       <div className="bridge slide-in" onClick={e => e.stopPropagation()} style={{ width: "min(740px, calc(100vw - 32px))", maxHeight: "80vh" }}>
         
         {/* Header */}
-        <div className="bridge-input-row" style={{ padding: "12px 16px", gap: 10 }}>
+        <div className="bridge-input-row" style={{ padding: "12px 16px", gap: 10 }} {...(window.OMP_PANEL ? { "data-wc-head": "", "data-tauri-drag-region": "" } : {})}>
           <Icon name="clock" size={16} color="var(--accent)" />
           <input
             ref={inputRef}

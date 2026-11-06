@@ -72,8 +72,7 @@ function ApprovalModeApplyLine({ result, busy, hasProject, sessions }) {
 /** `view` is the bridge snapshot's `approvalModes`, `activeProject` the
  *  rendered tab's entry (null with no tab), `query` the Settings search
  *  (highlights project paths; absent in the panel). */
-function ApprovalModeSection({ view, activeProject, sessions, query }) {
-  const bridge = window.OMP_BRIDGE;
+function ApprovalModeSection({ view, activeProject, sessions, query, bridge = window.OMP_BRIDGE }) {
   const AM = window.OMP_APPROVAL_MODE;
   const Mark = window.SettingsMark;
   const [busy, setBusy]     = React.useState(false);

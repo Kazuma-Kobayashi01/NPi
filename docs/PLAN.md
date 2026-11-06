@@ -3,16 +3,16 @@
 > *Ars longa, vita brevis.* 论文写作是一件漫长的事；这个模式的目标是把它缩短，
 > 同时不让它变得轻浮。
 
-状态：**草案 v0.2**（2026-10-31，已按第一轮决定修订）· 目标版本：**1.1.0** · 负责人：Kazuma
+状态：**草案 v0.3**（2026-11-06，按只做 macOS 与已实现部分修订）· 目标版本：**1.1.0** · 负责人：Kazuma · **进度以 [`PROGRESS.md`](PROGRESS.md) 为准**，本文不再记录状态
 
-> **进度以 [`PROGRESS.md`](PROGRESS.md) 为准。** 2026-11-04 起平台范围改为**只做 macOS**:下文"必须兼容 Windows"的要求、跨平台抽象与 Windows 验收用例作废(待逐处改写,见 `PROGRESS.md` §6);M7 已由 Librarian + Research Core 实现;M0.5 的 MCP 服务改走 Host Tool RPC。
+> 2026-11-04 起平台范围改为**只做 macOS**,下文已删去 Windows 的要求、跨平台抽象与 Windows 验收用例;Windows 适配交给别人(CLI 的 Windows 适配在 `omp` 里另做)。M7 已由 Librarian + Research Core 实现;M0.5 的 MCP 服务已由 Host Tool RPC 代替。
 本文是计划，不是承诺。每个阶段结束时回来修订它。
 
 ## 0. 已确认的决定（v0.2）
 
 | 项 | 决定 | 对计划的影响 |
 |---|---|---|
-| TeX 引擎 | **必须兼容 Windows** | 引擎层做成平台中立的抽象；默认 Tectonic（三平台同一份二进制），兼容 MiKTeX / TeX Live；路径、进程、字体全部按跨平台写（§5.2） |
+| TeX 引擎 | **只做 macOS**（2026-11-04；原"必须兼容 Windows"作废） | 默认 Tectonic，兼容 MacTeX / TeX Live；引擎仍做成接口以便换后端，不再为其他平台写路径、进程与字体的分支（§5.2） |
 | 翻译语言 | **先只做 中↔英** | 术语表、排版规则、质检都只针对这一对；其他语言不留入口（§5.3） |
 | 期刊/会议模板 | **先不考虑** | 模板库、按会议定制的评分口径整块延后；审稿用通用评审表（§5.6） |
 | 稿件格式 | **LaTeX、Markdown、Word 三者都兼容** | 引入统一的“稿件中间表示”，三种格式的导入、翻译、审稿、导出都要走通（§4.1、§5.3） |
@@ -153,25 +153,22 @@ NPi 现在有两个房间，Academic 复用同一套机制，**不另起炉灶**
 
 ### 5.2 LaTeX 排版与预览（稿件的“眼睛”）
 
-**目标**：写 `main.tex`，保存即得 PDF，错误可定位；**macOS 与 Windows 行为一致**。
+**目标**：写 `main.tex`，保存即得 PDF，错误可定位（macOS）。
 
 - **引擎抽象**：定义 `TexEngine` 接口（`detect() / version() / compile(job) -> {pdf, log}`），实现 `Tectonic`、`Latexmk`、`Xelatex`、`Lualatex`、`Pdflatex` 五个后端。
-  **默认 Tectonic**：单个可执行文件、三平台一致、自动按需取包，最适合“开箱即用”；
-  用户已装 **MiKTeX（Windows 常见）/ TeX Live / MacTeX** 时自动识别并可切换。
+  **默认 Tectonic**：单个可执行文件、自动按需取包，最适合“开箱即用”；
+  用户已装 **TeX Live / MacTeX** 时自动识别并可切换。
 - **安装引导**：设置里显示“已检测到的引擎”和一键“安装 Tectonic”的指引；
-  Tectonic 作为**可选下载**（下载前告知文件名、来源、大小并取得同意），按平台选正确的构建，校验 SHA-256。
+  Tectonic 作为**可选下载**（下载前告知文件名、来源、大小并取得同意），选 macOS 对应架构的构建，校验 SHA-256。
   1.1 **不打包** TeX 发行版（体积过大）。
-- **中文排版**：默认用 `ctex` + XeTeX 路线（Tectonic 原生是 XeTeX）；字体按平台回退——
-  macOS：Songti SC / PingFang SC；Windows：SimSun / Microsoft YaHei；也允许在设置里指定；缺字体时给出明确提示而不是静默出方块。
+- **中文排版**：默认用 `ctex` + XeTeX 路线（Tectonic 原生是 XeTeX）；字体默认 Songti SC / PingFang SC，也允许在设置里指定；缺字体时给出明确提示而不是静默出方块。
 - **编译**（Rust `latex_build.rs`）：
   - 命令参数白名单（前端不能传参数），默认**禁用 shell-escape**，输出目录限制在论文文件夹内，超时（默认 60 秒），进程树清理
-    （沿用 `supervisor`：macOS/Linux 进程组，**Windows Job Object**）；
+    （沿用 `supervisor` 的进程组）；
   - 解析 `.log` 得到 `{file, line, message, hint}`，前端显示为可点击的错误列表；
   - 同一论文同时只跑一次，防抖，增量编译。
-- **Windows 专项**：不显示控制台窗口（`CREATE_NO_WINDOW`，现有 `spawn.rs` 已有先例）；路径含空格/中文/UNC 前缀；`\r\n` 行尾；
-  引擎探测同时看 PATH 与 MiKTeX 默认安装位置；长路径；杀软对 Tectonic 取包的拦截提示。
-  **在 CI 里加 Windows runner**（GitHub Actions）跑编译用例与路径校验用例，不只靠本机验证。
-- **预览**：打包 **pdf.js**（平台中立），在右侧栏或独立分栏渲染 PDF（页缩略图、缩放、文本选择；SyncTeX 反向定位列为二期）。
+- **路径**：含空格、中文的路径都要有用例；引擎探测看 PATH 与 MacTeX 的默认安装位置。
+- **预览**：用已随包的 **pdf.js**（阅读器已在用），在右侧栏或独立分栏渲染 PDF（页缩略图、缩放、文本选择；SyncTeX 反向定位列为二期）。
   PDF 字节经 Rust 命令读出、前端用 blob 显示，不开启 asset 协议。
 - **编辑**：不自造代码编辑器。稿件在外部编辑器（或 agent）里改，NPi 监视文件变化并刷新；内嵌的轻量编辑只用于“应用某条修改建议”。
 - **模板**：**1.1 不做期刊/会议模板**。只提供“通用 article / 中文 ctexart / beamer 无”的最小起步文件。
@@ -347,7 +344,7 @@ NPi 现在有两个房间，Academic 复用同一套机制，**不另起炉灶**
 | `papers_mcp.rs` | 本地 MCP 服务（stdio）：把上面的能力以工具形式暴露给 agent（§7.5） |
 | `pdf_text.rs`（可选） | 若 pdf.js 提取不够稳，再引入原生提取 |
 
-> 凡是启动进程、拼路径的模块（`latex_build.rs` 等）都要在 **Windows** 上有对应测试（见 §10）；路径一律用 `Path`/`PathBuf`，不做字符串拼接。
+> 凡是启动进程、拼路径的模块（`latex_build.rs` 等）都要有含空格与中文路径的测试（见 §10）；路径一律用 `Path`/`PathBuf`，不做字符串拼接。
 | 扩展 `app_mode.rs` | `AppMode::Academic` + 提示词 |
 
 每个模块按 `AGENTS.md` 要求带测试；命令注册进 `generate_handler!`；
@@ -374,11 +371,10 @@ Academic 不另造机制，而是**往里面放内容**。
 
 **A. 随应用提供的本地 MCP 服务：`npi-papers`**
 
-为什么要有它：编译、解析、对齐、核验这些操作**必须确定、可测试、跨平台一致**，不能让模型临时拼 shell 命令。
+为什么要有它：编译、解析、对齐、核验这些操作**必须确定、可测试**，不能让模型临时拼 shell 命令。
 同一份 Rust 实现既给界面用，也经 MCP 给 agent 用。
 
-- **形态**：stdio 子进程，由应用的**同一个可执行文件**以内部参数启动（不是面向用户的子命令，因此不违背“先不做子命令”）；
-  macOS 与 Windows 行为一致。
+- **形态**：stdio 子进程，由应用的**同一个可执行文件**以内部参数启动（不是面向用户的子命令，因此不违背“先不做子命令”）。
 - **注册**：进入某篇论文时，应用在**该论文文件夹**的 `.omp/mcp.json` 写入这一项（只作用于这篇论文，不污染全局）；
   依赖 `mcp.enableProjectConfig`，首次启用时向用户确认。
 - **工具清单（首批）**
@@ -398,7 +394,7 @@ Academic 不另造机制，而是**往里面放内容**。
 
 - **安全**：所有路径被限制在论文文件夹内（拒绝越界与符号链接逃逸）；不联网；调用有超时；
   写操作经 omp 的审批机制（`approval.rs` 里对 `mcp__npi-papers__*` 的读类工具默认放行，写类默认询问）。
-- **契约测试**：用 JSON-RPC 夹具测每个工具的输入输出与拒绝路径；Windows runner 上同样跑。
+- **契约测试**：用 JSON-RPC 夹具测每个工具的输入输出与拒绝路径。
 
 **B. 随应用提供的技能（Skills）**
 
@@ -437,15 +433,15 @@ Graphviz/Mermaid 渲染。联网类（arXiv、Semantic Scholar、Crossref）**�
 | 阶段 | 内容 | 体量 | 验收 |
 |---|---|---|---|
 | **M0 地基** | `AppMode::Academic`、三段开关、`academic_space.rs`、论文目录与元数据、Academic 提示词、侧栏骨架、设置分区、起始页与问候 | M | 能新建论文、进入工作区、与 agent 对话，数据落在 Papers 目录 |
-| **M0.5 MCP 与技能底座** | `papers_mcp.rs` 骨架（`paper_outline`、`paper_read_block`）、`.omp/mcp.json` 自动登记、技能目录与登记、技能过滤（覆盖文件扩展）、技能 lint、审批规则 | M | agent 在 Academic 里能调用 MCP 工具与技能；契约测试与 lint 通过 |
+| **M0.5 MCP 与技能底座** | ~~`papers_mcp.rs` 骨架~~ 已由 Host Tool RPC 代替：Academic 会话的内建工具（`copilot.rs` 的 `AcademicHost`）无需连接 MCP；另有 `npi-librarian`、`npi-copilot` 两个 MCP 服务供终端里的 `npi` 等外部 agent 使用。稿件类工具（`paper_outline` 等）随 M2 做成内建工具，是否再经 MCP 暴露另议；技能目录与登记已做 | M | agent 在 Academic 里能调用文献与稿件工具和技能；工具与提示词一致性测试通过 |
 | **M1 数学显示** | KaTeX 打包、marked 数学扩展、流式处理、复制源码、测试 | M | S1 通过；`test-math`、`test-markdown` 通过；三个房间都显示公式 |
 | **M2 稿件 IR 与三种格式** | `paper_ir.rs`（`.tex`/`.md`）、`docx.rs`（读、保留样式的写回、批注）、`paper_apply_edit` 修订机制 | L | 三种格式都能读出章节树、定位块、写回修订；docx 往返不丢样式/公式/图片 |
-| **M3 LaTeX 与预览（跨平台）** | `TexEngine` 抽象与五个后端、Tectonic 引导、日志解析、pdf.js 预览、错误列表、最小起步文件 | L | S3 通过；**Windows runner 上编译与路径用例全绿**；恶意 `\write18`/越界用例被拒绝 |
+| **M3 LaTeX 与预览（macOS）** | `TexEngine` 抽象与后端、Tectonic 引导、日志解析、pdf.js 预览、错误列表、最小起步文件 | M | S3 通过；含空格与中文的路径用例通过；恶意 `\write18`/越界用例被拒绝 |
 | **M4 对照翻译（中↔英）** | 分段与占位符、术语表、翻译流水线、对齐索引、双栏同步滚动、按原格式导出（含 docx 保留样式）、质检 | L | S2 通过；占位符校验与回译抽检可用 |
 | **M5 模拟审稿** | 通用评审表与角色、有据可查的意见、任务清单、AC 汇总、rebuttal、版本对比、docx 批注导出 | M | S5、S6 通过；每条意见都带稿件位置 |
 | **M6 论文图** | 样式预设、沙箱运行、图库、LaTeX 片段、CSV→表格 | M | S4 通过；脚本与图同名保存，可一键重绘 |
-| **M7 本地引用管理** | bib 解析与检查、反编造规则落到 `bib_add`、读论文带页码问答 | M | S7 通过；`bib_add` 无来源时被拒绝 |
-| **M8 打磨与发布** | 导出、公式 OCR（可选）、投稿前检查清单、新手引导、性能（大 PDF）、README 与文档、发布 1.1.0 | M | 干净安装演练（macOS，Windows 构建就绪后再加一遍）；`npm test`、`cargo test` 全绿 |
+| **M7 本地引用管理** | **已由 Librarian + Research Core 实现**（超出原计划：文献库、引用格式、PDF 导入、页级索引与锚点、引文与数值核对、阅读器，见 `PLAN_LIBRARIAN.md`、`PLAN_3.0.md`） | — | 见 `PROGRESS.md` |
+| **M8 打磨与发布** | 导出、公式 OCR（可选）、投稿前检查清单、新手引导、性能（大 PDF）、README 与文档、发布 1.1.0 | M | 干净安装演练（macOS）；`npm test`、`cargo test` 全绿 |
 
 **已延后**：联网引用核验、期刊/会议模板、多语种翻译、`npi paper` 子命令。
 
@@ -459,7 +455,6 @@ Graphviz/Mermaid 渲染。联网类（arXiv、Semantic Scholar、Crossref）**�
 |---|---|
 | **编造参考文献** | 本版没有联网核验，所以靠规则：`bib_add` 只接受带来源的参数并强制标 `unverified`；提示词与技能都禁止“凭记忆写 BibTeX”；界面显示“未核验”徽标 |
 | **编造数据/结果图** | 图只从用户提供的数据与可复现脚本生成；生成式插图必须标注 |
-| **Windows 与 macOS 行为不一致**（路径、字体、进程、行尾） | 引擎抽象 + `Path` 一律不拼字符串 + CI 加 Windows runner + 中文字体回退表 |
 | **Word 往返丢样式/公式** | 以 run 为单位处理文字、公式/图片/批注作为受保护节点；`.docx → .tex/.md` 明确标注“有损”；往返测试用例 |
 | **泄露未发表稿件** | 明示当前使用的模型提供方；论文级“仅本地模型/不联网”开关；日志不记录稿件正文到遥测（本来就没有遥测） |
 | **用工具审他人稿件** | 多数会议/期刊**禁止**把待审稿件交给外部 LLM。审稿功能面向**自己的稿件**，界面与文档明确声明，不提供“导入待审稿件”的快捷入口 |
@@ -481,21 +476,19 @@ Graphviz/Mermaid 渲染。联网类（arXiv、Semantic Scholar、Crossref）**�
 - **Rust**：路径校验、编译日志解析、bib 解析、核验结果合并都有单元测试；
   需要 TeX 引擎的测试在缺引擎时跳过，CI 里设环境变量强制要求；
 - **人工验收清单**：每个里程碑写一页，按 §2 的故事逐条走一遍，截图存档；
-- **Windows**：GitHub Actions 加 Windows runner，跑编译用例、路径校验、MCP 契约测试；本机没有 Windows 时以 CI 为准；
 - **性能预算**：打开 50 页 PDF 首屏 < 2 秒；翻译双栏滚动 60 fps；编译预览（中等稿件）< 5 秒。
 
 ---
 
 ## 11. 决定记录与仍待定的问题
 
-**已决定（见 §0）**：TeX 引擎兼容 Windows；翻译先做中↔英；期刊模板先不做；稿件三种格式都支持；联网先不做；子命令先不做；接入 MCP 与技能。
+**已决定（见 §0）**：只做 macOS（2026-11-04，原"TeX 引擎兼容 Windows"作废）；翻译先做中↔英；期刊模板先不做；稿件三种格式都支持；联网先不做；子命令先不做；接入 MCP 与技能。
 
 **仍待你决定**
 
 1. **本地模型**：1.1 是否支持“仅本地模型”（经 omp 已有的本地提供商），还是放到 1.2？
 2. **发版节奏**：M1 做完先发 1.0.2；M2–M4 → 1.1.0；其余 → 1.2.0，这样分批可以吗？
-3. **Windows 版本何时开工**：本计划只要求“引擎与路径写法平台中立、CI 里有 Windows 用例”；
-   完整的 Windows 应用打包（现在应用是 macOS 专用）是否单独立项？
+3. ~~Windows 版本何时开工~~：已决定本项目只做 macOS，Windows 适配交给别人（2026-11-05）。
 4. **Word 的范围**：本版 `.docx` 做“读取、保留样式翻译、批注、修订建议”；
    是否还要“直接在 Word 里生成/编辑公式（OMML ⇄ LaTeX）”？（工作量大，我倾向于延后。）
 5. **第三方 MCP 推荐名单**：Zotero（本地）、Pandoc、Graphviz/Mermaid，还有没有你常用的要加？
@@ -508,5 +501,5 @@ Graphviz/Mermaid 渲染。联网类（arXiv、Semantic Scholar、Crossref）**�
 2. 开 **M0**：`app_mode.rs` 加 `Academic`，做 `academic_space.rs`、起始页与问候；紧接着 **M0.5** 把 MCP 与技能底座搭起来，
    因为后面每个功能都要经过它。
 3. 然后 **M1**（KaTeX）。
-4. 每个里程碑结束：更新本文状态栏与 §8、更新 `README.md`、发版
+4. 每个里程碑结束：更新 `PROGRESS.md` 与本文 §8、更新 `README.md`、发版
    （版本号在 `desktop/src-tauri/tauri.conf.json`、`Cargo.toml`、`package.json` 与 omp 的 `NPI_VERSION` 同步）。
