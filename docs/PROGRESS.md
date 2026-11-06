@@ -34,8 +34,8 @@
 | 3.0.0.134 | 内容并入 135 | `3.0.0.134/` | **稳定证书** | 内核含 CLI 界面改版与阿里四个入口的模型信息、思考等级;`alibaba` 显示为国际站;SHA-256 `caa0fed5…863d`(未在真机实测) |
 | 3.0.0.135 | 已提交并推送(分支 `3.0.0.135`) | `3.0.0.135/` | **稳定证书** | 内核含 CLI 右侧栏额度、设置页二级菜单、面板式弹窗;Desktop 前端相对 134 未改;SHA-256 `dae2b473…a1f5`(未在真机实测) |
 | 3.0.0.136 | 内容并入下一行完整包 | — | **稳定证书** | 目录整理:配置跟随 CLI 到 `~/.local/share/npi/desktop`,缓存统一到 `~/.cache/npi`(含内核缓存与 Rewind 快照),worktree 到 `~/Documents/NPi/Code/.worktrees`、`.agent-worktrees`;界面设置写一份到 `ui-state.json`;首次启动自动迁移;旧 dmg 已被完整包替换 |
-| 3.0.0.136 完整包 | 已提交(`f78c829`,未推送)、**已验证**(用户真机验收,2026-11-06) | `3.0.0.136/NPi Desktop_3.0.0.136_aarch64.dmg` | **稳定证书** | 包含统一记忆、会话搜索、分模式画像、技能撤销、模型排班表、多专家模拟评审；278876587 字节；SHA-256 `9f6d6b92d4be551de6dc9e4f138c1b496a206e721dccf99aac6ca1b26854d809`；已替换仅含目录整理的旧 dmg |
-| 3.0.0.137 | 未提交、未打包(分支 `3.0.0.137`) | — | — | 清遗留:聊天里 `[anchor N]` 点开阅读器;Librarian"让模型读第 1 页";历史会话、审批规则、Plan、Git 浏览器改独立窗口(`app/panel-link.js`);CLI 会话标签条(内核,未重编);`PLAN.md` 修订 |
+| 3.0.0.136 完整包 | 已提交并推送(`f78c829`)、**已验证**(用户真机验收,2026-11-06) | `3.0.0.136/NPi Desktop_3.0.0.136_aarch64.dmg` | **稳定证书** | 包含统一记忆、会话搜索、分模式画像、技能撤销、模型排班表、多专家模拟评审；278876587 字节；SHA-256 `9f6d6b92d4be551de6dc9e4f138c1b496a206e721dccf99aac6ca1b26854d809`；已替换仅含目录整理的旧 dmg |
+| 3.0.0.137 | 已提交并推送(`b046186`,分支 `3.0.0.137`) | `3.0.0.137/` | **稳定证书** | 清遗留:聊天里 `[anchor N]` 点开阅读器;Librarian"让模型读第 1 页";历史会话、审批规则、Plan、Git 浏览器改独立窗口(`app/panel-link.js`);CLI 会话标签条(内核 `bcbabfad9f`);`PLAN.md` 修订;278924606 字节;SHA-256 `84cf9c8075b63e14393d86cd2677caa4798bcb0901e833c7040a86a5c15fdec9`(未在真机实测) |
 
 打包流程(每次都这样,别改顺序):
 
@@ -46,7 +46,7 @@
 5. `hdiutil verify`、挂载后 `codesign --verify --deep --strict`、`shasum -a 256`
 6. 把 dmg 放进 `dist/<版本>/`,校验通过后删除 `target/release/bundle/` 下的源 dmg、`.app` 和 `rw.*.dmg`,只保留 `dist/` 里的那一份(增量编译缓存不动;`bundle/dmg/bundle_dmg.sh` 与 `icon.icns` 保留,只打 app 时 Tauri 不会重新生成它们,第 4 步要用)
 
-内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-06 00:26。
+内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-06 14:42(omp `bcbabfad9f`)。
 
 第 2 步的 `devstore run` 要保留环境注入的 PATH:`devstore run rust/current -- sh -c 'PATH="<nvm node>:$PATH" exec node node_modules/.bin/tauri build …'`。DevStore 若因卷意外断开留下过期租约(`mount` 报 `no lease on the image`,`unmount` 也失败),把映像目录里的 `lease.json` 改名后再挂载(2026-11-06 遇到过,是 DevStore 的 bug)。
 
