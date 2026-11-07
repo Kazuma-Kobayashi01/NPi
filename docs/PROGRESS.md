@@ -37,6 +37,8 @@
 | 3.0.0.136 完整包 | 已提交并推送(`f78c829`)、**已验证**(用户真机验收,2026-11-06) | `3.0.0.136/NPi Desktop_3.0.0.136_aarch64.dmg` | **稳定证书** | 包含统一记忆、会话搜索、分模式画像、技能撤销、模型排班表、多专家模拟评审；278876587 字节；SHA-256 `9f6d6b92d4be551de6dc9e4f138c1b496a206e721dccf99aac6ca1b26854d809`；已替换仅含目录整理的旧 dmg |
 | 3.0.0.137 | 已提交并推送(`b046186`,分支 `3.0.0.137`) | `3.0.0.137/` | **稳定证书** | 清遗留:聊天里 `[anchor N]` 点开阅读器;Librarian"让模型读第 1 页";历史会话、审批规则、Plan、Git 浏览器改独立窗口(`app/panel-link.js`);CLI 会话标签条(内核 `bcbabfad9f`);`PLAN.md` 修订;278924606 字节;SHA-256 `84cf9c8075b63e14393d86cd2677caa4798bcb0901e833c7040a86a5c15fdec9`(未在真机实测) |
 | 3.0.0.138 | 已提交(分支 `3.0.0.138`)、**已验证**(用户真机测试,2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_aarch64.dmg` | **稳定证书** | Option+Space 弹窗改用 macOS 原生 Liquid Glass(`objc2-app-kit` 的 `NSGlassEffectView` + `NSGlassEffectContainerView`,卡片与模式胶囊各一块,macOS 26 前退回 `NSVisualEffectView`);页面不再自绘玻璃;去掉输入框蓝色焦点环;内核未变;277359635 字节;SHA-256 `df095d3eaa1a4bf5ecff4a4bb116c68a1279d0b85cbd3806c9f924de71cb1bea` |
+| 3.0.0.138 CLI loading | 已构建，内核已提交推送(`09930e2f0e`)、未安装(2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-loading_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，CLI 等待行随机选择 25 组颜文字与英文短语，流光跟随主题 accent 高光；277357521 字节；SHA-256 `f39c0bfaec099ecbdefb7ba3bb238c00beeafc62129d7401dae090244dc9acea`；镜像校验、挂载后深度签名校验及包内内核隔离 `get_state` 启动冒烟通过，无模型请求；保留原版 138 dmg，未替换正在使用的应用 |
+| 3.0.0.138 读图与登录页 | 已构建、已提交推送(内核 `31660c16f6`)，待用户真机试用(2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_vision-login_aarch64.dmg` | **稳定证书** | 重编译内核(含 CLI loading 改动)：OAuth 回调页改为 NPi 标识与中英文文案；`images.blockImages` 移到"Model → Vision"并改名 "Block Image Input"。读图不出图的根因是用户配置 `images.blockImages: true`，已改为 `false`；277358286 字节；SHA-256 `bec8e7018e1f4399db2af0658dc4fd43234a223be4308988c7061df11d44ee13`；镜像校验与挂载后深度签名校验通过 |
 
 打包流程(每次都这样,别改顺序):
 
@@ -47,7 +49,7 @@
 5. `hdiutil verify`、挂载后 `codesign --verify --deep --strict`、`shasum -a 256`
 6. 把 dmg 放进 `dist/<版本>/`,校验通过后删除 `target/release/bundle/` 下的源 dmg、`.app` 和 `rw.*.dmg`,只保留 `dist/` 里的那一份(增量编译缓存不动;`bundle/dmg/bundle_dmg.sh` 与 `icon.icns` 保留,只打 app 时 Tauri 不会重新生成它们,第 4 步要用)
 
-内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-06 14:42(omp `bcbabfad9f`)。
+内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-07 23:46(omp `31660c16f6`)。
 
 第 2 步的 `devstore run` 要保留环境注入的 PATH:`devstore run rust/current -- sh -c 'PATH="<nvm node>:$PATH" exec node node_modules/.bin/tauri build …'`。DevStore 若因卷意外断开留下过期租约(`mount` 报 `no lease on the image`,`unmount` 也失败),把映像目录里的 `lease.json` 改名后再挂载(2026-11-06 遇到过,是 DevStore 的 bug)。
 
