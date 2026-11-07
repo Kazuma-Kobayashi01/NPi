@@ -11,16 +11,33 @@
 const _QW_MODES = [["chat", "Chat"], ["code", "Code"], ["academic", "Academic"]];
 const _QW_MAX_INPUT_ROWS = 6;
 
-/** The window follows the page's height. */
+/* The window gives the page its glass on macOS (quick_ask_glass.rs): Liquid Glass, or blur
+   before macOS 26; the card and the capsule then paint none of their own (quick.css). */
+if (window.OMP_PANEL?.kind === "quick") {
+  document.documentElement.dataset.backdrop = new URLSearchParams(location.search).get("backdrop") || "none";
+}
+
+/** The card and the capsule, as rectangles of the window with their corner radius. */
+function glassShapes(root) {
+  return [...root.querySelectorAll(".quick-glass, .quick-capsule")].map(el => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left, y: r.top, width: r.width, height: r.height, radius: parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0 };
+  });
+}
+
+/** The window follows the page's height, and its glass the card and the capsule. */
 function useQuickResize(rootRef) {
   React.useEffect(() => {
     const invoke = window.__TAURI__?.core?.invoke;
-    if (!invoke || !rootRef.current) return undefined;
-    const observer = new ResizeObserver(() => {
-      const height = rootRef.current?.getBoundingClientRect().height;
-      if (height) invoke("quickask_resize", { height: Math.ceil(height) }).catch(console.error);
-    });
-    observer.observe(rootRef.current);
+    const root = rootRef.current;
+    if (!invoke || !root) return undefined;
+    const report = () => {
+      const height = root.getBoundingClientRect().height;
+      if (height) invoke("quickask_resize", { height: Math.ceil(height), shapes: glassShapes(root) }).catch(console.error);
+    };
+    const observer = new ResizeObserver(report);
+    observer.observe(root);
+    root.querySelectorAll(".quick-glass, .quick-capsule").forEach(el => observer.observe(el));
     return () => observer.disconnect();
   }, [rootRef]);
 }

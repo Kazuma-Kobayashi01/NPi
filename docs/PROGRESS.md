@@ -36,6 +36,7 @@
 | 3.0.0.136 | 内容并入下一行完整包 | — | **稳定证书** | 目录整理:配置跟随 CLI 到 `~/.local/share/npi/desktop`,缓存统一到 `~/.cache/npi`(含内核缓存与 Rewind 快照),worktree 到 `~/Documents/NPi/Code/.worktrees`、`.agent-worktrees`;界面设置写一份到 `ui-state.json`;首次启动自动迁移;旧 dmg 已被完整包替换 |
 | 3.0.0.136 完整包 | 已提交并推送(`f78c829`)、**已验证**(用户真机验收,2026-11-06) | `3.0.0.136/NPi Desktop_3.0.0.136_aarch64.dmg` | **稳定证书** | 包含统一记忆、会话搜索、分模式画像、技能撤销、模型排班表、多专家模拟评审；278876587 字节；SHA-256 `9f6d6b92d4be551de6dc9e4f138c1b496a206e721dccf99aac6ca1b26854d809`；已替换仅含目录整理的旧 dmg |
 | 3.0.0.137 | 已提交并推送(`b046186`,分支 `3.0.0.137`) | `3.0.0.137/` | **稳定证书** | 清遗留:聊天里 `[anchor N]` 点开阅读器;Librarian"让模型读第 1 页";历史会话、审批规则、Plan、Git 浏览器改独立窗口(`app/panel-link.js`);CLI 会话标签条(内核 `bcbabfad9f`);`PLAN.md` 修订;278924606 字节;SHA-256 `84cf9c8075b63e14393d86cd2677caa4798bcb0901e833c7040a86a5c15fdec9`(未在真机实测) |
+| 3.0.0.138 | 已提交(分支 `3.0.0.138`)、**已验证**(用户真机测试,2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_aarch64.dmg` | **稳定证书** | Option+Space 弹窗改用 macOS 原生 Liquid Glass(`objc2-app-kit` 的 `NSGlassEffectView` + `NSGlassEffectContainerView`,卡片与模式胶囊各一块,macOS 26 前退回 `NSVisualEffectView`);页面不再自绘玻璃;去掉输入框蓝色焦点环;内核未变;277359635 字节;SHA-256 `df095d3eaa1a4bf5ecff4a4bb116c68a1279d0b85cbd3806c9f924de71cb1bea` |
 
 打包流程(每次都这样,别改顺序):
 

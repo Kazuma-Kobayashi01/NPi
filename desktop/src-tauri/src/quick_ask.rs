@@ -20,16 +20,32 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 /// A `panel-…` label: it takes the main window's capabilities and navigation rule (`panel_window.rs`).
 pub const QUICK_LABEL: &str = "panel-quick";
-const PAGE: &str = "index.html?panel=quick";
 const WIDTH: f64 = 760.0;
 /// The height before the page reports its own.
 const HEIGHT: f64 = 140.0;
 const MIN_HEIGHT: f64 = 80.0;
 /// Input, 380 pt of messages, footer and capsule, with the page's margins.
 const MAX_HEIGHT: f64 = 700.0;
-/// The window's transparent margin around the glass, for its glow (`quick.css` `--quick-margin`).
-const MARGIN: f64 = 20.0;
-const CORNER_RADIUS: f64 = 22.0;
+
+/// A piece of glass the page draws on: a rectangle of the window, in points from its top left,
+/// with its corner radius (`quick-window.jsx` `glassShapes`).
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+pub struct Shape {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub radius: f64,
+}
+
+/// The page, told which backdrop the window gives it (`quick.css` `[data-backdrop]`).
+fn page() -> String {
+    #[cfg(target_os = "macos")]
+    let backdrop = crate::quick_ask_glass::available().as_str();
+    #[cfg(not(target_os = "macos"))]
+    let backdrop = "none";
+    format!("index.html?panel=quick&backdrop={backdrop}")
+}
 
 /// The screen the window was last opened on.
 static SCREEN: std::sync::Mutex<Option<Area>> = std::sync::Mutex::new(None);
@@ -58,7 +74,7 @@ pub fn main_hidden(app: &AppHandle) {
 }
 
 fn build_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
-    let window = WebviewWindowBuilder::new(app, QUICK_LABEL, WebviewUrl::App(PAGE.into()))
+    let window = WebviewWindowBuilder::new(app, QUICK_LABEL, WebviewUrl::App(page().into()))
         .title("Quick Ask")
         .inner_size(WIDTH, HEIGHT)
         .decorations(false)
@@ -77,7 +93,7 @@ fn build_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
         let _ = window.run_on_main_thread(move || {
             if let Ok(ns_window) = target.ns_window() {
                 crate::quick_ask_glass::make_panel(ns_window);
-                crate::quick_ask_glass::apply(ns_window, WIDTH, HEIGHT, MARGIN, CORNER_RADIUS);
+                crate::quick_ask_glass::install(ns_window);
             }
         });
     }
@@ -174,15 +190,21 @@ pub fn on_blur(app: &AppHandle) {
     }
 }
 
-/// The page's height changed: the window follows and stays centred.
+/// The page's height or its glass changed: the window follows, and the glass behind the page is
+/// laid out again once the window has its new size.
 #[tauri::command]
-pub fn quickask_resize(app: AppHandle, height: f64) {
-    if let Some(window) = app.get_webview_window(QUICK_LABEL) {
-        let _ = window.set_size(tauri::LogicalSize::new(
-            WIDTH,
-            height.clamp(MIN_HEIGHT, MAX_HEIGHT),
-        ));
-    }
+pub fn quickask_resize(app: AppHandle, height: f64, shapes: Vec<Shape>) {
+    let Some(window) = app.get_webview_window(QUICK_LABEL) else {
+        return;
+    };
+    let _ = window.set_size(tauri::LogicalSize::new(
+        WIDTH,
+        height.clamp(MIN_HEIGHT, MAX_HEIGHT),
+    ));
+    #[cfg(target_os = "macos")]
+    let _ = window.run_on_main_thread(move || crate::quick_ask_glass::layout(&shapes));
+    #[cfg(not(target_os = "macos"))]
+    let _ = shapes;
 }
 
 #[tauri::command]

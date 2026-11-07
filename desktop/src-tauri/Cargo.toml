@@ -1,6 +1,6 @@
 [package]
 name = "omp-desktop"
-version = "3.0.0-137"
+version = "3.0.0-138"
 edition = "2021"
 
 [lib]
@@ -86,6 +86,9 @@ tauri-plugin-single-instance = "2"
 block2 = "0.6"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSBundle", "NSError", "NSGeometry", "NSObject", "NSString"] }
+# The quick-ask panel and its Liquid Glass (`src/quick_ask_glass.rs`).
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "objc2-quartz-core", "NSGlassEffectView", "NSGraphics", "NSPanel", "NSResponder", "NSView", "NSVisualEffectView", "NSWindow"] }
+objc2-quartz-core = { version = "0.3", default-features = false, features = ["std", "CALayer"] }
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSettings", "UNNotificationSound", "UNNotificationTrigger", "UNUserNotificationCenter"] }
 
 [target.'cfg(unix)'.dependencies]

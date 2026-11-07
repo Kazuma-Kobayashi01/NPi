@@ -20,7 +20,9 @@ The page is `index.html?panel=quick`. Unlike other panels, `live.js` runs here (
 
 ## Window size and glass
 
-The window is exactly as tall as `.quick`: a `ResizeObserver` calls `quickask_resize`, clamped to 80–700 pt, which also recentres it. Messages stop at 380 pt and scroll in `ChatView`, which sticks to the bottom. The transparent margin (`MARGIN` in Rust, `--quick-margin` in CSS) holds the glow. The `NSVisualEffectView` from `quick_ask_glass::apply` sizes with the window, and the page draws the rest.
+The window is exactly as tall as `.quick`: a `ResizeObserver` on it, the card (`.quick-glass`) and the capsule calls `quickask_resize` with the height, clamped to 80–700 pt, and the two shapes (rectangle from the top left, corner radius). Messages stop at 380 pt and scroll in `ChatView`, which sticks to the bottom. The transparent margin (`--quick-margin`) leaves room for the glass's shadow.
+
+The glass is AppKit's, through `objc2-app-kit` (`quick_ask_glass.rs`). `install` puts a root view behind the webview when the window is built; after each resize, `layout` (on the main thread, queued after `set_size`, so it sees the new height) gives it one piece per shape, flipped to AppKit's bottom-left origin and pinned to the top. On macOS 26 and later the pieces are `NSGlassEffectView`s (Liquid Glass, regular style, corner radius at most half the shorter side) inside one `NSGlassEffectContainerView`, so the card and the capsule blend as the system's glass does; before that they are `NSVisualEffectView`s (popover material, behind window) rounded through their layer. The page learns which from its URL (`backdrop=glass|vibrancy|none`, `html[data-backdrop]`) and then paints no background or glow on the card and capsule; with `none` (other systems) it paints its own as before.
 
 ## Tray icon and Cmd+W
 
@@ -28,4 +30,4 @@ A menu-bar icon (the mark, as a template image) with "Open NPi Desktop", "Quick 
 
 ## Not verified
 
-The panel's page was run in a browser with a fake bridge: input growth, send, stop, new conversation, mode change and continue; a reply from a real session was not rendered. Nothing native has run: the non-activating panel, keyboard focus, placement, blur-to-hide, a real session with `appMode`, and the hand-off to the main window are checked only by compiling. Liquid Glass is unavailable on the development Mac (macOS 15).
+The panel's page was run in a browser with a fake bridge: input growth, send, stop, new conversation, mode change and continue; a reply from a real session was not rendered. Nothing native has run: the non-activating panel, keyboard focus, placement, blur-to-hide, a real session with `appMode`, and the hand-off to the main window are checked only by compiling. The Liquid Glass pieces are checked by compiling and by unit tests of the coordinate flip and radius clamp, not yet on screen.
