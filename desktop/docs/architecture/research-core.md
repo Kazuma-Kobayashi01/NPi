@@ -1,6 +1,6 @@
 # Research Core: the paper index and full-text search
 
-Code: `src-tauri/src/librarian/research.rs` (index, search, quote check, tests in `research_tests.rs`), `librarian/cjk.rs` (the Chinese-aware split), `pdf_text.rs` `pages` (per-page extraction), `librarian/store.rs` (schema v5), `copilot.rs` (`research_search`, `research_check_quote`), `librarian/commands.rs` (`research_index`, `research_index_status`). Plan: `docs/PLAN_3.0.md` sections 4, 7 and 8.
+Code: `src-tauri/src/librarian/research.rs` (index, search, quote check, tests in `research_tests.rs`), `librarian/cjk.rs` (the Chinese-aware split), `pdf_text.rs` `pages` (per-page extraction), `librarian/store.rs` (schema v5), `copilot.rs` (`research_search`, `research_check_quote`), `librarian/commands.rs` (`research_index`, `research_index_status`). Plan: `docs/archive/PLAN_3.0.md` sections 4, 7 and 8.
 
 The index lives in the project's `.npi-academic/research.db`, next to the library (`librarian.md`). It reads files and writes nothing but that database: the originals in `papers/`, `notes/`, `digests/` and `drafts/` stay as they are (a test compares every file outside `.npi-academic/` byte for byte and by modification time before and after).
 

@@ -1,10 +1,23 @@
 # 总进度与下一步
 
-整理于 2026-11-06(分支 `3.0.0.137`)。这是**唯一的进度入口**:其他计划文档(`PLAN.md`、`PLAN_3.0.md`、`PLAN_LIBRARIAN.md`、`PLAN_CLI.md`、`PLAN_ACADEMIC_NEXT.md`)写"打算做什么",本文写"现在到了哪里、下一步做什么"。每做完一批就回来改这里。
+整理于 2026-11-06(分支 `3.0.0.137`)。这是**唯一的进度入口**:`PLAN.md`(1.1.0 规划,唯一仍在推进的计划)写"打算做什么";已完成的计划与交接记录在 [`archive/`](archive/README.md),本文写"现在到了哪里、下一步做什么"。每做完一批就回来改这里。
 
 验证记录:用户装 `3.0.0.132` 后在真实 app 里点过上面列的功能(含 3.0.0.122–132 新增部分),反馈没有问题;2026-11-06 用户装 `3.0.0.136` 完整包完成验收(会话搜索、画像、技能撤销、模型排班、多专家评审)。逐行的"未验证"标记保留原样,没有逐条改,以后遇到具体问题再回写。
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
+
+## NPi for VScode（2026-11-08）
+
+- 根目录 `npi-vscode/`，独立 Code 侧栏，不包含 Chat／Academic，不改 Desktop 或内核。插件当前版本 `0.1.1`，macOS Apple Silicon VSIX 内置独立 NPi 后端，默认不再依赖全局 CLI 或 PATH；显式 `npi.executablePath` 仍可覆盖。
+- 已实现流式 Markdown／思考、工具卡与输出、原生审批／提问、模型与推理选择、编辑器文件／选区附件、独立会话持久化、新建／切换／重连。
+- 已在 macOS arm64、VS Code `1.141.0`、真实 `npi/2.0.10` 开发宿主中验证侧栏发送、选区附件、实际工具写入、原生 write 审批、候选模型／推理发现、新会话、历史切换、重连恢复；使用临时 HOME 和本地确定性模型端点，未读取真实凭据或调用付费云模型。传输边界回归 3 项通过。
+- 当前包 `npi-vscode/npi-vscode-0.1.1-darwin-arm64.vsix`（约 112.7 MB，内置已签名的 `npi/2.0.10`）；未安装到用户日常 VS Code、未发布 Marketplace。旧 `0.1.0` 包仅为历史产物。使用与权限边界见 `npi-vscode/README.md`。
+- 界面与插件 README／Changelog 已改为英文，含按钮、提示、可访问性标签、思考／工具状态与 `lang="en"`；不更改用户内容或模型回复语言。真实 VS Code Webview 已验证空态与临时展示夹具的运行／完成／失败状态，重新生成同路径英文 VSIX，无模型请求。
+- 输入区参照 Copilot 重排：附件胶囊、+ 上下文菜单、模型／推理与右侧发送／停止均收进卡片；卡片下方显示 Local、启动审批策略与日志／重连。真实 Webview 验证 260／320／480 px 下空闲和运行态无横向溢出、发送／停止不被挤出，原生附件菜单可选代码，移除附件不发送草稿；按钮事件通过临时宿主拦截验证，未发送模型请求。
+- `0.1.1` 后端直接沿用标准 `~/.local/share/npi/agent` 配置、订阅认证、画像/profile 与模型排班，不复制凭据到插件目录；侧栏会话仍独立。新增内核命令菜单、原生订阅登录入口，以及随包 NPi 完整 Terminal（终端专用设置与面板不在 Webview 重造）。
+- 修复并复现前后验证：命令输出被后续 snapshot 清空、运行中工具输出在侧栏重建后丢失。定向回归共 5 项通过。
+- 真实 VS Code `1.141.0` 隔离开发宿主验证：PATH 无 `npi` 仍启动随包后端；仅在临时 HOME 的标准系统 NPi 目录放模型配置与测试认证，实际请求携带预期测试 bearer key；侧栏请求、真实文件写入、原生 exec 审批、命令发现与输出保留、重连历史、订阅提供商菜单（取消，未登录）、完整 NPi Terminal 均已跑通。未读取真实凭据、未完成真实 OAuth 或请求付费云模型，未覆盖其他平台与远程宿主。
+- 最终 VSIX 已安装到临时 VS Code 用户/扩展目录（非日常配置）并启动验证：从安装后的 runtime 执行，加载同一临时系统配置完成请求并归于 Ready；解包内核可执行权限、严格签名校验通过。VSIX SHA-256：`19f890adae6c4765e1d54171e327894c7a091ada90392e3b2d03279524f75d3e`。临时宿主与本地端点已关闭。
 
 ## 0. 先看这三件事
 
@@ -39,6 +52,10 @@
 | 3.0.0.138 | 已提交(分支 `3.0.0.138`)、**已验证**(用户真机测试,2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_aarch64.dmg` | **稳定证书** | Option+Space 弹窗改用 macOS 原生 Liquid Glass(`objc2-app-kit` 的 `NSGlassEffectView` + `NSGlassEffectContainerView`,卡片与模式胶囊各一块,macOS 26 前退回 `NSVisualEffectView`);页面不再自绘玻璃;去掉输入框蓝色焦点环;内核未变;277359635 字节;SHA-256 `df095d3eaa1a4bf5ecff4a4bb116c68a1279d0b85cbd3806c9f924de71cb1bea` |
 | 3.0.0.138 CLI loading | 已构建，内核已提交推送(`09930e2f0e`)、未安装(2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-loading_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，CLI 等待行随机选择 25 组颜文字与英文短语，流光跟随主题 accent 高光；277357521 字节；SHA-256 `f39c0bfaec099ecbdefb7ba3bb238c00beeafc62129d7401dae090244dc9acea`；镜像校验、挂载后深度签名校验及包内内核隔离 `get_state` 启动冒烟通过，无模型请求；保留原版 138 dmg，未替换正在使用的应用 |
 | 3.0.0.138 读图与登录页 | 已构建、已提交推送(内核 `31660c16f6`)，待用户真机试用(2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_vision-login_aarch64.dmg` | **稳定证书** | 重编译内核(含 CLI loading 改动)：OAuth 回调页改为 NPi 标识与中英文文案；`images.blockImages` 移到"Model → Vision"并改名 "Block Image Input"。读图不出图的根因是用户配置 `images.blockImages: true`，已改为 `false`；277358286 字节；SHA-256 `bec8e7018e1f4399db2af0658dc4fd43234a223be4308988c7061df11d44ee13`；镜像校验与挂载后深度签名校验通过 |
+| 3.0.0.138 生图卡片与 Chat 接入 | 已构建，待用户真机试用(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_aarch64.dmg` | **稳定证书** | 接入 `generate_image`（含 `write xd://generate_image`）结果卡片缩略图、灯箱、路径、模型/尺寸/质量与失败态；Chat 模式在会话配置 `generate_image.enabled: true` 时放行 `generate_image`；全局配置已开启并通过 Codex Plus 实测生成 WebP；277363194 字节；SHA-256 `f90258c7c7fb0d895deea6340611bbb558af4bedaa117c09521c37ea4c7dc2ba`；镜像校验、挂载后深度签名校验及包内内核隔离 `get_state` 启动冒烟通过，保留 `vision-login` dmg，未替换正在使用的应用 |
+| 3.0.0.138 CLI themes | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-themes_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，启动 Logo／字标／流光跟随主题，新增三款 `dark-tokyo-{neon,rain,chrome}`；277372924 字节；SHA-256 `df33e96c41b0abc6885c2c26347ced2c9d7158c0fa174d296d60490f98250ebf`；镜像校验、挂载后深度签名校验和包内内核隔离 `get_state` 通过，无模型请求；保留原有 dmg，已清理 app 中间产物，未替换正在使用的应用 |
+| 3.0.0.138 CLI Wide | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-wide_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，Content Width 命名档位 Common（100 列）／Wide（140 列），保留数字配置与默认 100 列；277373974 字节；SHA-256 `8974d327a9b7e25e2e5713727cdd018203fe461855e22b4e3962e98fabc4b9ac`；镜像校验、挂载后深度签名校验、包内内核隔离 `get_state` 通过，无模型请求；保留已有 dmg，清理 app 中间产物，未替换已安装应用 |
+| 3.0.0.138 Collapse | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_collapse_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`：Appearance → Display 新增 Collapse 四档（Off / Thinking / Thinking + Tools / All，默认 All），取代 `expandThinkingBlocks`，Ctrl+T／Ctrl+O 仅作用于当前会话；CLI 等待行全程保持颜文字动画，工具意图只显示在工具卡片；含 API Key 登录不自动打开网页、LM Studio v1 模型元数据与 Codex `gpt-6.1+` 上下文规则；277407320 字节；SHA-256 `7bca41b417037f72f918485b7ee8160bd2bf1871e0d0a483e58dfe63581dbe6b`；镜像校验、挂载后深度签名校验（`NPi Desktop Local`）、包内内核隔离 `get_state` 及 `display.collapse` 读取通过，无模型请求；已清理 app 中间产物，未替换已安装应用 |
 
 打包流程(每次都这样,别改顺序):
 
@@ -49,7 +66,9 @@
 5. `hdiutil verify`、挂载后 `codesign --verify --deep --strict`、`shasum -a 256`
 6. 把 dmg 放进 `dist/<版本>/`,校验通过后删除 `target/release/bundle/` 下的源 dmg、`.app` 和 `rw.*.dmg`,只保留 `dist/` 里的那一份(增量编译缓存不动;`bundle/dmg/bundle_dmg.sh` 与 `icon.icns` 保留,只打 app 时 Tauri 不会重新生成它们,第 4 步要用)
 
-内核:`omp/packages/coding-agent` 里 `bun run build`(bun 在 `.tools/node_modules/bun/bin`),产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-07 23:46(omp `31660c16f6`)。
+内核：`omp/packages/coding-agent` 里 `bun run build`（本机 `.tools/node_modules/.bin/bun`），产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-08（含 Collapse 档位与颜文字等待行，内核版本仍为 `npi/2.0.10`）；对应 app 使用 DevStore `rust/current` 构建，只生成 app、dmg。
+
+CLI 主题更新(2026-11-08，已重编译并打包至上表 `cli-themes` dmg)：启动 Logo、字标与流光改为读取当前主题的 `text` / `accent` / `borderAccent`，静止画面切换主题时同步刷新；新增内置 `dark-tokyo-neon`、`dark-tokyo-rain`、`dark-tokyo-chrome` 三款赛博朋克配色。17 项 welcome/tip/startup-splash 定向测试及 TUI 类型检查通过；终端渲染冒烟覆盖三款新主题与 light、动画/静止画面、全尺寸/紧凑 splash 和 256 色转换。三款配色同时导入本机 iTerm2 Color Presets，24 个颜色字段逐一与导出值一致，原有预设及全部 Profile 配置保持不变；导出文件保存在 `dist/3.0.0.138/iterm2/*.itermcolors`。未修改用户主题选择或已安装应用。
 
 第 2 步的 `devstore run` 要保留环境注入的 PATH:`devstore run rust/current -- sh -c 'PATH="<nvm node>:$PATH" exec node node_modules/.bin/tauri build …'`。DevStore 若因卷意外断开留下过期租约(`mount` 报 `no lease on the image`,`unmount` 也失败),把映像目录里的 `lease.json` 改名后再挂载(2026-11-06 遇到过,是 DevStore 的 bug)。
 
@@ -68,6 +87,7 @@
 | macOS 通知 | 已做、**已验证(用户确认授权可用)** | 根因是临时签名,每个版本被系统当成新应用(`ncprefs` 里 `dev.npi.desktop` 已有 9 条以上来源,授权值为 0)。现已用稳定证书签名,用户确认授权可用 |
 | 图片 429 | 已做、**未验证** | `Retry-After`(上限 4 秒)、429/503 重试两次并递增等待、同域名请求间隔 250 毫秒。**没找到这次 429 的原文**:如果来自模型接口或搜索源,这次改动覆盖不到 |
 | 左图右文图片卡片 | 已做、**未验证** | `ui.present` 图片组件新增 `description`;内核校验、桌面渲染、Chat 提示词都改了;需要内核 3.0.0.103 之后的版本 |
+| 生图 (`generate_image` / GPT-Image-2) | 已做、**已验证**(Codex Plus 实测出图 + UI 灯箱冒烟，2026-11-08) | 全局配置保存 `generate_image.enabled: true`；实测 `openai-codex/gpt-image-2` 由 `gpt-image-2-codex` 生成 WebP；Desktop 工具卡接通 `generate_image` 与 `write xd://generate_image` 缩略图/灯箱/模型信息与错误态；Chat 按会话配置条件放行 `generate_image` |
 
 ### Chat
 
@@ -112,7 +132,7 @@
 - 快速询问改成悬浮面板(Option+Space):不激活 App(NSPanel)、独立持有一个普通会话、消息与工具卡片复用主窗口组件、底部胶囊切模式/模型/思考、"在窗口中继续"。页面用假后端验证,**原生部分只编译过**。详见 `desktop/docs/architecture/quick-ask.md`。
 - Code 对标 Codex/Claude Code 第一批:每个任务一个 worktree(`worktree.rs`,放在 `~/.local/share/npi/worktrees/`,侧栏分支按钮新建,标签归在原项目下,Git 浏览器里合并、开 PR、删除);diff 行评论一次发给 Agent、单处改动撤销(`git_browser/hunk.rs`);Rewind 可同时还原文件(在内核 `session/file-checkpoints.ts`,CLI 和 Desktop 共用,存 `<agent 目录>/checkpoints/`,发提示前快照,最多等 2 秒,保留 200 个,上限 2 GiB;Desktop 用 RPC `plan_file_restore`、`restore_files`,CLI 用 Esc Esc)。Rust 用真实 git 测试,界面用假后端在浏览器验证。**未在真实 App 里验证**:新建 worktree 标签、Rewind 还原、评论发送。详见 `desktop/docs/architecture/worktree-tasks.md`。
 - **用户已实测通过(3.0.0.124):** Reader 看 PDF 页、右侧文献栏、macOS 通知授权。其余项(快速询问、Cmd+W、独立窗口、Chat 转交、左图右文、图片 429、OCR、摘要与对照表、MCP)仍在测试中。
-- 2026-11-06 接手 `HANDOFF_3.0.0.136.md`：两个失败测试及交接涉及的新增 lint 已修；定向 Rust 42 项、内核排班相关 227 项、前端 6 项检查通过。浏览器实际组件验证评审接受/拒绝与技能 Undo 回调；重建内核 CLI 配置读写和 RPC `get_state` 通过，随包 App 的真实 MCP 进程列出两个工具并在未确认时拒绝评审。完整 dmg 已重建、稳定签名、镜像与挂载后签名校验通过；之后用户安装完整包完成真机验收,已提交(未推送)。nightly 缺 clippy；现有工具链严格全仓 lint 仍有范围外诊断，不能声称全仓 lint 通过。
+- 2026-11-06 接手 `archive/HANDOFF_3.0.0.136.md`：两个失败测试及交接涉及的新增 lint 已修；定向 Rust 42 项、内核排班相关 227 项、前端 6 项检查通过。浏览器实际组件验证评审接受/拒绝与技能 Undo 回调；重建内核 CLI 配置读写和 RPC `get_state` 通过，随包 App 的真实 MCP 进程列出两个工具并在未确认时拒绝评审。完整 dmg 已重建、稳定签名、镜像与挂载后签名校验通过；之后用户安装完整包完成真机验收,已提交(未推送)。nightly 缺 clippy；现有工具链严格全仓 lint 仍有范围外诊断，不能声称全仓 lint 通过。
 
 - 阅读器改为看 PDF 原页(PDF.js 4.10.38,Apache-2.0,已入库 `src/vendor/pdfjs/`):文字层可选、缩放、页码框;搜索命中与锚点跳转到页并标出引文;"文字"标签保留。
 - OCR 工具:`research_ocr`(Copilot)、`academic_ocr`(Academic 主标签),每次最多 6 页;宿主工具调用改在独立线程执行。

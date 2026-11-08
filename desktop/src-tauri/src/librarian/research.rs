@@ -1,4 +1,4 @@
-//! The Research Core's index (`docs/PLAN_3.0.md` sections 4, 7 and 8): the
+//! The Research Core's index (`docs/archive/PLAN_3.0.md` sections 4, 7 and 8): the
 //! papers of a project cut into blocks with page-level anchors, a full-text
 //! index over them and over the library's references, and a deterministic
 //! quote check. It lives in the project's `research.db` beside the library

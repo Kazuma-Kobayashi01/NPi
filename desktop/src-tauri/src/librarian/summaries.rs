@@ -1,4 +1,4 @@
-//! Summaries, comparison tables and numeric checks of the Research Core (docs/PLAN_3.0.md §6, §8).
+//! Summaries, comparison tables and numeric checks of the Research Core (docs/archive/PLAN_3.0.md §6, §8).
 //!
 //! The model writes; Rust decides what may be called verified. A summary (a section's, L1, or the
 //! paper's, L2) is stored with `source_hash`, the paper's file hash when it was written: when the

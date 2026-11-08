@@ -1,8 +1,8 @@
 # Academic 后续计划
 
-> 总进度与下一步见 [`PROGRESS.md`](PROGRESS.md)。
+> 总进度与下一步见 [`PROGRESS.md`](../PROGRESS.md)。
 
-承接 `docs/PLAN_3.0.md`(阶段 3、4)与 `docs/PLAN_LIBRARIAN.md`。状态写于 2026-11-05;"已做"指代码与单元测试完成,真机与真实模型的验证见末尾。
+承接 `docs/archive/PLAN_3.0.md`(阶段 3、4)与 `docs/archive/PLAN_LIBRARIAN.md`。状态写于 2026-11-05;"已做"指代码与单元测试完成,真机与真实模型的验证见末尾。
 
 ## 一、顺序推进的五项
 

@@ -440,7 +440,7 @@ Graphviz/Mermaid 渲染。联网类（arXiv、Semantic Scholar、Crossref）**�
 | **M4 对照翻译（中↔英）** | 分段与占位符、术语表、翻译流水线、对齐索引、双栏同步滚动、按原格式导出（含 docx 保留样式）、质检 | L | S2 通过；占位符校验与回译抽检可用 |
 | **M5 模拟审稿** | 通用评审表与角色、有据可查的意见、任务清单、AC 汇总、rebuttal、版本对比、docx 批注导出 | M | S5、S6 通过；每条意见都带稿件位置 |
 | **M6 论文图** | 样式预设、沙箱运行、图库、LaTeX 片段、CSV→表格 | M | S4 通过；脚本与图同名保存，可一键重绘 |
-| **M7 本地引用管理** | **已由 Librarian + Research Core 实现**（超出原计划：文献库、引用格式、PDF 导入、页级索引与锚点、引文与数值核对、阅读器，见 `PLAN_LIBRARIAN.md`、`PLAN_3.0.md`） | — | 见 `PROGRESS.md` |
+| **M7 本地引用管理** | **已由 Librarian + Research Core 实现**（超出原计划：文献库、引用格式、PDF 导入、页级索引与锚点、引文与数值核对、阅读器，见 `archive/PLAN_LIBRARIAN.md`、`archive/PLAN_3.0.md`） | — | 见 `PROGRESS.md` |
 | **M8 打磨与发布** | 导出、公式 OCR（可选）、投稿前检查清单、新手引导、性能（大 PDF）、README 与文档、发布 1.1.0 | M | 干净安装演练（macOS）；`npm test`、`cargo test` 全绿 |
 
 **已延后**：联网引用核验、期刊/会议模板、多语种翻译、`npi paper` 子命令。

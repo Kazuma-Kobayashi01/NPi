@@ -1,6 +1,6 @@
 # Librarian 方案(Academic 参考文献库)
 
-参考 EndNote 的思路,在 Academic 项目里做一个本地参考文献库。**实施状态:L0 至 L4 均已实现(见 `desktop/docs/architecture/librarian.md`);L4 只做了库一侧的引用核对,论文原文引文与数字核对依赖 `docs/PLAN_3.0.md` 的锚点,未做。** 下文保留原规划;其中 `hayagriva` 已验证可用(含 GB/T 7714 中文样式),PDF 文字提取用 `pdf-inspector`,在线查询只用 Crossref。
+参考 EndNote 的思路,在 Academic 项目里做一个本地参考文献库。**实施状态:L0 至 L4 均已实现(见 `desktop/docs/architecture/librarian.md`);L4 只做了库一侧的引用核对,论文原文引文与数字核对依赖 `docs/archive/PLAN_3.0.md` 的锚点,未做。** 下文保留原规划;其中 `hayagriva` 已验证可用(含 GB/T 7714 中文样式),PDF 文字提取用 `pdf-inspector`,在线查询只用 Crossref。
 
 ## 1. 已确定的决定
 
@@ -17,7 +17,7 @@
 ## 3. 数据模型
 
 - 标准格式用 **CSL-JSON**:每条参考文献存一份 CSL-JSON,再加几列可索引字段(`citekey`、标题、第一作者、年份、DOI、类型、添加时间)。这样格式化引擎和导入导出可以直接使用。
-- 库存放在项目的 `research.db`(与 `docs/PLAN_3.0.md` 里的检索库为同一个数据库)。
+- 库存放在项目的 `research.db`(与 `docs/archive/PLAN_3.0.md` 里的检索库为同一个数据库)。
 - 表:
   - `references`:`id`、`citekey`(项目内唯一)、`csl_json`、索引字段、`source`(`manual / ris / bibtex / pdf / online`)、`created_at`、`updated_at`。
   - `groups`:手动分组;`group_refs`:条目与分组的多对多。
@@ -42,7 +42,7 @@
 
 - Academic 里加一个应用级标签页"Librarian",三栏:左边分组与标签,中间列表(列:作者、年份、标题、期刊、附件、标签)加搜索,右边详情(元数据表单、附件、笔记)。
 - 手动新增、编辑、删除条目;删除进入项目回收区,不做永久删除。
-- 搜索先用 SQLite FTS5,中文用 `docs/PLAN_3.0.md` 里已验证的 unigram + bigram 规范化方案。
+- 搜索先用 SQLite FTS5,中文用 `docs/archive/PLAN_3.0.md` 里已验证的 unigram + bigram 规范化方案。
 
 ### 4.3 L2:引用格式化
 

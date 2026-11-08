@@ -1,6 +1,6 @@
 # Librarian (reference library)
 
-Plan and phases: `docs/PLAN_LIBRARIAN.md`. This file records what exists. L0 (data layer), L1 (the window), L2 (citation styles), L3 (PDF import, files, online lookup) and L4 (the library as tools for the Copilot) are built.
+Plan and phases: `docs/archive/PLAN_LIBRARIAN.md`. This file records what exists. L0 (data layer), L1 (the window), L2 (citation styles), L3 (PDF import, files, online lookup) and L4 (the library as tools for the Copilot) are built.
 
 ## Storage
 

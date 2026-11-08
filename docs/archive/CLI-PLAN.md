@@ -1,6 +1,6 @@
 # CLI 维护计划
 
-CLI 缺陷与维护任务单独记录在此；[Academic 模式计划](PLAN.md) 保持原有范围。
+CLI 缺陷与维护任务单独记录在此；[Academic 模式计划](../PLAN.md) 保持原有范围。
 
 ## CLI-001：修复 Ctrl+C 会话中断问题
 

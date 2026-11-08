@@ -1,4 +1,4 @@
-//! Librarian: a reference library per Academic project (`docs/PLAN_LIBRARIAN.md`).
+//! Librarian: a reference library per Academic project (`docs/archive/PLAN_LIBRARIAN.md`).
 //! This is the data layer (L0): CSL-JSON records in the project's
 //! `research.db`, RIS / BibTeX / CSL-JSON in and out, duplicate detection and
 //! citation keys. The webview names a project and a reference id, never a

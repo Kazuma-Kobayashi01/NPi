@@ -12,7 +12,7 @@
 
 ## 用户明确要求
 
-1. 完成 `docs/PLAN_CLI.md` 的阶段 1、2，并让普通 CLI 的思考默认折叠。
+1. 完成 `docs/archive/PLAN_CLI.md` 的阶段 1、2，并让普通 CLI 的思考默认折叠。
 2. 优化 token 消耗只改工具返回内容量。子 Agent 调度和展示类模型调用是用户的 Agent 特色，必须保留；没有降低默认思考级别或子 Agent 并发、递归、预算。
 3. Rust 操作使用 DevStore `rust/current`；不替换已安装应用、不动真实登录与会话数据。打包只生成 app、dmg，dmg 归集到根目录 `dist/{version}/`。
 
@@ -24,7 +24,7 @@
 - 设置、会话、服务连接通过原有 alternate-screen overlay 居中显示，保持正常会话滚动区。设置支持跨页搜索，简单值左右切换，Ctrl+左右切页；子菜单和搜索保持各自的 Esc 语义。
 - 会话显示用户名及日期分组；新增 Ctrl+D 删除、Ctrl+R 重命名、Ctrl+A 切范围。Delete / F2 / Tab 仍可用，删除仍经过确认。
 - 服务连接按 Popular / Services 分组并始终支持搜索；保留禁用服务商过滤、授权及凭据验证逻辑。选中行会移除嵌套前景色后填色，避免文字与背景同色。
-- 普通 ANSI CLI 思考默认只显示 Thinking / Thought 摘要，Ctrl+T 展开/收起，使用现有 `expandThinkingBlocks` 配置。流式更新、结束和重绘不会意外重新展开；原始推理内容仍在会话中。原生 TSP 路径保留既有行为。
+- 普通 ANSI CLI 思考默认只显示 Thinking / Thought 摘要，Ctrl+T 展开/收起（仅当前会话）。保存的初始折叠程度由 Appearance → Display → Collapse（`display.collapse`：Off / Thinking / Thinking + Tools / All，默认 All）控制，已取代原 `expandThinkingBlocks`。流式更新、结束和重绘不会意外重新展开；原始推理内容仍在会话中。原生 TSP 路径保留既有行为。
 - 居中绘制时移除用户消息的 OSC 133 shell prompt 标记，避免终端将消息当作 shell 提示符重排，造成背景错位；复用现有 `stripPromptZones`。
 - 工具挂载详细通知 `tools.xdevNotices` 默认关闭；工具列表变化记 debug 日志，模型仍能收到能力变化，用户可显式开启通知。
 - 修复 Interaction Policy 的 Execution 分组未注册；补齐旧鼠标测试桩的 `composer.contentMargin`，以及输入事件测试中取消后应进入空闲的模拟状态。

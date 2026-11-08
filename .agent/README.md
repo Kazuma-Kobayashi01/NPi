@@ -4,7 +4,7 @@
 
 ## 开始工作前
 
-- CLI 本轮交接记录见 [docs/HANDOFF_CLI.md](../docs/HANDOFF_CLI.md)，包含改动范围、用户保留的 Agent 特色、验证边界和打包产物记录。
+- 当前进度与下一步只看 [docs/PROGRESS.md](../docs/PROGRESS.md)；已完成的计划与交接记录归档在 [docs/archive/](../docs/archive/README.md)，仅供查阅背景。CLI 交接中仍有效的约束：优化 token 只缩减工具返回内容量，不削弱子 Agent 调度与展示类模型调用。
 
 - 本项目是用户正在使用的 Agent 源码；自举开发不得影响当前会话和已安装应用。
 - 修改 `desktop/` 前读取 [桌面端约定](../desktop/AGENTS.md)，再按其中索引读取对应的架构文档。

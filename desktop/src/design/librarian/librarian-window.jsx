@@ -1,6 +1,6 @@
 /* librarian/librarian-window.jsx — the Librarian of one Academic project:
    a floating window with groups and tags on the left, the searchable list in
-   the middle and one reference's fields on the right (docs/PLAN_LIBRARIAN.md,
+   the middle and one reference's fields on the right (docs/archive/PLAN_LIBRARIAN.md,
    L1). The data is Rust's (library_* commands through `bridge.library`);
    what is shown and how it is filtered is app/librarian.js. */
 

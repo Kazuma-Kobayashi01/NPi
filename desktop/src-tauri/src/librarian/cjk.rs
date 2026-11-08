@@ -2,7 +2,7 @@
 //!
 //! FTS5's `unicode61` keeps a run of Chinese characters as one token and
 //! `trigram` finds nothing shorter than three characters, so neither finds the
-//! two-character word 文献 (`docs/PLAN_3.0.md` section 7). The index therefore
+//! two-character word 文献 (`docs/archive/PLAN_3.0.md` section 7). The index therefore
 //! stores a normalised column: Latin words lower-cased as they are, and every
 //! CJK run as its characters (unigrams) plus each pair of neighbours
 //! (bigrams). A query goes through the same split: a CJK run of n >= 2

@@ -66,6 +66,16 @@ promises of this product.
 
 <p align="center"><img src="docs/assets/divider.svg" width="420" alt="❦"></p>
 
+## NPi for VScode
+
+The Code-only VS Code extension lives in [`npi-vscode/`](npi-vscode/README.md).
+It includes an NPi backend for macOS Apple Silicon, sharing NPi CLI/Desktop
+configuration and subscription sign-in without requiring a separate CLI install.
+The sidebar supports streaming conversations, tool approvals, model selection,
+editor context, and separate session history; a bundled terminal exposes the full
+NPi terminal interface. Desktop's Chat and Academic modes are not included.
+See the extension README for VSIX installation, configuration, and development.
+
 ## Two rooms
 
 <table>
