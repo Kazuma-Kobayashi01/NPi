@@ -22,6 +22,13 @@ Implementation files:
 - `src-tauri/src/python_runtime/installer.rs` - verification, extraction,
   content-addressed install and locking
 - `src-tauri/src/python_runtime/environment.rs` - venv, packages and health
+- `src-tauri/src/python_runtime/wheels.rs` - the bundled scientific suite
+  (offline wheelhouse) installed into each environment version
+- `scripts/build-python-wheelhouse.sh` - reproducible wheelhouse builder;
+  `scripts/python-scientific.in` (top-level requirements) and
+  `scripts/python-scientific.lock` (versions and SHA-256 of every wheel)
+- `src-tauri/resources/python-runtime-wheels-manifest.json` - the bundled
+  wheelhouse descriptor
 - `src-tauri/src/python_runtime/paths.rs` - one resolver for every directory
 - `src-tauri/src/agent/spawn.rs` - exports `NPI_PYTHON_HOST` to every `omp`
   child as the absolute desktop executable
@@ -128,16 +135,46 @@ The base directory is, in priority order, `NPI_ENV_DIR` when non-empty, then
    packaged `python3` and `uv` once. Only a successful probe is renamed into
    the content-addressed runtime path.
 5. Create the default environment offline with the runtime's own
-   `python3 -I -B -m venv --without-pip`, seed pip with
-   `-I -B -m ensurepip --upgrade --default-pip` (the wheel is bundled), record
-   the version directory and atomically switch `current`.
-6. Report health by reading the interpreter and `uv` versions. A timeout,
+   `python3 -I -B -m venv --without-pip` and seed pip with
+   `-I -B -m ensurepip --upgrade --default-pip` (the wheel is bundled).
+6. When the app ships `python-runtime-wheels-manifest.json`, install the
+   scientific suite into the new version offline (see below), then verify the
+   version and atomically switch `current`.
+7. Report health by reading the interpreter and `uv` versions. A timeout,
    crash, digest mismatch, or missing binary is an error; nothing falls back to
    another interpreter.
 
 An interrupted install can leave a `.staging-*` directory, but never a runtime
 that later runs look healthy: the runtime is only visible after the atomic
 rename, and the installed-state record names the exact digest.
+
+## Scientific suite (offline wheelhouse)
+
+numpy, scipy, matplotlib, pandas and sympy, with their dependencies (15
+wheels), ship as a second archive next to the runtime:
+`python-runtime-wheels-scientific-aarch64-apple-darwin.tar.gz`, about 76 MB,
+described by `python-runtime-wheels-manifest.json` (suite, platform, archive
+name/size/SHA-256, the lock and wheels folder inside it, the pinned package
+list). Installed, the suite takes about 265 MB in the environment.
+
+- The suite is part of the environment's identity: the version id becomes
+  `py<runtimeVersion>-<runtimeSha12>-scientific-<wheelhouseSha12>`, so a new pin
+  set builds a new version beside the old one and flips `current` only after it
+  is complete. Packages a user installed into an older version stay there.
+- `wheels.rs` verifies the archive's size and SHA-256, unpacks it into
+  `<base>/archives/.wheels-*`, and runs the runtime's
+  `uv pip install --offline --no-index --require-hashes --find-links <wheels>
+  --requirement <lock>`. No index is contacted, and a wheel whose digest is not
+  in the lock is refused. The staging directory is removed afterwards.
+- A `.npi-wheelhouse` marker in the version directory records the archive
+  digest; a version without it (a build that died mid-install) is rebuilt, not
+  published.
+- An app without the wheelhouse manifest builds the environment with pip only.
+  A manifest whose archive is missing or altered, or that names another
+  platform than the runtime, fails `ensure`, like the runtime archive.
+- The wheels target macOS 12+ (scipy publishes no older Apple Silicon wheel).
+- Each distribution keeps its license in its installed `*.dist-info`; the
+  archive adds `wheelhouse/THIRD-PARTY-NOTICES.txt` listing the pins.
 
 ## Host protocol
 
@@ -202,10 +239,11 @@ runtime, including for gateway/worker processes. `omp` runs
 `$NPI_PYTHON_HOST --npi-python-host` with an `ensure` request and uses the
 absolute `pythonPath` it returns. It does not read the archive or build a venv.
 
-`omp`'s `python` tool still executes code in its own supervised subprocess; the
-desktop host owns the interpreter, the environment and package installs. The
-tool keeps its own output caps, timeout and process-tree kill ladder. See
-`omp/docs/python-repl.md`.
+`omp` runs Python code through `eval`, whose Python backend uses this
+interpreter, so the scientific suite is importable there. `omp`'s `python`
+tool (mounted under `xd://python`, and registered only when `NPI_PYTHON_HOST`
+is set) reports the environment and lists or installs packages through this
+host; it no longer executes code. See `omp/docs/python-repl.md`.
 
 ## Packaging contract
 
@@ -242,6 +280,20 @@ To regenerate after changing a pin:
 ./scripts/build-python-runtime.sh
 ```
 
+The wheelhouse is built from the runtime archive (its `python3`, pip and `uv`
+are the build tools) and the committed lock:
+
+```bash
+./scripts/build-python-wheelhouse.sh            # from python-scientific.lock
+./scripts/build-python-wheelhouse.sh --relock   # re-resolve python-scientific.in first
+```
+
+It downloads the pinned wheels into `.cache/runtime-downloads/wheels/` with
+`pip download --require-hashes`, packages them with the same ustar/gzip
+normalization (built twice, byte-identical), installs the packaged archive
+offline into a scratch venv and imports every package, then writes
+`python-runtime-wheels-manifest.json`.
+
 The script writes the archive and `python-runtime-manifest.json` into
 `src-tauri/resources/`. The manifest keeps the fields the Rust readers require
 (`runtimeVersion`, `platform`, `archiveName`, `archiveSha256`, `archiveSize`,
@@ -252,21 +304,23 @@ still work.
 
 ## Source checkout builds
 
-The archive is a generated 38 MB binary and is not committed.
-`src-tauri/resources/.gitignore` ignores `python-runtime-*.tar.gz`; the
-manifest stays tracked so the expected digest and license inventory are
-reviewable.
+The archives are generated binaries (38 MB runtime, 76 MB wheelhouse) and are
+not committed. `src-tauri/resources/.gitignore` ignores
+`python-runtime-*.tar.gz`; both manifests and the lock stay tracked so the
+expected digests and package pins are reviewable.
 
 Before `tauri build` (and before `npm run build`, which invokes it), prepare
 and verify the runtime:
 
 ```bash
 ./scripts/build-python-runtime.sh
+./scripts/build-python-wheelhouse.sh
 node scripts/check-python-runtime.mjs
 ```
 
 `check-python-runtime.mjs` is the fail-closed pre-build gate. It reads the
-committed manifest, requires the archive, and compares its size and SHA-256. It
+committed manifests, requires both archives, and compares their size and
+SHA-256. It
 never downloads, extracts or builds anything: a missing or stale archive stops
 the build with the exact `./scripts/build-python-runtime.sh` command to run.
 `tauri build` alone does not run a JavaScript pre-build hook, so the npm build

@@ -102,6 +102,8 @@
       "已安装的技能、工作流和提示词流程。", "已安裝的技能、工作流程和提示詞流程。", "インストール済みのスキル、ワークフロー、プロンプト手順です。"],
     ["When the agent asks before it runs a tool: a default for every project, and projects that override it. A change restarts omp in the affected open tabs; conversations continue.",
       "代理运行工具前何时询问：所有项目的默认值，以及覆盖它的项目。更改会重启受影响标签页中的 omp；会话会继续。", "代理執行工具前何時詢問：所有專案的預設值，以及覆寫它的專案。變更會重啟受影響分頁中的 omp；對話會繼續。", "エージェントがツール実行前に確認するタイミングです。全プロジェクトの既定値と、それを上書きするプロジェクトがあります。変更すると影響するタブで omp が再起動しますが、会話は続きます。"],
+    ["omp runs commands, eval, file tools and MCP servers inside a macOS Seatbelt sandbox. Workspace write: they can write only inside the project (its git repository), npi's own folders and temporary folders. Read only: not even the project. Reading files and network access stay open. Tabs started or restarted afterwards use it; it is the same setting as the CLI's sandbox.mode.",
+      "omp 在 macOS Seatbelt 沙盒中运行命令、eval、文件工具和 MCP 服务器。仅写工作区：只能写项目（所在 git 仓库）、npi 自己的文件夹和临时文件夹。只读：连项目也不能写。读取文件和联网不受限制。之后新开或重启的标签页生效；与 CLI 的 sandbox.mode 是同一个设置。", "omp 在 macOS Seatbelt 沙盒中執行命令、eval、檔案工具和 MCP 伺服器。僅寫工作區：只能寫專案（所在 git 儲存庫）、npi 自己的資料夾和暫存資料夾。唯讀：連專案也不能寫。讀取檔案和連網不受限制。之後新開或重啟的分頁生效；與 CLI 的 sandbox.mode 是同一個設定。", "omp はコマンド、eval、ファイルツール、MCP サーバーを macOS の Seatbelt サンドボックス内で実行します。ワークスペースのみ書き込み：プロジェクト（その git リポジトリ）、npi 自身のフォルダー、一時フォルダーにだけ書き込めます。読み取り専用：プロジェクトにも書き込めません。ファイルの読み取りとネットワークは制限しません。以降に開始または再起動したタブに適用され、CLI の sandbox.mode と同じ設定です。"],
     ["Rules are only granted from a prompt; here you review and revoke them.",
       "规则只能通过提示授予；在这里可以查看并撤销它们。", "規則只能透過提示授予；在這裡可以檢視並撤銷它們。", "ルールは確認プロンプトからのみ付与されます。ここで確認・取り消しができます。"],
     ["Allow the agent to operate your Mac, only after you enable it and grant macOS permissions.",

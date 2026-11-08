@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Settings → Approvals → Sandbox: the process sandbox (Off / Workspace write / Read only) for the tab's profile. It is omp's `sandbox.mode` (read and written through `omp config`, the same value as the CLI's settings); on macOS omp then runs commands, eval, file tools and MCP servers in a Seatbelt sandbox that only lets them write inside the project, npi's folders and temporary folders. Tabs started or restarted afterwards use it.
+- The managed Python environment comes with numpy, scipy, matplotlib, pandas and sympy preinstalled. They ship as a pinned offline wheelhouse inside the app (about 76 MB) and install without network access on first use; `scripts/build-python-wheelhouse.sh` builds it from `scripts/python-scientific.lock`, and the pre-build check now verifies it too.
 - Image generation (`generate_image`, including `xd://generate_image` device calls): tool cards now render generated image thumbnails with the lightbox viewer, output path, actual `provider/model` and size/quality summary, and surface empty-image or error responses as failed cards; Chat sessions include `generate_image` in their tool allowlist when `generate_image.enabled` is turned on for the session's profile.
 
 - `[anchor N]` in an answer of an Academic project's tab (Academic session or Copilot) is a link: a click opens the reader on that page with the passage marked. The project's tool guide asks the model to keep the anchors the research tools give beside the claims they support.

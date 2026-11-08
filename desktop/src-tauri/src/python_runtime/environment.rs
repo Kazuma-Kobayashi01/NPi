@@ -32,6 +32,7 @@ use super::command::{failure_text, run_bounded, LIST_TIMEOUT, PROBE_TIMEOUT, VEN
 use super::lock::FileLock;
 use super::paths::EnvPaths;
 use super::report_progress;
+use super::wheels::{self, Wheelhouse};
 
 /// One installed distribution, as `uv pip list --format json` reports it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -233,7 +234,7 @@ fn remove_env_dir(env_dir: &Path) -> Result<(), String> {
 ///
 /// # Errors
 /// When PATH cannot be joined (an entry holding the platform separator).
-fn prepare_child_env(
+pub(super) fn prepare_child_env(
     cmd: &mut Command,
     paths: &EnvPaths,
     env_dir: &Path,
@@ -368,10 +369,17 @@ fn publish_env(paths: &EnvPaths, env_dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("could not write {}: {e}", pointer.display()))
 }
 
-/// The managed environment directory for `runtime_version` /
-/// `archive_sha256`, created from `runtime_dir` if that identity's version
-/// directory is missing or unusable and published through the `current`
-/// pointer.
+/// The managed environment directory for one runtime identity, built and
+/// published if needed.
+///
+/// The identity is `runtime_version` / `archive_sha256`, plus the bundled
+/// `wheelhouse` when the app ships one. The version directory is created
+/// from `runtime_dir` when missing or unusable and published through the
+/// `current` pointer.
+///
+/// The wheelhouse is part of the identity: its suffix goes into the version
+/// id, and a version directory counts as complete only once the suite is
+/// installed in it, so a new pin set builds a new version next to the old one.
 ///
 /// Only `environments/default/versions/<id>` is written — the runtime
 /// directory is read, never modified, and other environment versions are
@@ -379,20 +387,35 @@ fn publish_env(paths: &EnvPaths, env_dir: &Path) -> Result<(), String> {
 ///
 /// # Errors
 /// When the runtime is not installed, the version id is unusable, the venv
-/// cannot be created, or it fails the post-build verification.
+/// cannot be created, the bundled suite cannot be installed, or the
+/// environment fails the post-build verification.
 pub fn ensure_env(
     paths: &EnvPaths,
     runtime_dir: &Path,
     runtime_version: &str,
     archive_sha256: &str,
+    wheelhouse: Option<&Wheelhouse>,
 ) -> Result<PathBuf, String> {
     ensure_env_bounded(
         paths,
         runtime_dir,
         runtime_version,
         archive_sha256,
+        wheelhouse,
         VENV_TIMEOUT,
     )
+}
+
+/// Whether `env_dir` is complete: it verifies, and holds the bundled suite
+/// when there is one.
+fn env_complete(
+    paths: &EnvPaths,
+    runtime_dir: &Path,
+    env_dir: &Path,
+    wheelhouse: Option<&Wheelhouse>,
+) -> bool {
+    verify_env(paths, runtime_dir, env_dir).is_ok()
+        && wheelhouse.is_none_or(|suite| suite.is_installed_in(env_dir))
 }
 
 /// [`ensure_env`] with the venv deadline spelled out (the tests use a short
@@ -402,12 +425,16 @@ fn ensure_env_bounded(
     runtime_dir: &Path,
     runtime_version: &str,
     archive_sha256: &str,
+    wheelhouse: Option<&Wheelhouse>,
     venv_timeout: std::time::Duration,
 ) -> Result<PathBuf, String> {
-    let id = env_version_id(runtime_version, archive_sha256)?;
+    let mut id = env_version_id(runtime_version, archive_sha256)?;
+    if let Some(suite) = wheelhouse {
+        id = format!("{id}-{}", suite.version_suffix());
+    }
     let env_dir = paths.env_version_dir(&id);
     if published_env_dir(paths).as_deref() == Some(env_dir.as_path())
-        && verify_env(paths, runtime_dir, &env_dir).is_ok()
+        && env_complete(paths, runtime_dir, &env_dir, wheelhouse)
     {
         return Ok(env_dir);
     }
@@ -417,7 +444,7 @@ fn ensure_env_bounded(
     // Another process may have published this very version while we waited,
     // or a crash left a complete one unpublished: publish after verifying
     // rather than building again.
-    if verify_env(paths, runtime_dir, &env_dir).is_ok() {
+    if env_complete(paths, runtime_dir, &env_dir, wheelhouse) {
         publish_env(paths, &env_dir)?;
         return Ok(env_dir);
     }
@@ -498,6 +525,13 @@ fn ensure_env_bounded(
         ));
     }
 
+    // The bundled suite goes in before the pointer can publish the version:
+    // offline, from the verified archive, pinned by hash.
+    if let Err(error) = install_suite(paths, runtime_dir, &env_dir, wheelhouse) {
+        let _ = remove_env_dir(&env_dir);
+        return Err(error);
+    }
+
     // Verify at the final path, before the pointer can publish it: a venv is
     // only a set of paths into the runtime, and pip's own scripts embed the
     // directory they were built in.
@@ -512,6 +546,25 @@ fn ensure_env_bounded(
         &format!("published the Python environment at {}", env_dir.display()),
     );
     Ok(env_dir)
+}
+
+/// Install the bundled suite into a freshly built `env_dir`; nothing to do
+/// when the app ships none.
+fn install_suite(
+    paths: &EnvPaths,
+    runtime_dir: &Path,
+    env_dir: &Path,
+    wheelhouse: Option<&Wheelhouse>,
+) -> Result<(), String> {
+    wheelhouse.map_or(Ok(()), |suite| {
+        wheels::install(
+            paths,
+            runtime_dir,
+            env_dir,
+            suite,
+            super::command::INSTALL_TIMEOUT,
+        )
+    })
 }
 
 /// The environment's state as the settings pane and omp see it: the
@@ -778,7 +831,8 @@ EOF\n\
         let log = runtime.join("python-args");
         fake_runtime(&runtime, &fake_venv_runtime(&log), "#!/bin/sh\nexit 0\n");
 
-        let env_dir = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa").expect("ensure");
+        let env_dir =
+            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None).expect("ensure");
         let id = env_version_id("3.12.16", "aaaaaaaaaaaaaaaa").expect("id");
         assert_eq!(env_dir, paths.env_version_dir(&id));
         let python = env_python_bin(&env_dir);
@@ -797,7 +851,7 @@ EOF\n\
         // runtime interpreter is not started again.
         fs::remove_file(&log).expect("clear the log");
         assert_eq!(
-            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa").expect("reuse"),
+            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None).expect("reuse"),
             env_dir
         );
         assert!(!log.exists(), "the venv was rebuilt");
@@ -824,7 +878,7 @@ EOF\n\
              exit 0\n";
         fake_runtime(&runtime, body, "#!/bin/sh\nexit 0\n");
 
-        let error = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa")
+        let error = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None)
             .expect_err("an environment without pip");
         assert!(error.contains("no pip"), "error: {error}");
         let id = env_version_id("3.12.16", "aaaaaaaaaaaaaaaa").expect("id");
@@ -847,9 +901,9 @@ EOF\n\
             fake_runtime(runtime, &fake_venv_runtime(&log), "#!/bin/sh\nexit 0\n");
         }
 
-        let old = ensure_env(&paths, &first_runtime, "3.12.16", "aaaaaaaaaaaaaaaa")
+        let old = ensure_env(&paths, &first_runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None)
             .expect("first environment");
-        let new = ensure_env(&paths, &second_runtime, "3.12.17", "bbbbbbbbbbbbbbbb")
+        let new = ensure_env(&paths, &second_runtime, "3.12.17", "bbbbbbbbbbbbbbbb", None)
             .expect("second environment");
         assert_ne!(old, new);
         assert!(
@@ -874,10 +928,12 @@ EOF\n\
         let log = runtime.join("python-args");
         fake_runtime(&runtime, &fake_venv_runtime(&log), "#!/bin/sh\nexit 0\n");
 
-        let env_dir = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa").expect("ensure");
+        let env_dir =
+            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None).expect("ensure");
         let python = env_python_bin(&env_dir);
         fs::remove_file(&python).expect("damage the environment");
-        let rebuilt = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa").expect("rebuild");
+        let rebuilt =
+            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None).expect("rebuild");
         assert_eq!(rebuilt, env_dir);
         assert!(python.is_file());
         assert_eq!(
@@ -907,11 +963,108 @@ EOF\n\
             &runtime,
             "3.12.16",
             "aaaaaaaaaaaaaaaa",
+            None,
             std::time::Duration::from_millis(150),
         )
         .expect_err("a hung venv");
         assert!(error.contains("did not finish within"), "error: {error}");
         assert_eq!(published_env_dir(&paths), None);
+    }
+
+    /// The test wheelhouse from `wheels.rs`, loaded from `dir`.
+    fn test_wheelhouse(dir: &Path) -> Wheelhouse {
+        crate::python_runtime::wheels::tests::resources(dir);
+        wheels::load_wheelhouse(dir, "aarch64-apple-darwin")
+            .expect("load")
+            .expect("a wheelhouse")
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_bundled_suite_is_installed_into_its_own_version_before_publishing() {
+        let dir = TempDir::new("python-env", "suite");
+        let paths = test_paths(&dir.path().join("env"));
+        let suite = test_wheelhouse(&dir.path().join("res"));
+        let runtime = paths.runtime_dir("3.12.16", "test", "aaaaaaaaaaaaaaaa");
+        let log = runtime.join("python-args");
+        let uv_log = runtime.join("uv-args");
+        fake_runtime(
+            &runtime,
+            &fake_venv_runtime(&log),
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n",
+                uv_log.display()
+            ),
+        );
+
+        let env_dir = ensure_env(
+            &paths,
+            &runtime,
+            "3.12.16",
+            "aaaaaaaaaaaaaaaa",
+            Some(&suite),
+        )
+        .expect("ensure with the suite");
+        let plain = env_version_id("3.12.16", "aaaaaaaaaaaaaaaa").expect("id");
+        assert_eq!(
+            env_dir,
+            paths.env_version_dir(&format!("{plain}-{}", suite.version_suffix()))
+        );
+        assert_eq!(published_env_dir(&paths), Some(env_dir.clone()));
+        assert!(suite.is_installed_in(&env_dir));
+        let installs = fs::read_to_string(&uv_log).expect("uv ran");
+        assert!(installs.contains("--offline"), "uv: {installs}");
+
+        // Reused as is: neither the venv nor the suite install runs again.
+        fs::remove_file(&uv_log).expect("clear");
+        ensure_env(
+            &paths,
+            &runtime,
+            "3.12.16",
+            "aaaaaaaaaaaaaaaa",
+            Some(&suite),
+        )
+        .expect("reuse");
+        assert!(!uv_log.exists(), "the suite was installed again");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_version_without_the_finished_suite_is_not_published_as_complete() {
+        let dir = TempDir::new("python-env", "suite-crash");
+        let paths = test_paths(&dir.path().join("env"));
+        let suite = test_wheelhouse(&dir.path().join("res"));
+        let runtime = paths.runtime_dir("3.12.16", "test", "aaaaaaaaaaaaaaaa");
+        let log = runtime.join("python-args");
+        fake_runtime(&runtime, &fake_venv_runtime(&log), "#!/bin/sh\nexit 0\n");
+        let env_dir = ensure_env(
+            &paths,
+            &runtime,
+            "3.12.16",
+            "aaaaaaaaaaaaaaaa",
+            Some(&suite),
+        )
+        .expect("first build");
+
+        // A build that died after the venv but before the suite finished.
+        fs::remove_file(env_dir.join(".npi-wheelhouse")).expect("drop the marker");
+        fs::remove_file(paths.default_env_current_file()).expect("unpublish");
+        fs::remove_file(&log).expect("clear");
+        ensure_env(
+            &paths,
+            &runtime,
+            "3.12.16",
+            "aaaaaaaaaaaaaaaa",
+            Some(&suite),
+        )
+        .expect("rebuild");
+        assert!(suite.is_installed_in(&env_dir));
+        assert!(
+            fs::read_to_string(&log)
+                .expect("the runtime ran")
+                .contains("-m venv"),
+            "the incomplete version was published without rebuilding"
+        );
     }
 
     #[test]
@@ -920,8 +1073,8 @@ EOF\n\
         let paths = test_paths(dir.path());
         let runtime = paths.runtime_dir("3.12.16", "test", "aaaaaaaaaaaaaaaa");
 
-        let error =
-            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa").expect_err("no runtime");
+        let error = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None)
+            .expect_err("no runtime");
         assert!(error.contains("not installed"), "error: {error}");
     }
 
@@ -937,7 +1090,8 @@ EOF\n\
             &fake_venv_runtime(&log),
             "#!/bin/sh\necho 'uv 0.13.6 (abc 2026-10-26)'\n",
         );
-        let env_dir = ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa").expect("ensure");
+        let env_dir =
+            ensure_env(&paths, &runtime, "3.12.16", "aaaaaaaaaaaaaaaa", None).expect("ensure");
 
         let health = check_health(&paths, &runtime);
         assert!(health.ok, "message: {:?}", health.message);

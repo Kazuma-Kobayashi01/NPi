@@ -1,0 +1,10 @@
+# Scientific suite preinstalled into NPi's managed Python environment.
+#
+# Top-level requirements only. `scripts/build-python-wheelhouse.sh --relock`
+# resolves them into python-scientific.lock (exact versions plus SHA-256 for
+# every distribution); the wheelhouse is built from the lock, never from here.
+numpy
+scipy
+matplotlib
+pandas
+sympy

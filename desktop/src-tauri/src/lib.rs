@@ -40,6 +40,7 @@ mod git;
 mod git_browser;
 mod git_watcher;
 mod goal_config;
+mod sandbox_config;
 mod model_config;
 mod json_store;
 mod keybindings;
@@ -1484,6 +1485,30 @@ async fn goal_continuation_set(
     off_ipc(move || goal_config::set(profile.as_deref(), enabled)).await?
 }
 
+/// omp's process sandbox mode (`off`, `workspace-write`, `read-only`) for
+/// `profile` — see `sandbox_config::get`. Same profile resolution and
+/// `async` + `spawn_blocking` shape as [`goal_continuation_get`].
+#[tauri::command]
+async fn sandbox_mode_get(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<String, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || sandbox_config::get(profile.as_deref())).await?
+}
+
+/// Write omp's sandbox mode for `profile` and return the value omp reports
+/// afterwards — see `sandbox_config::set`. Tabs pick it up when they start.
+#[tauri::command]
+async fn sandbox_mode_set(
+    profile: Option<String>,
+    mode: String,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<String, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || sandbox_config::set(profile.as_deref(), &mode)).await?
+}
+
 /// Every chat model omp offers `profile` (no session needed) — see
 /// `model_config::catalog`.
 #[tauri::command]
@@ -2234,6 +2259,8 @@ pub fn run() {
             usage_stats,
             goal_continuation_get,
             goal_continuation_set,
+            sandbox_mode_get,
+            sandbox_mode_set,
             computer_use::computer_use_get,
             computer_use::computer_use_set,
             computer_use::computer_use_request_permission,

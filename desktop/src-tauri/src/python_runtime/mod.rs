@@ -4,7 +4,8 @@
 //! descriptor and the installed state), `lock` (the one OS file lock),
 //! `installer` (verifying, unpacking and proving a runtime), `command`
 //! (bounded helper runs), `environment` (the versioned virtualenv and its
-//! packages) and `manager` (the entry points).
+//! packages), `wheels` (the bundled offline package suite) and `manager`
+//! (the entry points).
 //!
 //! Two front doors share those entry points:
 //!
@@ -28,6 +29,7 @@ pub mod lock;
 pub mod manager;
 pub mod manifest;
 pub mod paths;
+pub mod wheels;
 
 use std::path::{Path, PathBuf};
 

@@ -239,6 +239,9 @@
       { name: "Approval mode", src: "approval-mode.json", rows: [
         custom("approvalMode", "Tool approval mode", "When the agent asks before it runs a tool: a default for every project, and projects that override it. A change restarts omp in the affected open tabs; conversations continue.", "yolo write always ask permission project override default"),
       ] },
+      { name: "Sandbox", src: "omp config", rows: [
+        custom("sandboxMode", "Process sandbox", "omp runs commands, eval, file tools and MCP servers inside a macOS Seatbelt sandbox. Workspace write: they can write only inside the project (its git repository), npi's own folders and temporary folders. Read only: not even the project. Reading files and network access stay open. Tabs started or restarted afterwards use it; it is the same setting as the CLI's sandbox.mode.", "sandbox seatbelt contain containment restrict write read only workspace isolation"),
+      ] },
       { name: "Standing rules", rows: [
         custom("approvalRules", "Always-allow rules", "Rules are only granted from a prompt; here you review and revoke them.", "rules always allow revoke saved answers"),
       ] },

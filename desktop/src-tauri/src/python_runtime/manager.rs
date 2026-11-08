@@ -21,6 +21,7 @@ use super::environment::{
 use super::installer::ensure_runtime_installed;
 use super::manifest::read_installed_state;
 use super::paths::EnvPaths;
+use super::wheels::load_wheelhouse;
 
 /// What the settings pane shows before any work happens.
 ///
@@ -113,13 +114,7 @@ impl PythonRuntimeManager {
         resource_dir: &Path,
         override_dir: Option<&Path>,
     ) -> Result<EnvironmentHealth, String> {
-        let (paths, bundled, runtime_dir) = ensure_runtime_installed(resource_dir, override_dir)?;
-        ensure_env(
-            &paths,
-            &runtime_dir,
-            &bundled.runtime_version,
-            &bundled.archive_sha256,
-        )?;
+        let (paths, runtime_dir, _env_dir) = Self::prepared(resource_dir, override_dir)?;
         let health = check_health(&paths, &runtime_dir);
         if !health.ok {
             return Err(health.message.unwrap_or_else(|| {
@@ -161,17 +156,20 @@ impl PythonRuntimeManager {
         install_packages(&paths, &runtime_dir, &env_dir, packages)
     }
 
-    /// The runtime and environment every command needs, installed and built.
+    /// The runtime and environment every command needs, installed and built,
+    /// with the bundled package suite when the app ships one.
     fn prepared(
         resource_dir: &Path,
         override_dir: Option<&Path>,
     ) -> Result<(EnvPaths, PathBuf, PathBuf), String> {
         let (paths, bundled, runtime_dir) = ensure_runtime_installed(resource_dir, override_dir)?;
+        let wheelhouse = load_wheelhouse(resource_dir, &bundled.platform)?;
         let env_dir = ensure_env(
             &paths,
             &runtime_dir,
             &bundled.runtime_version,
             &bundled.archive_sha256,
+            wheelhouse.as_ref(),
         )?;
         Ok((paths, runtime_dir, env_dir))
     }

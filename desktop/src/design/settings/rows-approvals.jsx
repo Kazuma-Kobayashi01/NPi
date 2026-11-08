@@ -7,6 +7,8 @@
      approvalRules  how many standing rules the active tab's session and
                     project have (OMP_BRIDGE.listApprovalRules) and
                     "Manage rules", which opens the approvals panel
+     sandboxMode    omp's `sandbox.mode` in the config of ctx.profileId
+                    (OMP_BRIDGE.sandboxMode / setSandboxMode)
    ═════════════════════════════════════════════════════════════════════ */
 
 /** The rendered tab's entry, null with no tab (EMPTY_PROJECT has no id). */
@@ -47,7 +49,48 @@ function _SRAp_Rules({ row, ctx, query }) {
   );
 }
 
+const _SRAp_SANDBOX_OPTIONS = [
+  { value: "off", label: "Off" },
+  { value: "workspace-write", label: "Workspace write" },
+  { value: "read-only", label: "Read only" },
+];
+
+function _SRAp_Sandbox({ row, ctx, query }) {
+  const { SettingsRow: Row, SettingsSeg: Seg } = window;
+  const { bridge, profileId } = ctx;
+  const [state, setState] = React.useState({ profileId, value: null, error: "", busy: false });
+  React.useEffect(() => {
+    let current = true;
+    setState({ profileId, value: null, error: "", busy: false });
+    bridge.sandboxMode(profileId).then(res => {
+      if (current) setState({ profileId, value: res.ok ? res.value : null, error: res.ok ? "" : res.error, busy: false });
+    });
+    return () => { current = false; };
+  }, [bridge, profileId]);
+  const save = mode => {
+    if (state.busy || mode === state.value) return;
+    setState(s => ({ ...s, busy: true, error: "" }));
+    bridge.setSandboxMode(profileId, mode).then(res => {
+      // A reply for a profile the row no longer shows is dropped.
+      setState(s => s.profileId !== profileId ? s
+        : { ...s, busy: false, value: res.ok ? res.value : s.value, error: res.ok ? "" : res.error });
+    });
+  };
+  const ready = state.profileId === profileId && state.value !== null;
+  return (
+    <>
+      <Row label={row.label} desc={row.desc} query={query}>
+        {ready
+          ? <Seg label={row.label} options={_SRAp_SANDBOX_OPTIONS} value={state.value} onChange={save} />
+          : <span className="st-ro">{state.error ? "unavailable" : "reading…"}</span>}
+      </Row>
+      {state.error && <div className="st-row-error">{state.error}</div>}
+    </>
+  );
+}
+
 Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
   approvalMode: _SRAp_Mode,
   approvalRules: _SRAp_Rules,
+  sandboxMode: _SRAp_Sandbox,
 });

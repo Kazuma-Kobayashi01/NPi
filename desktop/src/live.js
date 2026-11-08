@@ -3818,6 +3818,18 @@
       return _invokeResult("goal_continuation_set", { profile, enabled });
     },
 
+    /** omp's process sandbox mode for `profile` (src-tauri sandbox_config.rs):
+     *  `{ok, value}` with "off" / "workspace-write" / "read-only", or
+     *  `{ok: false, error}`. Same value as the CLI's `sandbox.mode`. */
+    sandboxMode(profile) {
+      return _invokeResult("sandbox_mode_get", { profile });
+    },
+    /** Writes it for `profile`; tabs started afterwards run under it. Same
+     *  result shape, with the mode omp reports afterwards. */
+    setSandboxMode(profile, mode) {
+      return _invokeResult("sandbox_mode_set", { profile, mode });
+    },
+
     computerUseGet(profile) {
       return _invokeResult("computer_use_get", { profile });
     },

@@ -285,7 +285,7 @@ fn verify_archive(archive: &Path, bundled: &BundledRuntimeManifest) -> Result<()
 
 /// SHA-256 of a file's contents, read in 64 KiB chunks so a 40 MB archive is
 /// never held in memory.
-fn sha256_file(path: &Path) -> Result<String, String> {
+pub(super) fn sha256_file(path: &Path) -> Result<String, String> {
     let mut file = File::open(path).map_err(|e| format!("cannot open {}: {e}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0_u8; 64 * 1024];
