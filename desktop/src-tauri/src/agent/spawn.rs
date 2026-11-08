@@ -282,8 +282,13 @@ fn omp_args(
 
 /// What a Chat session starts with: its tools, and no thinking, which conversation does not need
 /// and which delays the first word. A resumed chat keeps the level the user last chose.
-fn chat_flags(resume: Option<&str>) -> Vec<String> {
-    let mut flags = vec![format!("--tools={CHAT_TOOLS}")];
+fn chat_flags(resume: Option<&str>, image_gen: bool) -> Vec<String> {
+    let tools = if image_gen {
+        CHAT_TOOLS_WITH_IMAGE_GEN
+    } else {
+        CHAT_TOOLS
+    };
+    let mut flags = vec![format!("--tools={tools}")];
     if resume.is_none_or(str::is_empty) {
         flags.push("--thinking=off".to_string());
     }
@@ -303,11 +308,62 @@ const SIDECHAT_FLAGS: &[&str] = &[
 ];
 
 /// The built-in tools Chat mode keeps (`--tools=`): web search and reading a URL
-/// or file. omp refuses to start when a named tool is unavailable in the
-/// session (memory tools need a configured backend), so only these two are
-/// named; the generative-UI and host tools (remember, hand-off) are not
-/// built-ins and stay available.
+/// or file, plus `generate_image` when enabled for this session. omp refuses to
+/// start when a named tool is unavailable in the session (`generate_image`
+/// registers only when `generate_image.enabled` is true), so `generate_image`
+/// joins the whitelist only after a matching config check; the generative-UI
+/// and host tools (remember, hand-off) are not built-ins and stay available.
 const CHAT_TOOLS: &str = "web_search,read";
+const CHAT_TOOLS_WITH_IMAGE_GEN: &str = "web_search,read,generate_image";
+const GENERATE_IMAGE_SETTING: &str = "generate_image.enabled";
+
+/// Whether `generate_image.enabled` is on in the exact profile, resolved cwd
+/// and `--config` overlay that [`spawn_omp`] hands to the session itself.
+fn image_gen_enabled(
+    omp: &Omp,
+    profile: Option<&str>,
+    resolved_cwd: Option<&str>,
+    config: Option<&Path>,
+) -> Result<bool, String> {
+    #[derive(serde::Deserialize)]
+    struct ConfigValue {
+        value: bool,
+    }
+    let mut cmd = omp.command();
+    if let Some(flag) = profile_flag(profile) {
+        cmd.arg(flag);
+    }
+    cmd.args(["config", "get", GENERATE_IMAGE_SETTING, "--json"]);
+    if let Some(dir) = resolved_cwd {
+        cmd.current_dir(dir);
+    }
+    if let Some(overlay) = config {
+        let inherited = std::env::var_os("PI_CONFIG_FILES");
+        let paths = inherited
+            .as_deref()
+            .into_iter()
+            .flat_map(std::env::split_paths)
+            .filter(|path| !path.as_os_str().is_empty())
+            .chain(std::iter::once(overlay.to_path_buf()));
+        let joined =
+            std::env::join_paths(paths).map_err(|e| format!("invalid PI_CONFIG_FILES: {e}"))?;
+        cmd.env("PI_CONFIG_FILES", joined);
+    }
+    let output = crate::spawn_gate::output(&mut cmd)
+        .map_err(|e| format!("failed to run {}: {e}", omp.binary.display()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = stderr.trim();
+        return Err(if stderr.is_empty() {
+            format!("omp config exited with {}", output.status)
+        } else {
+            format!("omp config failed: {stderr}")
+        });
+    }
+    serde_json::from_slice::<ConfigValue>(&output.stdout)
+        .map(|cfg| cfg.value)
+        .map_err(|e| format!("unexpected {GENERATE_IMAGE_SETTING} from omp: {e}"))
+}
 
 // ── session spawn ─────────────────────────────────────────────────────────────
 
@@ -403,11 +459,13 @@ pub(crate) fn spawn_omp(
         args.splice(at..at, SIDECHAT_FLAGS.iter().map(|flag| (*flag).to_string()));
     }
     if app_mode == "chat" && !sidechat {
-        // Chat changes nothing: only the web and read tools, plus the
-        // host and UI tools omp always keeps. The coding tools, MCP servers and
-        // skills' tool schemas stay out of every request.
+        // Chat changes nothing: only the web and read tools (plus generate_image
+        // when enabled for this session), and the host and UI tools omp always
+        // keeps. The coding tools, MCP servers and skills' tool schemas stay out
+        // of every request.
+        let image_gen = image_gen_enabled(&omp, profile, resolved_cwd.as_deref(), config)?;
         let at = args.len() - usize::from(config.is_some());
-        args.splice(at..at, chat_flags(resume));
+        args.splice(at..at, chat_flags(resume, image_gen));
     }
     if let Some(text) = prompt {
         // Replaces omp's default prompt (omp still adds the skills list). Before the `--config` token, which stays last.
@@ -675,9 +733,23 @@ mod tests {
 
     #[test]
     fn a_new_chat_starts_without_thinking_and_a_resumed_one_keeps_its_level() {
-        assert!(super::chat_flags(None).contains(&"--thinking=off".to_string()));
-        assert!(super::chat_flags(Some("")).contains(&"--thinking=off".to_string()));
-        assert_eq!(super::chat_flags(Some("/s.jsonl")).len(), 1);
+        assert_eq!(
+            super::chat_flags(None, false),
+            vec!["--tools=web_search,read", "--thinking=off"]
+        );
+        assert_eq!(
+            super::chat_flags(Some(""), true),
+            vec!["--tools=web_search,read,generate_image", "--thinking=off"]
+        );
+        assert_eq!(
+            super::chat_flags(Some("/s.jsonl"), false),
+            vec!["--tools=web_search,read"]
+        );
+        assert_eq!(
+            super::chat_flags(Some("/s.jsonl"), true),
+            vec!["--tools=web_search,read,generate_image"]
+        );
+        assert!(super::SIDECHAT_FLAGS.contains(&"--no-tools"));
     }
 
     #[test]

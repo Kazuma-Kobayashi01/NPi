@@ -87,6 +87,7 @@ const TOOL_META = {
   edit:    { color: "var(--accent)",  icon: "diff",   label: "Edit" },
   bash:    { color: "var(--amber)",   icon: "bash",   label: "Bash" },
   write:   { color: "var(--magenta)", icon: "edit",   label: "Write" },
+  generate_image: { color: "var(--magenta)", icon: "image", label: "Image" },
   todo:    { color: "var(--lime)",    icon: "plan",  label: "Todo"  },
   eval:    { color: "var(--rose)",    icon: "test",  label: "Eval"  },
   task:    { color: "var(--cyan)",    icon: "agent", label: "Task"  },

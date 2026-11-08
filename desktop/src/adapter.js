@@ -209,6 +209,8 @@
       .slice(0, _MAX_CARD_IMAGES)
       .map(b => ({ type: "image", data: b.data, mimeType: b.mimeType }));
   }
+  // Device writes wrap generate_image's details in details.xdev.inner.
+  const _XD_HELP_RE = /^\s*(\?|help)?\s*$/i;
   // Cut the last occurrence of `notice`, with one newline on each side.
   // Mirrors omp's stripTrailingNotice (packages/tui/src/tools/output-meta.ts).
   function _stripNotice(text, notice) {
@@ -279,13 +281,17 @@
   // ── tool_execution_start → running tool card ──────────────────────────────
   // Verified fields: ev.toolName, ev.toolCallId, ev.args (object), ev.intent
   function buildToolStartCard(event, time) {
-    const tool = normalizeToolName(event.toolName ?? "");
-    // args is a plain object; extract a display target from common arg names
-    const args   = (typeof event.args === "object" && event.args !== null) ? event.args : {};
+    const rawArgs = (typeof event.args === "object" && event.args !== null) ? event.args : {};
+    const rawName = event.toolName ?? "";
+    const isXdImage = rawName === "write" && rawArgs.path === "xd://generate_image"
+      && !!rawArgs.content && !_XD_HELP_RE.test(rawArgs.content);
+    const effectiveName = isXdImage ? "generate_image" : rawName;
+    const tool = normalizeToolName(effectiveName);
+    const args = isXdImage ? JSON.parse(rawArgs.content) : rawArgs;
     const editPaths = tool === "edit" && typeof args.input === "string" ? _editInputPaths(args.input) : [];
     const target = (editPaths.length ? editPaths.join(", ") : undefined)
                 ?? args.path ?? args.pattern ?? args.command ?? args.query
-                ?? args.expression ?? args.url
+                ?? args.subject ?? args.expression ?? args.url
                 // omp's goal tool: the operation (create, get, complete…).
                 ?? (tool === "goal" ? args.op : undefined)
                 ?? (tool === "eval" && args.input
@@ -293,8 +299,9 @@
                       : "")
                 ?? "";
     // Use intent (one-line description written by the agent) when available
-    const title = event.intent
-      ?? (target ? `${event.toolName} · ${target}` : (event.toolName ?? tool));
+    const intent = event.intent;
+    const title = intent
+      ?? (target ? `${effectiveName} · ${target}` : (effectiveName || tool));
     return {
       kind: "tool", tool, title,
       target: String(target),
@@ -313,11 +320,19 @@
 
   // ── tool_execution_end → finalized tool card ──────────────────────────────
   function finalizeToolCard(card, event) {
-    const duration = card._startMs ? Date.now() - card._startMs : (event.duration ?? 0);
-    const details  = event.result?.details;
-    const extra    = {};
+    const duration   = card._startMs ? Date.now() - card._startMs : (event.duration ?? 0);
+    const rawDetails = event.result?.details;
+    const xdev       = rawDetails?.xdev;
+    const isXdImage  = xdev?.tool === "generate_image" && xdev.mode === "execute";
+    const tool       = isXdImage ? "generate_image" : card.tool;
+    const details    = isXdImage ? xdev.inner : rawDetails;
+    const extra      = {};
+    if (isXdImage && card.tool !== "generate_image") {
+      extra.tool = "generate_image";
+      if (card.targets) extra.targets = undefined;
+    }
 
-    if (card.tool === "search" && details?.matches) {
+    if (tool === "search" && details?.matches) {
       extra.preview = Object.entries(details.matches).slice(0, 5).map(([file, hits]) => ({
         file,
         hits: Array.isArray(hits) ? hits.length : (hits ?? 0),
@@ -377,11 +392,27 @@
       if (images.length) extra.images = images;
     }
     // omp's write result: "Successfully wrote N bytes to <path>".
-    if (card.tool === "write") {
+    if (tool === "write") {
       const bytes = _resultText(event.result).match(/\bwrote (\d+) bytes\b/)?.[1];
       if (bytes) extra.bytes = Number(bytes);
     }
-    if (card.tool === "task") {
+    if (tool === "generate_image") {
+      if (xdev?.args?.subject) extra.target = xdev.args.subject;
+      const images = (details?.images ?? []).slice(0, _MAX_CARD_IMAGES);
+      if (images.length) extra.images = images;
+      extra.imagePaths = details?.imagePaths ?? [];
+      extra.provider = details?.provider;
+      extra.model = details?.model;
+      extra.resultText = _resultText(event.result).trim();
+      extra.responseText = details?.responseText;
+      const firstImg = images[0];
+      extra.summary = [
+        details?.provider && `${details.provider}/${details.model}`,
+        firstImg?.size,
+        firstImg?.quality && `quality ${firstImg.quality}`,
+      ].filter(Boolean).join(" · ");
+    }
+    if (tool === "task") {
       const progress = details?.progress ?? card.subagents ?? [];
       const results  = details?.results  ?? [];
       const byIdx    = new Map(results.map(r => [r.index, r]));
@@ -413,8 +444,11 @@
       }
     }
 
-    // `isError`: omp's verdict; a failed call stays open under "folded".
-    return { ...card, status: "ok", duration, isError: !!event.isError, ...extra };
+    // `isError`: omp's verdict; a `generate_image` call that returned no
+    // images is also treated as failed so an empty response never looks like
+    // a completed image generation. A failed call stays open under "folded".
+    const isError = !!event.isError || (tool === "generate_image" && !extra.images?.length);
+    return { ...card, status: "ok", duration, isError, ...extra };
   }
 
   // ── tool_execution_update → partial card update (streaming) ─────────────────

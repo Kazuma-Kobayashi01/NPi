@@ -161,4 +161,126 @@ check("a write card names its file and takes the size from omp's result text", (
   assert.equal(failed.bytes, undefined);
 });
 
+check("generate_image cards surface details.images, output paths, provider/model, and xdev write dispatches", () => {
+  const directStart = buildToolStartCard({
+    toolName: "generate_image",
+    toolCallId: "img-1",
+    args: { subject: "a red fox in snow" },
+    intent: "Generating red fox",
+  }, "12:00");
+  assert.equal(directStart.tool, "generate_image");
+  assert.equal(directStart.target, "a red fox in snow");
+
+  const directDone = finalizeToolCard(directStart, {
+    isError: false,
+    result: {
+      content: [{
+        type: "text",
+        text: "Provider: openai-codex\nModel: gpt-image-2-codex (catalog entry openai-codex/gpt-image-2)\nGenerated 1 image(s):\n  /tmp/omp-image-1.webp (1254x1254, quality low)",
+      }],
+      details: {
+        provider: "openai-codex",
+        model: "gpt-image-2-codex",
+        imageCount: 1,
+        imagePaths: ["/tmp/omp-image-1.webp"],
+        images: [{ data: "FOXDATA", mimeType: "image/webp", size: "1254x1254", quality: "low" }],
+      },
+    },
+  });
+  assert.equal(directDone.isError, false);
+  assert.equal(directDone.provider, "openai-codex");
+  assert.equal(directDone.model, "gpt-image-2-codex");
+  assert.deepEqual(arr(directDone.imagePaths), ["/tmp/omp-image-1.webp"]);
+  assert.equal(directDone.images.length, 1);
+  assert.equal(directDone.images[0].data, "FOXDATA");
+  assert.equal(directDone.images[0].mimeType, "image/webp");
+  assert.equal(directDone.summary, "openai-codex/gpt-image-2-codex · 1254x1254 · quality low");
+
+  // Under tools.xdev, generate_image runs as `write` targeting `xd://generate_image`
+  // with JSON args in `content` and result details wrapped in `details.xdev.inner`.
+  const xdStart = buildToolStartCard({
+    toolName: "write",
+    toolCallId: "img-2",
+    args: { path: "xd://generate_image", content: JSON.stringify({ subject: "a red fox" }) },
+  }, "12:01");
+  assert.equal(xdStart.tool, "generate_image");
+  assert.equal(xdStart.target, "a red fox");
+  assert.equal(xdStart.targets, undefined);
+
+  const xdDone = finalizeToolCard(xdStart, {
+    isError: false,
+    result: {
+      content: [{ type: "text", text: "Generated 1 image(s):\n  /tmp/omp-image-2.webp" }],
+      details: {
+        xdev: {
+          tool: "generate_image",
+          mode: "execute",
+          args: { subject: "a red fox" },
+          tier: "write",
+          inner: {
+            provider: "openai-codex",
+            model: "gpt-image-2-codex",
+            imageCount: 1,
+            imagePaths: ["/tmp/omp-image-2.webp"],
+            images: [{ data: "XDFOX", mimeType: "image/webp", size: "1254x1254", quality: "low" }],
+          },
+        },
+      },
+    },
+  });
+  assert.equal(xdDone.tool, "generate_image");
+  assert.equal(xdDone.isError, false);
+  assert.deepEqual(arr(xdDone.imagePaths), ["/tmp/omp-image-2.webp"]);
+  assert.equal(xdDone.images[0].data, "XDFOX");
+  assert.equal(xdDone.provider, "openai-codex");
+  assert.equal(xdDone.model, "gpt-image-2-codex");
+});
+
+check("generate_image cards treat empty-image results and errors as failed and keep the reason", () => {
+  const startCard = buildToolStartCard({
+    toolName: "write",
+    toolCallId: "img-empty",
+    args: { path: "xd://generate_image", content: JSON.stringify({ subject: "blocked prompt" }) },
+  }, "12:02");
+  const emptyDone = finalizeToolCard(startCard, {
+    isError: false,
+    result: {
+      content: [{ type: "text", text: "No image data returned.\n\nRefused by safety system." }],
+      details: {
+        xdev: {
+          tool: "generate_image",
+          mode: "execute",
+          args: { subject: "blocked prompt" },
+          inner: {
+            provider: "openai-codex",
+            model: "gpt-image-2-codex",
+            imageCount: 0,
+            imagePaths: [],
+            images: [],
+            responseText: "Refused by safety system.",
+          },
+        },
+      },
+    },
+  });
+  assert.equal(emptyDone.isError, true);
+  assert.equal(emptyDone.images, undefined);
+  assert.equal(emptyDone.provider, "openai-codex");
+  assert.equal(emptyDone.model, "gpt-image-2-codex");
+  assert.match(emptyDone.resultText, /No image data returned/);
+
+  const errDone = finalizeToolCard(startCard, {
+    isError: true,
+    result: {
+      content: [{ type: "text", text: "Image generation exhausted the resolved image chain: openai-codex/gpt-image-2." }],
+      details: {
+        xdev: { tool: "generate_image", mode: "execute", args: { subject: "blocked prompt" } },
+      },
+    },
+  });
+  assert.equal(errDone.isError, true);
+  assert.equal(errDone.images, undefined);
+  assert.match(errDone.resultText, /exhausted the resolved image chain/);
+});
+
 console.log(`tool-output: ${passed} checks passed`);

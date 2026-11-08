@@ -45,6 +45,45 @@ function _TC_ReadBody({ msg, projectRoot, onPreviewFile }) {
   );
 }
 
+// A generate_image card's output path(s), actual provider/model summary,
+// generated image thumbnails (opening ImageLightbox), and failure/no-image
+// or provider text notes.
+function _TC_ImageBody({ msg, projectRoot, onPreviewFile }) {
+  const paths = msg.imagePaths ?? [];
+  const modelInfo = msg.summary;
+  const note = msg.isError ? msg.resultText : msg.responseText;
+  return (
+    <React.Fragment>
+      {(paths.length > 0 || modelInfo) && (
+        <div className="tool-foot mono selectable">
+          <span style={{ color: "var(--fg-3)" }}>↳</span>
+          {paths.map((p, i) => {
+            const target = _TC_readTarget(p);
+            const previewable = !!(onPreviewFile && projectRoot && target && _TC_inProject(target.path, projectRoot));
+            return (
+              <React.Fragment key={i}>
+                {i > 0 && ", "}
+                {previewable ? (
+                  <button type="button" className="diff-path" onClick={() => onPreviewFile(target)} title="Preview the file">{p}</button>
+                ) : (
+                  <span className="fp-path-outside">{p}</span>
+                )}
+              </React.Fragment>
+            );
+          })}
+          {modelInfo && <span style={{ color: "var(--fg-3)" }}>{paths.length > 0 ? `· ${modelInfo}` : modelInfo}</span>}
+        </div>
+      )}
+      <_TC_Thumbs images={msg.images} className="tool-images" alt="generated image" />
+      {note && (
+        <pre className="tool-bash mono selectable" style={{ color: msg.isError ? "var(--rose)" : "var(--fg-2)" }}>
+          {note}
+        </pre>
+      )}
+    </React.Fragment>
+  );
+}
+
 function ScrubbableDiff({ msg, onOpenFile }) {
   const total = msg.diff.length;
   const [pos, setPos]     = React.useState(total);
@@ -243,6 +282,8 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
           )}
 
           {msg.tool === "read" && <_TC_ReadBody msg={msg} projectRoot={projectRoot} onPreviewFile={onPreviewFile} />}
+
+          {msg.tool === "generate_image" && <_TC_ImageBody msg={msg} projectRoot={projectRoot} onPreviewFile={onPreviewFile} />}
 
           {msg.tool === "write" && msg.targets?.length > 0 && (
             <div className="tool-foot mono">

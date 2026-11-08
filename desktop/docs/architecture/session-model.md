@@ -33,9 +33,12 @@ Display UI, but keeps ordinary conversation concise, honors text-only
 preferences, and uses Interactive UI only for necessary bounded input.
 Permissions and mandatory Ask gates are unchanged. Available research
 surfaces are `web_search` (text-source discovery), `read` (known URLs), and
-the enabled eval `browser` prelude for dynamic pages. There is no dedicated
-image-search tool or interactive map renderer; real source-page images and
-static map images can be displayed without pretending otherwise.
+the enabled eval `browser` prelude for dynamic pages. When `generate_image.enabled`
+is true in the session's profile/config scope, `generate_image` is added to Chat's
+`--tools` allowlist and rendered directly on its tool card; otherwise Chat keeps
+`--tools=web_search,read`. There is no dedicated image-search tool or interactive
+map renderer; real source-page images and static map images can be displayed
+without pretending otherwise.
 
 `OMP_CHAT_IMAGE` supplies the shared `MarkdownMediaContext` for Markdown
 and `ui.present` image components. A component's `src`, optional real

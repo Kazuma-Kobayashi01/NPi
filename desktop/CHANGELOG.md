@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Image generation (`generate_image`, including `xd://generate_image` device calls): tool cards now render generated image thumbnails with the lightbox viewer, output path, actual `provider/model` and size/quality summary, and surface empty-image or error responses as failed cards; Chat sessions include `generate_image` in their tool allowlist when `generate_image.enabled` is turned on for the session's profile.
+
 - `[anchor N]` in an answer of an Academic project's tab (Academic session or Copilot) is a link: a click opens the reader on that page with the passage marked. The project's tool guide asks the model to keep the anchors the research tools give beside the claims they support.
 - Librarian: "Read page 1 with the model…" for a reference whose PDF shows no DOI. After a confirmation saying what is sent, page 1's text goes to the profile's model (no tools); what it reads shows like an online lookup, blank fields ticked, and only Save writes it.
 - History, approvals, Todo and plan, and the git browser open as their own windows, like the Librarian. They show the main window's current tab and act on it there (`app/panel-link.js`); Settings stays inside the main window.

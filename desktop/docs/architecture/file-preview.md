@@ -44,6 +44,7 @@ A range is `{ from, to }`, 1-based and inclusive; one line and an open-ended sta
 
 - read: `images`, the result's `{type:"image"}` blocks, at most 4. omp sends them only when the model takes image input. A failed or text-only read has none. The card shows them with `ImageThumbs` (`chat/image-lightbox.jsx`), the user bubble's thumbnail strip.
 - write: `targets: [args.path]` at start. On finish, `bytes` is parsed from omp's `Successfully wrote N bytes to …`.
+- generate_image (including `write` calls targeting `xd://generate_image`, whose details arrive under `details.xdev.inner`): `images` from `details.images`, `imagePaths`, `provider`, `model`, `summary`, `resultText`, and `responseText`. A call that returns no images is marked `isError: true`.
 
 Tool cards come only from live `tool_execution_*` frames; the get_messages merge keeps them in place, so these fields need no rebuild path.
 
