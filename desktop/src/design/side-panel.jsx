@@ -90,7 +90,7 @@ function _SP2_CtxRow({ p, total, fmt }) {
   );
 }
 
-function ContextCard({ breakdown, onCompact, compacting, disabled }) {
+function ContextCard({ breakdown, onCompact, onDetails, compacting, disabled }) {
   const fmt = window.formatTokens;
   if (!breakdown) {
     return <SideCard title="Context"><div className="sp-dim">Nothing sent yet.</div></SideCard>;
@@ -111,9 +111,14 @@ function ContextCard({ breakdown, onCompact, compacting, disabled }) {
         {parts.map(p => <_SP2_CtxRow key={p.key} p={p} total={total} fmt={fmt} />)}
       </div>
       <div className="sp-note">Parts are text estimates reconciled to the reported total. Native payloads and images are not separately sized.</div>
-      {onCompact && (
+      {(onCompact || onDetails) && (
         <div className="sp-foot-action">
-          <button
+          {onDetails && (
+            <button type="button" className="btn ghost is-floating sp-compact-btn" onClick={onDetails} title="What the context is made of, request by request">
+              <span>Details</span>
+            </button>
+          )}
+          {onCompact && <button
             type="button"
             className="btn ghost is-floating sp-compact-btn"
             disabled={disabled || compacting || used === 0}
@@ -127,7 +132,7 @@ function ContextCard({ breakdown, onCompact, compacting, disabled }) {
             ) : (
               <span>Compact Context</span>
             )}
-          </button>
+          </button>}
         </div>
       )}
     </SideCard>

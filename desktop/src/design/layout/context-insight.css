@@ -1,0 +1,101 @@
+/* Context details panel (design/context-insight-modal.jsx and
+   context-insight-charts.jsx): the stats panel's card holding KPI tiles,
+   bordered cards, the composition donut, the trend chart and chips. */
+/* Resizable from the corner grip (the size is remembered by the modal);
+   window-chrome's zoom (.wc-zoomed) still fills the window. Children size
+   against the panel through container units. */
+.bridge-scrim.ci-scrim { padding-top: 2.5vh; }
+.ci-panel {
+  width: min(1120px, calc(100vw - 40px)); height: min(900px, calc(95vh - 16px));
+  min-width: min(520px, calc(100vw - 16px)); min-height: min(360px, calc(100vh - 16px));
+  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);
+  resize: both; container-type: size;
+}
+.ci-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: var(--d-text-sm); color: var(--fg-2); }
+.ci-empty { color: var(--fg-4); font-size: var(--d-text-xs); padding: 4px 0; }
+.ci-empty.big { padding: 40px 0; text-align: center; font-size: var(--d-text-sm); }
+
+/* ── KPI tiles ── */
+.ci-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ci-tile {
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; min-width: 0;
+  border-radius: 10px; background: var(--bg-surface); border: 1px solid var(--line);
+}
+.ci-tile-value { font-family: var(--font-mono); font-size: calc(var(--d-text-lg) + 3px); font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ci-tile-label { color: var(--fg-4); font-size: var(--d-text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Cards ── */
+.ci-card {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--bg-surface);
+}
+.ci-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ci-card-title { color: var(--fg); font-weight: 600; font-size: var(--d-text-sm); }
+.ci-card-extra { color: var(--fg-4); font-family: var(--font-mono); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; }
+.ci-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+/* ── Composition: donut + legend ── */
+.ci-composition { display: flex; align-items: center; gap: 20px; }
+.ci-donut { position: relative; flex: none; width: clamp(132px, 15cqw, 210px); aspect-ratio: 1; }
+.ci-donut svg { width: 100%; height: 100%; display: block; }
+.ci-donut-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ci-donut-label strong { color: var(--fg); font-family: var(--font-mono); font-size: var(--d-text-lg); }
+.ci-donut-label span { color: var(--fg-4); font-size: var(--d-text-xs); }
+.ci-legend { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+.ci-legend-row { display: flex; align-items: center; gap: 8px; min-height: 22px; min-width: 0; }
+.ci-legend-label { flex: 0 1 auto; min-width: 0; width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
+.ci-mini { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; min-width: 24px; }
+.ci-mini > span { display: block; height: 100%; border-radius: 2px; }
+.ci-legend-num, .ci-legend-pct { flex: none; font-family: var(--font-mono); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; text-align: right; }
+.ci-legend-num { color: var(--fg-2); min-width: 4.2em; }
+.ci-legend-pct { color: var(--fg-4); min-width: 2.6em; }
+
+/* ── Trend ── */
+.ci-key { display: flex; align-items: center; gap: 14px; color: var(--fg-4); font-size: var(--d-text-xs); }
+.ci-key i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: -0.5px; }
+.ci-key-range { margin-left: auto; font-family: var(--font-mono); }
+.ci-trend-wrap { display: flex; flex-direction: column; gap: 6px; }
+.ci-trend-plot { display: flex; gap: 8px; height: clamp(150px, 26cqh, 420px); }
+.ci-axis { display: flex; flex-direction: column; justify-content: space-between; color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; text-align: right; min-width: 3.4em; margin: -6px 0; }
+.ci-bars { position: relative; flex: 1; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--line-bright); }
+.ci-grid-line { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--line); pointer-events: none; }
+.ci-bar { position: relative; flex: 1; min-width: 2px; display: flex; flex-direction: column; border-radius: 2px 2px 0 0; overflow: hidden; opacity: 0.82; cursor: default; transition: opacity 80ms; }
+.ci-bar:hover, .ci-bar.sel { opacity: 1; }
+.ci-bar.sel { box-shadow: 0 0 0 1px var(--fg-3); }
+.ci-bar-fresh { background: var(--amber); flex-basis: 0; }
+.ci-bar-cached { background: var(--accent); flex-basis: 0; }
+.ci-turns { display: flex; gap: 2px; margin-left: calc(3.4em + 8px); }
+.ci-turns span { flex-basis: 0; min-width: 0; height: 16px; border-radius: 3px; background: var(--bg-hover); color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; line-height: 16px; text-align: center; overflow: hidden; }
+.ci-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--line); }
+.ci-detail-title { color: var(--fg); font-weight: 600; margin-right: auto; }
+.ci-pill { padding: 2px 8px; border-radius: var(--r-pill); background: var(--bg-hover); color: var(--fg); font-family: var(--font-mono); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; }
+.ci-pill.dim { color: var(--fg-3); }
+
+/* ── Chips and files ── */
+.ci-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ci-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; max-width: 100%;
+  border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg-elevated);
+  font-family: var(--font-mono); font-size: var(--d-text-xs); color: var(--fg-2);
+}
+.ci-chip strong { color: var(--fg); font-weight: 600; }
+.ci-chip-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.ci-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-chip-err { color: var(--rose); }
+.ci-chip.more { color: var(--fg-4); cursor: pointer; }
+.ci-chip.more:hover { color: var(--fg); background: var(--bg-hover); }
+.ci-files { display: flex; flex-direction: column; max-height: clamp(200px, 30cqh, 480px); overflow-y: auto; }
+.ci-file { display: flex; align-items: center; gap: 6px; min-height: 24px; border-bottom: 1px solid var(--line-soft, var(--line)); }
+.ci-file:last-child { border-bottom: none; }
+.ci-file-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: var(--d-text-xs); color: var(--fg-2); }
+.ci-badge { flex: none; padding: 0 7px; border-radius: var(--r-pill); font-family: var(--font-mono); font-size: 10px; line-height: 17px; }
+.ci-badge.read { color: var(--cyan); background: color-mix(in oklab, var(--cyan) 14%, transparent); }
+.ci-badge.write { color: var(--amber); background: color-mix(in oklab, var(--amber) 16%, transparent); }
+
+.sp-foot-action .sp-compact-btn + .sp-compact-btn { margin-left: 4px; }
+@container (max-width: 680px) {
+  .ci-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ci-row, .ci-legend { grid-template-columns: 1fr; }
+  .ci-composition { flex-direction: column; align-items: stretch; }
+  .ci-donut { align-self: center; }
+}

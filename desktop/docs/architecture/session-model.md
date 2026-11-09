@@ -122,6 +122,28 @@ count in this RPC and are not priced by base64/ciphertext length.
 `tokensBefore` and optional `tokensAfter` are whole-context before/after
 compaction metadata, never the token size of the summary itself.
 
+The card's **Details** button opens **Context details**
+(`design/context-insight-modal.jsx`; donut, trend and chips in
+`design/context-insight-charts.jsx`, loaded before it): KPI tiles, the whole
+context as a donut (the card's fixed parts plus the Messages split), a
+per-request trend with turn bands and a hover detail strip, tool and command
+chips, and file activity. Its data is `ctxBreakdown.insight`,
+which `live.js` (`_contextBreakdown`) computes with
+`OMP_CONTEXT_INSIGHT.analyze(contextMessages, messagesTokens)`
+(`app/context-insight.js`) from the same active context, so it travels in the
+same snapshot field and never sees discarded history. It splits the Messages
+share into your messages / answers / reasoning / tool calls / tool results /
+other, with the text estimates scaled together (up or down) to exactly the
+Messages total: about 4 characters a token runs low on code and JSON, and an
+unscaled residual read as half the context being "overhead". Images are
+counted, not sized. It lists per-request context from each assistant
+message's `usage` (the last 60 of all requests, cached share, cache-hit rate),
+tool calls and errors, files read and edited (`read`/`write`/`edit`/`ast_edit`
+paths, read ranges stripped) and shell programs (`bash` calls and `!`
+executions, one per segment of a quote-aware split; heredoc bodies, quoted
+text and wrapper words such as `sudo`/`env` are skipped). Ideas after
+dsh-context (Apache-2.0); no code shared.
+
 ## Todo and plan rail card
 
 The ambient rail's bottom `TodoPlanCard` (`design/side-panel.jsx`, wired through `AmbientRail` in `design/chrome.jsx`) receives the active session's `kanban` and counts from `app-live.jsx`. Its header uses the same local disclosure interaction as other `SideCard` cards: initially folded, click/Enter/Space toggles tasks in place rather than opening `PlanKanban`. Expanded content shows phase headings, task statuses and notes, updates with the active session data, and scrolls within a bounded height. Empty plans display an idle state. The separate **Todo and plan** More-menu action still opens the full plan view.

@@ -19,7 +19,7 @@
 
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, SubagentPane, ProjectSidebar, EmptyWorkspace, SideChat,
-  ChromeToolbar, AmbientRail, ConversationTree, PlanKanban, HistoryModal, GitBrowser, RewindDialog, FilePreview, ApprovalRulesPanel, UsageStatsPanel, PromptHistoryModal, useTweaks,
+  ChromeToolbar, AmbientRail, ConversationTree, PlanKanban, HistoryModal, GitBrowser, RewindDialog, FilePreview, ApprovalRulesPanel, UsageStatsPanel, PromptHistoryModal, ContextInsightModal, useTweaks,
   SettingsPage, SettingsWindow, ConfirmCloseDialog, LibrarianWindow,
   useWidgets, WidgetCard, WidgetErrorCard, WidgetApprovalCard, WidgetBoundary,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, DEFAULT_PROFILE_ID,
@@ -62,6 +62,7 @@ function App() {
   const [preview,     setPreview]     = React.useState(null);
   const [rulesOpen,   setRulesOpen]   = React.useState(false);
   const [statsOpen,   setStatsOpen]   = React.useState(false);
+  const [ctxDetailsOpen, setCtxDetailsOpen] = React.useState(false);
   const [promptHistoryOpen, setPromptHistoryOpen] = React.useState(false);
   // The Settings app tab (#37; app/settings-tab.js): `{open, active,
   // section}`. Not an omp tab: the active omp tab stays `activeSessionId`
@@ -945,7 +946,7 @@ function App() {
     "app.interrupt":           () => {
       // Only abort when no overlay is open (overlays handle Escape themselves),
       // and never from the Settings page, which covers the chat.
-      if (stab.open || bridgeOpen || historyOpen || gitOpen || rulesOpen || statsOpen || promptHistoryOpen || planOpen) return;
+      if (stab.open || bridgeOpen || historyOpen || gitOpen || rulesOpen || statsOpen || ctxDetailsOpen || promptHistoryOpen || planOpen) return;
       if (streaming) handleAbort();
     },
     "app.thinking.cycle":      cycleThinking,
@@ -1408,6 +1409,7 @@ function App() {
                   todoCounts={todoCounts}
                   kanban={kanban}
                   onCompact={bridge.compact}
+                  onContextDetails={() => setCtxDetailsOpen(true)}
                   compacting={compacting}
                 >
                   {/* Hidden without the GitHub CLI; the hook keeps checking on
@@ -1566,6 +1568,10 @@ function App() {
         // update the header's profileLabel but leave the previous
         // profile's numbers showing underneath it.
         <UsageStatsPanel key={activeProfileId} onClose={() => setStatsOpen(false)} profileLabel={activeProfileLabel} />
+      )}
+
+      {ctxDetailsOpen && (
+        <ContextInsightModal breakdown={ctxBreakdown} onClose={() => setCtxDetailsOpen(false)} />
       )}
 
       {promptHistoryOpen && (

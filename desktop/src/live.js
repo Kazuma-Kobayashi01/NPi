@@ -2023,6 +2023,17 @@
     _handleEvent(obj);
   }
 
+  // The rail's Context card breakdown, carrying the Context details view's
+  // split of its Messages share (app/context-insight.js) so both read the same
+  // get_messages context and travel in the same snapshot field.
+  function _contextBreakdown(rpcState, contextMessages) {
+    const breakdown = window.OMP_USAGE.contextBreakdown(rpcState, contextMessages);
+    if (!breakdown) return null;
+    const messages = breakdown.parts.find(p => p.key === "messages")?.tokens ?? 0;
+    breakdown.insight = window.OMP_CONTEXT_INSIGHT.analyze(contextMessages, messages);
+    return breakdown;
+  }
+
   // ── RPC response handler ──────────────────────────────────────────────────
   function _handleResponse(resp) {
     // This is model context, not the full display transcript. In particular,
@@ -2030,7 +2041,7 @@
     if (resp.command === "get_messages" && resp.id?.startsWith("context-")) {
       if (resp.success) {
         state.contextMessages = resp.data.messages;
-        state.ctxBreakdown = window.OMP_USAGE.contextBreakdown(state.rpcState, state.contextMessages);
+        state.ctxBreakdown = _contextBreakdown(state.rpcState, state.contextMessages);
         notify();
       }
       return;
@@ -2903,7 +2914,7 @@
   function _applyRpcState(rpcState) {
     if (!rpcState) return;
     state.rpcState      = rpcState;
-    state.ctxBreakdown  = window.OMP_USAGE.contextBreakdown(rpcState, state.contextMessages);
+    state.ctxBreakdown  = _contextBreakdown(rpcState, state.contextMessages);
     _send({ type: "get_messages", id: "context-" + (_nextCmdId++) });
     state.isCompacting  = rpcState.isCompacting === true;
     state.isStreaming   = rpcState.isStreaming ?? false;
