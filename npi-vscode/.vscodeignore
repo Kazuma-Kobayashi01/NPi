@@ -1,0 +1,10 @@
+.vscode/**
+test/**
+node_modules/.bin/**
+node_modules/@vscode/**
+node_modules/typescript/**
+package-lock.json
+*.vsix
+scripts/**
+.DS_Store
+**/.DS_Store

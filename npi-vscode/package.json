@@ -1,0 +1,172 @@
+{
+  "name": "npi-vscode",
+  "displayName": "NPi for VScode",
+  "description": "NPi Code agent in your editor: streaming conversations, tools, approvals, and workspace context.",
+  "version": "0.1.1",
+  "publisher": "npi",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onView:npi.code"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "NPi runs commands and edits workspace files. Trust the workspace to use it."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "NPi requires a filesystem workspace."
+    }
+  },
+  "scripts": {
+    "check": "node --check src/extension.js && node --check src/rpc.js && node --check src/backend.js && node --check scripts/package.js && node --check media/main.js",
+    "test": "node --test test/*.test.js",
+    "package": "node scripts/package.js"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "npi",
+          "title": "NPi",
+          "icon": "media/npi.svg"
+        }
+      ]
+    },
+    "views": {
+      "npi": [
+        {
+          "type": "webview",
+          "id": "npi.code",
+          "name": "NPi Code",
+          "contextualTitle": "NPi for VScode"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "npi.open",
+        "title": "Open Code",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.newSession",
+        "title": "New Session",
+        "category": "NPi",
+        "icon": "$(add)"
+      },
+      {
+        "command": "npi.sessions",
+        "title": "Switch Session",
+        "category": "NPi",
+        "icon": "$(history)"
+      },
+      {
+        "command": "npi.attachSelection",
+        "title": "Attach Selection",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.attachFile",
+        "title": "Attach Current File",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.restart",
+        "title": "Restart Agent",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.logs",
+        "title": "Show Agent Logs",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.commands",
+        "title": "Show Commands",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.login",
+        "title": "Sign In to Subscription",
+        "category": "NPi"
+      },
+      {
+        "command": "npi.terminal",
+        "title": "Open Full NPi Terminal",
+        "category": "NPi"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "npi.newSession",
+          "when": "view == npi.code",
+          "group": "navigation"
+        },
+        {
+          "command": "npi.sessions",
+          "when": "view == npi.code",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "npi.attachSelection",
+          "when": "editorHasSelection && isWorkspaceTrusted",
+          "group": "npi"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "npi.attachSelection",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n",
+        "when": "editorTextFocus && editorHasSelection && isWorkspaceTrusted"
+      }
+    ],
+    "configuration": {
+      "title": "NPi",
+      "properties": {
+        "npi.executablePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Leave empty to use the bundled NPi backend. Optional executable name on PATH or absolute path for a custom NPi kernel. Both use your existing NPi settings and sign-in."
+        },
+        "npi.profile": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional existing NPi profile. Empty uses the default profile."
+        },
+        "npi.approvalMode": {
+          "type": "string",
+          "enum": [
+            "always-ask",
+            "always-ask-cached",
+            "write"
+          ],
+          "default": "write",
+          "scope": "machine",
+          "description": "Tool approval policy. NPi owns approval decisions; this extension never auto-approves."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.7.1"
+  }
+}
