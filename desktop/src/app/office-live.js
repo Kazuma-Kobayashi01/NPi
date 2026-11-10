@@ -4,7 +4,8 @@
 // go through the main window: it listens to the session's RPC lines itself
 // and sends its own commands, so it keeps working while the main window is
 // hidden or shows another tab. It only reads what omp pushes about the
-// company (`office_state`) and answers to its own requests, whose ids start
+// company (`office_state`, and `office_usage`: spend as a delta the window
+// adds up itself) and answers to its own requests, whose ids start
 // with `office:` — the main window resolves responses by its own ids, so the
 // two never take each other's replies.
 (function () {
@@ -15,20 +16,22 @@
   function readLine(payload) {
     if (!payload || typeof payload.text !== "string") return null;
     // Cheap reject before parsing: streaming deltas are most of the traffic.
-    if (!payload.text.includes('"office_state"') && !payload.text.includes(`"id":"${PREFIX}`)) return null;
+    if (!payload.text.includes('"office_') && !payload.text.includes(`"id":"${PREFIX}`)) return null;
     let frame;
     try { frame = JSON.parse(payload.text); } catch (_) { return null; }
     if (frame?.type === "office_state" && frame.state) return { kind: "state", state: frame.state };
+    if (frame?.type === "office_usage" && frame.amount) return { kind: "usage", frame };
     if (frame?.type === "response" && typeof frame.id === "string" && frame.id.startsWith(PREFIX)) return { kind: "response", frame };
     return null;
   }
 
   /**
    * Connects to tab `sessionId`. `onState(state)` gets every company state,
-   * `onOnline(bool, reason)` whether its omp answers. Returns
+   * `onUsage(frame)` every `office_usage` delta, `onOnline(bool, reason)`
+   * whether its omp answers. Returns
    * `{ request(cmd), command(args), refresh(), transcript(file, fromByte), close() }`.
    */
-  function connect(sessionId, { onState, onOnline }) {
+  function connect(sessionId, { onState, onUsage, onOnline }) {
     const tauri = window.__TAURI__;
     const pending = new Map();
     const unlisten = [];
@@ -85,6 +88,7 @@
         const line = readLine(ev.payload);
         if (!line || closed) return;
         if (line.kind === "state") { onOnline(true, ""); onState(line.state); }
+        else if (line.kind === "usage") onUsage?.(line.frame);
         else settle(line.frame);
       }).then(un => (closed ? un() : unlisten.push(un)));
       tauri.event.listen(`agent://exit/${sessionId}`, () => { if (!closed) onOnline(false, "exit"); })

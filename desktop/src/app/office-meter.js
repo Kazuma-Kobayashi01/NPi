@@ -1,11 +1,56 @@
 // app/office-meter.js — the Office window's fuel-pump meter.
 //
-// Pure: the numbers the meter shows between two readings (it rolls toward
+// Pure: the local ledger (omp sends each booking as a delta and the window
+// adds it up itself, so a working member never makes it re-read the whole
+// company), the numbers the meter shows between two readings (it rolls toward
 // the latest reading instead of jumping), the unit price, the JPY amount and
 // how each figure is written.
 (function () {
-  /** How long the meter takes to reach a new reading, ms. Readings arrive about every two seconds while members work. */
+  /** How long the meter takes to reach a new reading, ms. Deltas arrive a few times a second while members work. */
   const ROLL_MS = 1800;
+
+  const zero = () => ({ tokens: 0, cost: 0, requests: 0 });
+  const plus = (a, b) => ({
+    tokens: (a?.tokens ?? 0) + (b?.tokens ?? 0),
+    cost: (a?.cost ?? 0) + (b?.cost ?? 0),
+    requests: (a?.requests ?? 0) + (b?.requests ?? 0),
+  });
+
+  /** `usage` (OfficeState.usage) with "today" started over for local day `day`; the same object when it already covers it. */
+  function rollDay(usage, day) {
+    if (!usage || !day || usage.day === day) return usage;
+    const members = {};
+    for (const [name, m] of Object.entries(usage.members ?? {})) members[name] = { today: zero(), total: m.total };
+    return { ...usage, day, members, today: zero() };
+  }
+
+  /**
+   * `usage` with one `office_usage` frame (`{ member, day, amount }`) added.
+   * A booking on a later day starts "today" over first; one on an earlier day
+   * (a run that crossed midnight, reported late) only counts toward the total.
+   */
+  function book(usage, frame) {
+    if (!usage || !frame?.member || !frame.amount) return usage;
+    const day = frame.day && frame.day > (usage.day ?? "") ? frame.day : usage.day;
+    const next = rollDay(usage, day);
+    const today = frame.day === next.day;
+    const prior = next.members?.[frame.member] ?? { today: zero(), total: zero() };
+    return {
+      ...next,
+      members: {
+        ...next.members,
+        [frame.member]: { today: today ? plus(prior.today, frame.amount) : prior.today, total: plus(prior.total, frame.amount) },
+      },
+      today: today ? plus(next.today, frame.amount) : next.today,
+      total: plus(next.total, frame.amount),
+    };
+  }
+
+  /** The local calendar day of `date`, `YYYY-MM-DD` (as omp books it). */
+  function localDay(date) {
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${String(date.getDate()).padStart(2, "0")}`;
+  }
 
   /** A meter at rest on `reading` ({ tokens, cost }). */
   function rest(reading) {
@@ -83,5 +128,5 @@
     return next.getTime() - now.getTime();
   }
 
-  window.OMP_OFFICE_METER = { ROLL_MS, rest, aim, shown, rolling, unitPrice, toJpy, fmtTokens, fmtTokensShort, fmtUsd, fmtJpy, msToMidnight };
+  window.OMP_OFFICE_METER = { ROLL_MS, rollDay, book, localDay, rest, aim, shown, rolling, unitPrice, toJpy, fmtTokens, fmtTokensShort, fmtUsd, fmtJpy, msToMidnight };
 })();

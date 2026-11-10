@@ -224,4 +224,39 @@ check("today starts over at local midnight", () => {
   assert.equal(P.msToMidnight(new Date(2026, 10, 10, 0, 0, 0)), 86_400_000);
 });
 
+check("usage deltas are billed locally", () => {
+  const amt = (tokens, cost) => ({ tokens, cost, requests: 1 });
+  const usage = {
+    day: "2026-11-10",
+    members: { "1-a": { today: amt(100, 0.1), total: amt(500, 0.5) } },
+    today: amt(100, 0.1),
+    total: amt(500, 0.5),
+  };
+  const a = P.book(usage, { member: "1-a", day: "2026-11-10", amount: amt(50, 0.05) });
+  assert.equal(a.members["1-a"].today.tokens, 150);
+  assert.equal(a.members["1-a"].total.tokens, 550);
+  assert.equal(a.today.requests, 2);
+  assert.equal(usage.today.tokens, 100, "the old state is not mutated");
+  const b = P.book(a, { member: "1-b", day: "2026-11-10", amount: amt(10, 0.01) });
+  assert.equal(b.members["1-b"].today.tokens, 10);
+  assert.equal(b.total.tokens, 560);
+  // A booking on the next day starts "today" over.
+  const c = P.book(b, { member: "1-a", day: "2026-11-11", amount: amt(7, 0.007) });
+  assert.equal(c.day, "2026-11-11");
+  assert.equal(c.today.tokens, 7);
+  assert.equal(c.members["1-b"].today.tokens, 0);
+  assert.equal(c.members["1-b"].total.tokens, 10);
+  assert.equal(c.total.tokens, 567);
+  // A late booking for yesterday counts only toward the total.
+  const d = P.book(c, { member: "1-a", day: "2026-11-10", amount: amt(3, 0.003) });
+  assert.equal(d.today.tokens, 7);
+  assert.equal(d.total.tokens, 570);
+  // Midnight with nobody working.
+  const e = P.rollDay(d, "2026-11-12");
+  assert.equal(e.today.tokens, 0);
+  assert.equal(e.total.tokens, 570);
+  assert.equal(P.rollDay(e, "2026-11-12"), e);
+  assert.equal(P.localDay(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
+});
+
 console.log(`office-model: ${passed} checks passed`);

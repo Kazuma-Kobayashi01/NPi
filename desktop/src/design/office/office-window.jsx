@@ -20,14 +20,22 @@ const _OF_PENDING_MS = 10000;
 function useOffice(sessionId) {
   const [state, setState] = React.useState(null);
   const [online, setOnline] = React.useState({ on: true, reason: "" });
+  // Spend is billed here: omp sends each booking as a delta and the totals are kept locally.
+  const onUsage = frame => setState(s => {
+    if (!s?.usage || (s.company && frame.checkout && frame.checkout !== s.company.checkout)) return s;
+    return { ...s, usage: _OF_P.book(s.usage, frame) };
+  });
   const link = React.useMemo(
-    () => window.OMP_OFFICE_LIVE.connect(sessionId, { onState: setState, onOnline: (on, reason) => setOnline({ on, reason }) }),
+    () => window.OMP_OFFICE_LIVE.connect(sessionId, { onState: setState, onUsage, onOnline: (on, reason) => setOnline({ on, reason }) }),
     [sessionId],
   );
   React.useEffect(() => () => link.close(), [link]);
-  // "Today" starts over at local midnight; with nobody working no frame says so.
+  // "Today" starts over at local midnight; with nobody working no frame says so. Rolled here, not asked of omp.
   React.useEffect(() => {
-    const timer = setTimeout(() => link.refresh(), _OF_P.msToMidnight(new Date()) + 1500);
+    const timer = setTimeout(() => {
+      const day = _OF_P.localDay(new Date());
+      setState(s => (s?.usage ? { ...s, usage: _OF_P.rollDay(s.usage, day) } : s));
+    }, _OF_P.msToMidnight(new Date()) + 1500);
     return () => clearTimeout(timer);
   }, [link, state?.usage?.day]);
   // Another process (a shell's `npi office merge`) is not pushed: catch up when the window is looked at.
