@@ -85,6 +85,18 @@ CLI 主题更新(2026-11-08，已重编译并打包至上表 `cli-themes` dmg)�
 
 稳定签名证书 `NPi Desktop Local`(自签名,有效期到 2036 年,在登录钥匙串)用于保住通知授权;换电脑、重置钥匙串或重装系统后要重跑 `scripts/macos-local-signing.sh`。建议把它连私钥导出成 `.p12` 备份。
 
+### 内核待合入：CLI `/usage` 视觉打磨（2026-11-10，未合并、未推送）
+
+- 独立仓库：`omp/` 是独立 Git 仓库。主 checkout 为 `/Users/jackson-hao/Documents/Code/NPi Desktop/omp`，分支 `kernel.2.0.10-universal`，HEAD `a32ad0bf2e`；该 checkout 另有与本改动无关的未提交 Office 改动，本次未触碰。
+- 分支与提交：新分支 `usage-ui-polish`，位于 worktree `/Users/jackson-hao/Documents/NPi/Code/.agent-worktrees/kernel-work/Worker-666423/omp`（与主 omp 共享 `.git`），基于 `a32ad0bf2e`，提交 `34397c094f`（`feat(tui): polish the /usage dashboard layout ...`）。
+- 状态：未合并进 `kernel.2.0.10-universal`、`usage-panel`（旧提交 `f9f346ac4c`，有意不合并）或 `3.1.0.72`；未推送；已安装的 NPi Desktop 应用与内核未替换。
+- 改动范围：`packages/tui/src/overlays/usage-dashboard.ts`（仅 ANSI 渲染路径：顶部导航行 Overview/Details 与刷新状态、Quota 标题、剩余额度条与对齐的百分比／重置列、压力行标记、热力图日期范围与 Less/More 图例、最忙日与活跃天数、按优先级降级的底部提示与滚动位置、Tab 切换视图、空状态引导）；`packages/tui/test/usage-dashboard.test.ts`（+7 项）；`packages/tui/CHANGELOG.md`；新增 `packages/coding-agent/scripts/usage-preview.ts`（隔离的合成数据预览脚本）。
+- 未改：统计与额度语义、账户访问与权限、真实配置、Desktop UI、native `describe` 路径、经典详情报告渲染器。
+- 预览（合成数据，不读真实账户）：在 omp 工作树内执行 `.tools/node_modules/.bin/bun packages/coding-agent/scripts/usage-preview.ts --size 80x24 --theme dark --scenario rich --keys enter,down,pgdn,tab,r,esc`；`--theme` 可选 dark／light，`--scenario` 可选 rich／empty／errors／long／all，加 `--ansi` 输出原始 ANSI。
+- 采纳（待主 agent 决定）：`git -C <主 omp> merge usage-ui-polish`，或 cherry-pick `34397c094f`。之后需按本文件第 1 节“内核”步骤重编译，才会进入随包内核。
+- 已验证：tui `usage-dashboard.test.ts` 与 `usage-native-describe.test.ts` 共 37→44 项通过；coding-agent 三项 usage 测试通过；tui 的 tsgo 类型检查通过；改动文件 oxlint／oxfmt 通过；预览在 80x24、120x40、40x16 下几何正常。
+- 未验证：真实终端模拟器与用户主题中的视觉效果；真实账户数据；完整测试套件；内核重编译与已安装应用；独立验收尚未完成，其结论未计入以上。
+
 ## 2. 已做的工作(按领域)
 
 ### Desktop 基础与体验
