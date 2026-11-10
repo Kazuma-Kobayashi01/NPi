@@ -4026,7 +4026,11 @@
     openOffice(sessionId) {
       const entry = sessionRegistry.get(sessionId);
       if (!entry) return Promise.resolve(false);
-      return window.OMP_OPEN_PANEL("office", { project: sessionId, title: `Office · ${entry.name}` });
+      return window.OMP_OPEN_PANEL("office", {
+        project: sessionId,
+        profile: _resolveProfile(entry, _noTabProfile(), profiles),
+        title: `Office · ${entry.name}`,
+      });
     },
 
     // ── Subagent manager ──────────────────────────────────────────────────────

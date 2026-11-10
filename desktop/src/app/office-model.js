@@ -9,6 +9,7 @@
   const MANAGER = "general-manager";
   const ZERO = Object.freeze({ tokens: 0, cost: 0, requests: 0 });
   const PHASES = ["working", "reviewing", "awaiting_owner", "awaiting_manager", "idle"];
+  const STANDARD_EFFORTS = Object.freeze(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
   const amount = a => ({ tokens: a?.tokens ?? 0, cost: a?.cost ?? 0, requests: a?.requests ?? 0 });
   const plus = (a, b) => ({ tokens: a.tokens + b.tokens, cost: a.cost + b.cost, requests: a.requests + b.requests });
@@ -114,5 +115,23 @@
     return rows.filter(r => r.tokens > 0).map(r => ({ ...r, share: total > 0 ? r.tokens / total : 0 }));
   }
 
-  window.OMP_OFFICE_MODEL = { MANAGER, PHASES, view, shares, memberRuns, repoName };
+  /** Find the catalog entry matching `model` by selector or provider/id; null if missing or unset. */
+  function findCatalogModel(catalog, model) {
+    return model ? catalog.find(m => m.selector === model || `${m.provider}/${m.id}` === model) ?? null : null;
+  }
+
+  /**
+   * Effort options for `model`:
+   * - catalog match: ["off", ...entry.thinking without "auto"/"off"] (just ["off"] if no thinking)
+   * - capability tier, unknown model, or empty catalog: the standard set.
+   */
+  function effortChoices(catalog, model) {
+    const entry = findCatalogModel(catalog, model);
+    if (!entry) return [...STANDARD_EFFORTS];
+    const raw = Array.isArray(entry.thinking) ? entry.thinking : [];
+    const filtered = raw.filter(l => l && l !== "auto" && l !== "off");
+    return ["off", ...filtered];
+  }
+
+  window.OMP_OFFICE_MODEL = { MANAGER, PHASES, STANDARD_EFFORTS, view, shares, memberRuns, repoName, findCatalogModel, effortChoices };
 })();

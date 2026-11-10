@@ -3,15 +3,15 @@
    office below; a card opens that office's member conversations
    (office-detail.jsx). Data comes over the window's own line to the tab's omp
    (app/office-live.js), shaped by app/office-model.js and app/office-meter.js.
-   Members are read-only here: the owner's actions are merging or sending back
-   an approved office pull request, the roster, and clearing an office's memory,
+   The owner's actions are merging or sending back an approved office pull request,
+   configuring the roster (company scale, office sizes, member capability, model,
+   thinking effort, and leader role, worker add/remove), and clearing an office's memory,
    all run as `/office` commands. */
 
 const _OF_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon: _OF_Icon, OMP_OFFICE_MODEL: _OF_M, OMP_OFFICE_METER: _OF_P } = window;
 const _OF_SCALES = [["team", "Team", 1], ["studio", "Studio", 3], ["enterprise", "Enterprise", 6]];
 const _OF_CAPS = ["common", "professional", "expert"];
-const _OF_EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const _OF_RANGE_KEY = "npi.office.range";
 const _OF_FLOW = ["Assigned", "Worker PRs in review", "Office PRs in review", "Waiting for you", "Merged"];
 const _OF_PENDING_MS = 10000;
@@ -277,19 +277,58 @@ function OfMemoryDialog({ office, link, onClose }) {
   );
 }
 
-function OfRoster({ view, link, onClose }) {
-  const cmd = useOfCommand(link);
+function OfRoster({ view, link, profile, onClose }) {
   const [removing, setRemoving] = React.useState(null);
-  const [models, setModels] = React.useState([]);
+  const [catalog, setCatalog] = React.useState([]);
+  const [catalogError, setCatalogError] = React.useState(null);
+  const [pendingTarget, setPendingTarget] = React.useState(null);
+  const [error, setError] = React.useState(null);
+  const busy = pendingTarget !== null;
+
   React.useEffect(() => {
-    window.__TAURI__?.core.invoke("model_usage_list", { profile: null }).then(list => setModels(Array.isArray(list) ? list : []), () => {});
-  }, []);
-  const setModel = (id, value) => { const v = value.trim(); cmd.run(["set", id, "model", v || "default"]); };
-  const setEffort = (id, value) => cmd.run(["set", id, "thinking", value || "default"]);
+    let current = true;
+    window.__TAURI__.core.invoke("models_catalog", { profile }).then(
+      list => {
+        if (current) {
+          setCatalog(Array.isArray(list) ? list : []);
+          setCatalogError(null);
+        }
+      },
+      err => {
+        if (current) {
+          setCatalog([]);
+          setCatalogError(String(err?.message ?? err));
+        }
+      }
+    );
+    return () => { current = false; };
+  }, [profile]);
+
+  const groups = React.useMemo(() => window.OMP_MODELS.groupByVendor(catalog), [catalog]);
+
+  const runCmd = React.useCallback(async (args, target) => {
+    setPendingTarget(target);
+    setError(null);
+    try {
+      const result = await link.command(args);
+      if (result.failed) {
+        setError({ target, message: result.text.split(/\n\s*\n/)[0] });
+        return false;
+      }
+      return true;
+    } catch (e) {
+      setError({ target, message: String(e?.message ?? e) });
+      return false;
+    } finally {
+      setPendingTarget(null);
+    }
+  }, [link]);
+
   if (removing) {
     return (
-      <OfDialog title={_OF_T("Remove {name}? The name is not reused.", { name: removing })} action={_OF_T("Remove")} danger busy={cmd.busy} error={cmd.error}
-        onAction={async () => { if (await cmd.run(["remove", removing])) setRemoving(null); }} onClose={() => setRemoving(null)} />
+      <OfDialog title={_OF_T("Remove {name}? The name is not reused.", { name: removing })} action={_OF_T("Remove")} danger busy={busy}
+        error={error?.target === `member:${removing}` ? error.message : ""}
+        onAction={async () => { if (await runCmd(["remove", removing], `member:${removing}`)) setRemoving(null); }} onClose={() => setRemoving(null)} />
     );
   }
   return (
@@ -300,45 +339,83 @@ function OfRoster({ view, link, onClose }) {
           <button className="btn icon ghost" aria-label={_OF_T("Close")} onClick={onClose}><_OF_Icon name="close" size={12} /></button>
         </div>
         <div className="of-drawer-note">{_OF_T("The roster is shared by every tab.")}</div>
-        <div className="of-drawer-note">{_OF_T("An empty model uses the capability's tier from Settings → Models; an empty effort uses that model's default.")}</div>
-        {cmd.error && <div className="of-error selectable">{cmd.error}</div>}
-        <div className="of-roster-row">
+        <div className="of-drawer-note">{_OF_T("“Capability tier” uses that capability's model from Settings → Models; “default effort” uses that model's default.")}</div>
+        {catalogError && <div className="of-drawer-note">{_OF_T("Models unavailable: {error}", { error: catalogError })}</div>}
+        <div className={`of-roster-row${pendingTarget === "scale" ? " pending" : ""}`} aria-busy={pendingTarget === "scale"}>
           <span className="of-block-k">{_OF_T("Company size")}</span>
           <div className="of-seg">
             {_OF_SCALES.map(([id, label, n]) => (
-              <button key={id} className={view.scale === id ? "on" : ""} disabled={cmd.busy} onClick={() => cmd.run(["scale", id])}>{_OF_T(label)} · {n}</button>
+              <button key={id} className={view.scale === id ? "on" : ""} disabled={busy} onClick={() => runCmd(["scale", id], "scale")}>{_OF_T(label)} · {n}</button>
             ))}
           </div>
         </div>
-        <datalist id="of-models">{models.map(m => <option key={m} value={m} />)}</datalist>
+        {error?.target === "scale" && <div className="of-error of-roster-error selectable">{error.message}</div>}
         {view.offices.map(office => (
           <div key={office.number} className="of-roster-office">
-            <div className="of-roster-row">
+            <div className={`of-roster-row${pendingTarget === `office:${office.number}` ? " pending" : ""}`} aria-busy={pendingTarget === `office:${office.number}`}>
               <span className="of-card-title">{_OF_T("Office {n}", { n: office.number })}</span>
-              <span className="of-block-k">{_OF_T("Members")} {office.members.length}</span>
-              <button className="btn outlined" disabled={cmd.busy || office.members.length >= 6} onClick={() => cmd.run(["add", String(office.number)])}>{_OF_T("Add a worker")}</button>
-            </div>
-            {office.members.map(m => (
-              <div key={m.id} className="of-roster-member">
-                <span className="of-member-name mono">{m.role === "leader" ? "★ " : ""}{m.id}</span>
-                <select aria-label={_OF_T("Capability")} value={m.capability} disabled={cmd.busy} onChange={e => cmd.run(["set", m.id, "capability", e.target.value])}>
-                  {_OF_CAPS.map(c => <option key={c} value={c}>{_OF_T(`cap.${c}`)}</option>)}
-                </select>
-                <input key={m.model} className="of-input mono" list="of-models" aria-label={_OF_T("Model")} defaultValue={m.model} placeholder={_OF_T("capability tier")} disabled={cmd.busy}
-                  onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                  onBlur={e => { if (e.target.value.trim() !== m.model) setModel(m.id, e.target.value); }} />
-                <select aria-label={_OF_T("Effort")} value={m.thinking} disabled={cmd.busy} onChange={e => setEffort(m.id, e.target.value)}>
-                  <option value="">{_OF_T("default effort")}</option>
-                  {_OF_EFFORTS.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                {m.role !== "leader" && (
-                  <>
-                    <button className="btn ghost" disabled={cmd.busy} onClick={() => cmd.run(["set", m.id, "role", "leader"])}>{_OF_T("Make leader")}</button>
-                    <button className="btn danger" disabled={cmd.busy || office.members.length <= 3} onClick={() => setRemoving(m.id)}>{_OF_T("Remove")}</button>
-                  </>
-                )}
+              <span className="of-block-k">{_OF_T("Members")}</span>
+              <div className="of-stepper">
+                <button type="button" className="btn icon ghost" aria-label={_OF_T("Decrease worker count")}
+                  disabled={busy || office.members.length <= 3}
+                  onClick={() => runCmd(["size", String(office.number), String(office.members.length - 1)], `office:${office.number}`)}>
+                  <_OF_Icon name="minus" size={12} />
+                </button>
+                <span className="of-stepper-val mono">{office.members.length}</span>
+                <button type="button" className="btn icon ghost" aria-label={_OF_T("Increase worker count")}
+                  disabled={busy || office.members.length >= 6}
+                  onClick={() => runCmd(["size", String(office.number), String(office.members.length + 1)], `office:${office.number}`)}>
+                  <_OF_Icon name="plus" size={12} />
+                </button>
               </div>
-            ))}
+              <button className="btn outlined" disabled={busy || office.members.length >= 6} onClick={() => runCmd(["add", String(office.number)], `office:${office.number}`)}>{_OF_T("Add a worker")}</button>
+            </div>
+            {error?.target === `office:${office.number}` && <div className="of-error of-roster-error selectable">{error.message}</div>}
+            {office.members.map(m => {
+              const entry = _OF_M.findCatalogModel(catalog, m.model);
+              const offered = _OF_M.effortChoices(catalog, m.model);
+              const isMissingModel = Boolean(m.model && !entry);
+              const isUnsupportedEffort = Boolean(m.thinking && !offered.includes(m.thinking));
+              return (
+                <React.Fragment key={m.id}>
+                  <div className={`of-roster-member${pendingTarget === `member:${m.id}` ? " pending" : ""}`} aria-busy={pendingTarget === `member:${m.id}`}>
+                    <span className="of-member-name mono">{m.role === "leader" ? "★ " : ""}{m.id}</span>
+                    <select className="of-member-cap" aria-label={_OF_T("Capability")} value={m.capability} disabled={busy} onChange={e => runCmd(["set", m.id, "capability", e.target.value], `member:${m.id}`)}>
+                      {_OF_CAPS.map(c => <option key={c} value={c}>{_OF_T(`cap.${c}`)}</option>)}
+                    </select>
+                    <select className="of-member-model" aria-label={_OF_T("Model")} value={entry ? entry.selector : (m.model || "")} disabled={busy}
+                      onChange={e => runCmd(["set", m.id, "model", e.target.value || "default"], `member:${m.id}`)}>
+                      <option value="">{_OF_T("capability tier")}</option>
+                      {isMissingModel && (
+                        <option value={m.model}>{_OF_T("{model} (not in this profile's models)", { model: m.model })}</option>
+                      )}
+                      {groups.map(g => (
+                        <optgroup key={g.vendor} label={g.vendor}>
+                          {g.models.map(opt => (
+                            <option key={opt.selector} value={opt.selector}>{opt.name || opt.selector}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <select className="of-member-effort" aria-label={_OF_T("Effort")} value={m.thinking || ""} disabled={busy}
+                      onChange={e => runCmd(["set", m.id, "thinking", e.target.value || "default"], `member:${m.id}`)}>
+                      <option value="">{_OF_T("default effort")}</option>
+                      {isUnsupportedEffort && (
+                        <option value={m.thinking}>{_OF_T("{effort} (unsupported by this model)", { effort: m.thinking })}</option>
+                      )}
+                      {offered.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                    {m.role !== "leader" && (
+                      <>
+                        <button className="btn ghost" disabled={busy} onClick={() => runCmd(["set", m.id, "role", "leader"], `member:${m.id}`)}>{_OF_T("Make leader")}</button>
+                        <button className="btn danger" disabled={busy || office.members.length <= 3} onClick={() => setRemoving(m.id)}>{_OF_T("Remove")}</button>
+                      </>
+                    )}
+                  </div>
+                  {error?.target === `member:${m.id}` && <div className="of-error of-roster-error selectable">{error.message}</div>}
+                </React.Fragment>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -410,7 +487,7 @@ function OfLoading() {
   );
 }
 
-function OfficeWindow({ sessionId, onClose }) {
+function OfficeWindow({ sessionId, profile, onClose }) {
   const rootRef = React.useRef(null);
   const wc = window.useWindowChrome(onClose, rootRef);
   const { state, online, link } = useOffice(sessionId);
@@ -477,7 +554,7 @@ function OfficeWindow({ sessionId, onClose }) {
       {dialog?.kind === "memory" && view?.offices.find(o => o.number === dialog.office) && (
         <OfMemoryDialog office={view.offices.find(o => o.number === dialog.office)} link={link} onClose={() => setDialog(null)} />
       )}
-      {dialog?.kind === "roster" && view && <OfRoster view={view} link={link} onClose={() => setDialog(null)} />}
+      {dialog?.kind === "roster" && view && <OfRoster view={view} link={link} profile={profile} onClose={() => setDialog(null)} />}
     </div>
   );
 }

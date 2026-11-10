@@ -121,6 +121,50 @@ check("a state without a company still draws", () => {
   assert.deepEqual(v.usage.today, { tokens: 0, cost: 0, requests: 0 });
 });
 
+// ── Catalog & Thinking Effort ─────────────────────────────────────────────
+const sampleCatalog = [
+  { provider: "anthropic", id: "claude-3-7-sonnet", selector: "anthropic/claude-3-7-sonnet", name: "Claude 3.7 Sonnet", thinking: ["auto", "low", "medium", "high", "max"] },
+  { provider: "anthropic", id: "claude-3-5-haiku", selector: "claude-3-5-haiku-alias", name: "Claude 3.5 Haiku", thinking: ["off"] },
+  { provider: "openai", id: "gpt-4o", selector: "openai/gpt-4o", name: "GPT-4o", thinking: [] },
+  { provider: "google", id: "gemini-2.5-pro", selector: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", thinking: ["off", "low", "high"] },
+  { provider: "meta", id: "llama-3-8b", selector: "meta/llama-3-8b", name: "Llama 3 8B", thinking: null },
+];
+
+check("findCatalogModel matches by selector, provider/id, and handles missing/empty values", () => {
+  assert.equal(M.findCatalogModel([], "anthropic/claude-3-7-sonnet"), null);
+  assert.equal(M.findCatalogModel(sampleCatalog, null), null);
+  assert.equal(M.findCatalogModel(sampleCatalog, ""), null);
+  assert.equal(M.findCatalogModel(sampleCatalog, "unknown"), null);
+  // match by selector
+  assert.equal(M.findCatalogModel(sampleCatalog, "anthropic/claude-3-7-sonnet")?.id, "claude-3-7-sonnet");
+  assert.equal(M.findCatalogModel(sampleCatalog, "claude-3-5-haiku-alias")?.id, "claude-3-5-haiku");
+  // match by provider/id when selector is different
+  assert.equal(M.findCatalogModel(sampleCatalog, "anthropic/claude-3-5-haiku")?.name, "Claude 3.5 Haiku");
+});
+
+check("effortChoices returns standard set for capability tier, unknown model, or empty catalog", () => {
+  const standard = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+  assert.deepEqual(M.effortChoices(sampleCatalog, ""), standard);
+  assert.deepEqual(M.effortChoices(sampleCatalog, null), standard);
+  assert.deepEqual(M.effortChoices(sampleCatalog, "nonexistent-model"), standard);
+  assert.deepEqual(M.effortChoices([], "anthropic/claude-3-7-sonnet"), standard);
+});
+
+check("effortChoices formats thinking levels for catalog models", () => {
+  // model with auto and thinking levels: filters auto and off, prepends off
+  assert.deepEqual(M.effortChoices(sampleCatalog, "anthropic/claude-3-7-sonnet"), ["off", "low", "medium", "high", "max"]);
+  // model with only off in thinking: returns ["off"]
+  assert.deepEqual(M.effortChoices(sampleCatalog, "claude-3-5-haiku-alias"), ["off"]);
+  // model with empty thinking: returns ["off"]
+  assert.deepEqual(M.effortChoices(sampleCatalog, "openai/gpt-4o"), ["off"]);
+  // model with thinking: null: returns ["off"]
+  assert.deepEqual(M.effortChoices(sampleCatalog, "meta/llama-3-8b"), ["off"]);
+  // model with off, low, high: returns ["off", "low", "high"]
+  assert.deepEqual(M.effortChoices(sampleCatalog, "google/gemini-2.5-pro"), ["off", "low", "high"]);
+  // match by provider/id
+  assert.deepEqual(M.effortChoices(sampleCatalog, "anthropic/claude-3-5-haiku"), ["off"]);
+});
+
 // ── Meter ────────────────────────────────────────────────────────────────
 check("the meter rolls toward a higher reading and lands on it", () => {
   let m = P.rest({ tokens: 100, cost: 1 });
