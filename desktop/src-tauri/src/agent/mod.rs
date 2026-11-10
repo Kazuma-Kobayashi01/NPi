@@ -20,6 +20,7 @@
 //! A stopped session's descendants (subagents, tool calls) die with it
 //! through `crate::supervisor` (Job Object / process group).
 
+pub mod subscription;
 mod approvals;
 pub mod ext_ui;
 pub mod inflight;
@@ -120,6 +121,10 @@ const ALLOWED_COMMAND_TYPES: &[&str] = &[
     // inspector's message box and stop button for a running agent.
     "set_subagent_subscription",
     "get_subagents",
+    // Virtual Office (src/app/office-live.js, the tab's Office switch).
+    "get_office_state",
+    "office_command",
+    "set_office_enabled",
     "get_subagent_messages",
     "steer_subagent",
     "cancel_subagent",

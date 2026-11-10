@@ -142,3 +142,6 @@ body.reordering, body.reordering * { cursor: grabbing !important; user-select: n
 [data-reorder-axis="y"].drop-before::after { left: 0; right: 0; top: 0; height: 2px; }
 [data-reorder-axis="y"].drop-after::after  { left: 0; right: 0; bottom: 0; height: 2px; }
 
+
+/* The Office item of the nav: a dot while Virtual Office is on for the active tab. */
+.psb-navitem .psb-office-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); margin-left: auto; flex: none; }

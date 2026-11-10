@@ -962,7 +962,7 @@
     // The inspected agent belongs to the tab being left: drop that process
     // back to "progress" while activeSessionId still addresses it.
     if (subagentInspecting) {
-      _send({ type: "set_subagent_subscription", level: SUB.subscriptionLevelFor({ inspecting: false }) });
+      _claimSubscription(SUB.subscriptionLevelFor({ inspecting: false }));
     }
 
     // Tear down old listeners
@@ -1709,7 +1709,7 @@
    *  not unit-tested directly; its one pure decision (the `tabName`
    *  derivation) now lives in, and is proven by, `_tabNameFor`. */
   async function _startProjectSession(cwd, {
-    resume = null, name = null, profile, activate = true, remember = true, appMode = null,
+    resume = null, name = null, profile, activate = true, remember = true, appMode = null, office = false,
   }) {
     _lastSessionMs = Math.max(Date.now(), _lastSessionMs + 1);
     const id = `session-${_lastSessionMs}`;
@@ -1719,6 +1719,8 @@
     // Register with null branch — chip hidden until git resolves.
     sessionRegistry.set(id, {
       id, name: tabName, path: cwd ?? "", color, branch: null, profile, appMode,
+      // Virtual Office is on for this tab: its chat is the general manager.
+      office: !!office,
       // The approval mode `start_session` spawned this tab's current omp
       // with (set by `_spawnSession`); null while no process runs it.
       approvalMode: null,
@@ -3090,7 +3092,9 @@
         _send({ type: "get_available_commands" });
         // Subscription level is per process and survives tab switches, but a
         // respawned process starts at "off" — so (re)assert it every time.
-        _send({ type: "set_subagent_subscription", level: SUB.subscriptionLevelFor({ inspecting: subagentInspecting }) });
+        _claimSubscription(SUB.subscriptionLevelFor({ inspecting: subagentInspecting }));
+        // Virtual Office is the tab's own switch and omp starts with it off.
+        if (sessionRegistry.get(activeSessionId)?.office) _send({ type: "set_office_enabled", enabled: true });
         _send({ type: "get_subagents" });
       });
   }
@@ -3152,6 +3156,16 @@
   }
 
   function _logSendError(e) { console.error("[live] send error:", e); }
+
+  // Subagent frames this window needs from the active tab's omp. The level is
+  // per process and an Office window may read the same one, so Rust keeps
+  // each window's need and sets omp to the highest (agent/subscription.rs).
+  function _claimSubscription(level) {
+    if (!window.__TAURI__ || !activeSessionId) return Promise.resolve(false);
+    return window.__TAURI__.core
+      .invoke("subagent_subscription_claim", { sessionId: activeSessionId, level })
+      .then(() => true, e => { _logSendError(e); return false; });
+  }
 
   // Project path (cwd) of the active tab, or null for a pathless tab (a
   // resumed session with no recorded cwd) — used to scope project-level
@@ -3982,6 +3996,35 @@
     exportHtml()       { _send({ type: "export_html" }); },
     refreshModels()    { _initFetch(); },
 
+    // ── Virtual Office ────────────────────────────────────────────────────────
+
+    /** Turn Virtual Office on or off for tab `sessionId`: the tab remembers
+     *  it (open-tabs.json) and its omp is told now; a restart tells it again
+     *  (`_initFetch`). Resolves to whether omp took the command. */
+    async setOfficeEnabled(sessionId, on) {
+      const entry = sessionRegistry.get(sessionId);
+      if (!entry || !window.__TAURI__) return false;
+      sessionRegistry.set(sessionId, { ...entry, office: !!on });
+      notify();
+      try {
+        await window.__TAURI__.core.invoke("send_command", {
+          sessionId, json: JSON.stringify({ type: "set_office_enabled", enabled: !!on }),
+        });
+        return true;
+      } catch (e) {
+        // Not running yet: `_initFetch` sends it when the tab's omp is up.
+        console.warn(`[live] set_office_enabled for '${sessionId}' not sent:`, e);
+        return false;
+      }
+    },
+
+    /** Open (or focus) the Office window of tab `sessionId`. */
+    openOffice(sessionId) {
+      const entry = sessionRegistry.get(sessionId);
+      if (!entry) return Promise.resolve(false);
+      return window.OMP_OPEN_PANEL("office", { project: sessionId, title: `Office · ${entry.name}` });
+    },
+
     // ── Subagent manager ──────────────────────────────────────────────────────
 
     /** Raise the active process to the "events" subscription while an agent
@@ -3990,7 +4033,7 @@
       const next = !!on;
       if (next === subagentInspecting) return;
       subagentInspecting = next;
-      _send({ type: "set_subagent_subscription", level: SUB.subscriptionLevelFor({ inspecting: next }) });
+      _claimSubscription(SUB.subscriptionLevelFor({ inspecting: next }));
     },
 
     /** Fetch (or tail, from the cached byte offset) one agent's persisted

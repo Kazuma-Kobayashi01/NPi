@@ -298,13 +298,13 @@ check("only same-named chips carry their parent folder", () => {
 
 check("tabLayout keeps tab order and points at the active tab", () => {
   const tabs = [
-    tab("a", "/a", { sessionFile: "/s/a.jsonl", name: "Fix login" }),
+    tab("a", "/a", { sessionFile: "/s/a.jsonl", name: "Fix login", office: true }),
     tab("b", "", { profile: "work", sessionFile: null }),
   ];
   assert.deepEqual(N.tabLayout(tabs, "b"), {
     tabs: [
-      { path: "/a", profile: "default", sessionFile: "/s/a.jsonl", name: "Fix login" },
-      { path: "", profile: "work", sessionFile: null, name: "b" },
+      { path: "/a", profile: "default", sessionFile: "/s/a.jsonl", name: "Fix login", office: true },
+      { path: "", profile: "work", sessionFile: null, name: "b", office: false },
     ],
     active: 1,
   });
@@ -322,8 +322,8 @@ check("tabLayout is insensitive to per-tab state that a relaunch cannot restore"
 });
 
 check("restoreSpec resumes a conversation under its saved label", () => {
-  const spec = N.restoreSpec({ path: "/a", profile: "work", sessionFile: "/s/a.jsonl", name: "Fix login" });
-  assert.deepEqual(spec, { cwd: "/a", resume: "/s/a.jsonl", name: "Fix login", profile: "work" });
+  const spec = N.restoreSpec({ path: "/a", profile: "work", sessionFile: "/s/a.jsonl", name: "Fix login", office: true });
+  assert.deepEqual(spec, { cwd: "/a", resume: "/s/a.jsonl", name: "Fix login", profile: "work", office: true });
 });
 
 check("restoreSpec leaves an unlabeled conversation's name to the spawn's fallback", () => {
@@ -332,7 +332,7 @@ check("restoreSpec leaves an unlabeled conversation's name to the spawn's fallba
 
 check("restoreSpec opens a fresh, unnamed tab on the folder when there is no conversation", () => {
   const spec = N.restoreSpec({ path: "/a", profile: null, sessionFile: null, name: "Old title" });
-  assert.deepEqual(spec, { cwd: "/a", resume: null, name: null, profile: "default" });
+  assert.deepEqual(spec, { cwd: "/a", resume: null, name: null, profile: "default", office: false });
 });
 
 // ── collapseChatFamilies ────────────────────────────────────────────────────

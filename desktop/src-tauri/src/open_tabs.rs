@@ -50,6 +50,9 @@ pub struct OpenTab {
     /// Tab label at save time, shown until omp reports the session's title.
     #[serde(default)]
     pub name: Option<String>,
+    /// Virtual Office is on for this tab: its chat is the general manager.
+    #[serde(default)]
+    pub office: bool,
 }
 
 /// The persisted layout: tabs in order plus the active tab's index.
@@ -226,6 +229,7 @@ mod tests {
             profile: Some("work".to_owned()),
             session_file: session_file.map(str::to_owned),
             name: Some("label".to_owned()),
+            office: false,
         }
     }
 
@@ -362,6 +366,7 @@ mod tests {
                 profile: Some(String::new()),
                 session_file: Some(String::new()),
                 name: Some(String::new()),
+                office: false,
             }],
             active: Some(0),
         });
@@ -398,7 +403,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&restore).expect("serialize"),
             serde_json::json!({
-                "tabs": [{ "path": "/p", "profile": "work", "sessionFile": null, "name": "label" }],
+                "tabs": [{ "path": "/p", "profile": "work", "sessionFile": null, "name": "label", "office": false }],
                 "active": 0,
                 "skipped": ["/gone"],
             })

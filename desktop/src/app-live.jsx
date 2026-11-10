@@ -897,6 +897,18 @@ function App() {
 
   // "New conversation" in a project: always a new tab, under the project's
   // own profile rather than the active tab's.
+  // Virtual Office is a tab's own switch (Code tabs with a folder); its window shows that tab's company.
+  const officeTab = appModeName === "code" && activeProject.id && activeProject.path ? activeProject : null;
+  const [officeHint, setOfficeHint] = React.useState(false);
+  const setTabOffice = async (tab, on) => {
+    await bridge?.setOfficeEnabled(tab.id, on);
+    if (on) bridge?.openOffice(tab.id);
+  };
+  const handleOfficeNav = () => {
+    if (!officeTab) return;
+    if (officeTab.office) bridge?.openOffice(officeTab.id);
+    else setTabOffice(officeTab, true);
+  };
   const handleNewWorktree = (path, profile) => { bridge?.newWorktreeTask(path, profile).catch(err => console.error("[app] worktree task failed:", err)); };
   const handleNewInProject = async (path, profile) => {
     if (!bridge) return;
@@ -985,6 +997,12 @@ function App() {
     "desktop.panel.changes":   () => openGit({ path: null, project: gitProject }),
     "desktop.panel.rules":     () => openRules(),
     "desktop.panel.stats":     () => openStats(),
+    // Opens the active tab's Office window; a tab without Office only says so.
+    "desktop.office.open":     () => {
+      if (officeTab?.office) { bridge?.openOffice(officeTab.id); return; }
+      setOfficeHint(true);
+      setTimeout(() => setOfficeHint(false), 2600);
+    },
     "desktop.composer.promptHistory": () => setPromptHistoryOpen(v => !v),
     "desktop.session.compact": () => bridge?.compact(),
     "desktop.session.export":  () => bridge?.exportHtml(),
@@ -1281,6 +1299,9 @@ function App() {
                 onOpenFolder={handleNewProject}
                 onHide={toggleSidebar}
                 onHistory={openHistory}
+                office={officeTab ? { on: !!officeTab.office, hint: officeHint } : null}
+                onOffice={handleOfficeNav}
+                onTabOffice={appModeName === "code" ? setTabOffice : null}
                 onReorder={handleReorder}
                 footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} onClick={() => openSettings("account")} />}
               />

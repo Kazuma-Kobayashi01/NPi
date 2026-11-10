@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const ctx = { window: { TWEAK_DEFAULTS: {} } };
 const run = f => vm.runInNewContext(fs.readFileSync(fileURLToPath(new URL(`../src/app/${f}`, import.meta.url)), "utf8"), ctx);
-for (const f of ["i18n.js", "i18n/ui.js", "i18n/settings.js", "i18n/settings-desc.js", "greetings.js", "settings-schema.js"]) run(f);
+for (const f of ["i18n.js", "i18n/ui.js", "i18n/office.js", "i18n/settings.js", "i18n/settings-desc.js", "greetings.js", "settings-schema.js"]) run(f);
 const I = ctx.window.OMP_I18N;
 const D = I.dictionaries();
 let n = 0;

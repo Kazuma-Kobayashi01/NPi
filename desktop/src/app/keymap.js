@@ -53,6 +53,7 @@
     { id: "desktop.panel.changes",   label: "Git browser",             group: "View",    scope: "global",   defaultKeys: ["ctrl+shift+g", "shift+super+g"] },
     { id: "desktop.panel.rules",     label: "Approvals",               group: "View",    scope: "global",   defaultKeys: [] },
     { id: "desktop.panel.stats",     label: "Usage statistics",        group: "View",    scope: "global",   defaultKeys: [] },
+    { id: "desktop.office.open",     label: "Open the Office window",  group: "View",    scope: "global",   defaultKeys: ["ctrl+shift+o", "shift+super+o"] },
     { id: "desktop.composer.promptHistory", label: "Prompt history",   group: "Session", scope: "global",   defaultKeys: ["ctrl+up", "super+up"] },
     { id: "desktop.session.compact", label: "Compact session",         group: "Session", scope: "global",   defaultKeys: [] },
     { id: "desktop.session.export",  label: "Export session to HTML",  group: "Session", scope: "global",   defaultKeys: [] },

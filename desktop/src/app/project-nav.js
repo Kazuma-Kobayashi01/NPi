@@ -227,6 +227,7 @@
         profile: t.profile ?? null,
         sessionFile: t.sessionFile || null,
         name: t.name || null,
+        office: !!t.office,
       })),
       active: active < 0 ? null : active,
     };
@@ -246,6 +247,7 @@
       // No saved profile is the built-in one: the tab must record the
       // profile its process actually runs under.
       profile: tab.profile || DEFAULT_PROFILE_ID,
+      office: !!tab.office,
     };
   }
 

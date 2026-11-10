@@ -49,6 +49,7 @@ mod model_usage;
 mod navigation_guard;
 mod chat_handoff;
 mod clipboard;
+mod fx_rate;
 mod panel_window;
 mod ocr;
 mod pdf_text;
@@ -96,6 +97,31 @@ fn send_command(
     bridge: State<'_, AgentBridge>,
 ) -> Result<(), String> {
     bridge.send(&session_id, &json)
+}
+
+/// A window says which subagent frames it needs from a session; omp is set
+/// to the highest level any window asked for (`agent/subscription.rs`).
+#[tauri::command]
+fn subagent_subscription_claim(
+    window: tauri::WebviewWindow,
+    session_id: String,
+    level: String,
+    bridge: State<'_, AgentBridge>,
+    claims: State<'_, agent::subscription::SubscriptionClaims>,
+) -> Result<String, String> {
+    let effective = claims.claim(&session_id, window.label(), &level)?;
+    bridge.send(&session_id, &agent::subscription::command(effective))?;
+    Ok(effective.to_string())
+}
+
+/// Gives back the claims of the window labelled `owner`, which closed.
+pub(crate) fn release_subscription_claims(app: &tauri::AppHandle, owner: &str) {
+    let claims = app.state::<agent::subscription::SubscriptionClaims>();
+    let bridge = app.state::<AgentBridge>();
+    for (session, level) in claims.release(owner) {
+        // The session may be gone already; nothing to lower then.
+        let _ = bridge.send(&session, &agent::subscription::command(level));
+    }
 }
 
 /// Session-start payload from the frontend. A struct rather than four loose
@@ -2069,6 +2095,7 @@ fn with_plugins_and_state(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AgentBridge::new())
+        .manage(agent::subscription::SubscriptionClaims::default())
         .manage(computer_overlay::OverlayState::default())
         .manage(GitWatcherState::new())
         .manage(OpenProjectState::new())
@@ -2297,6 +2324,8 @@ pub fn run() {
             quit_app,
             hide_main_window,
             panel_window::open_panel_window,
+            subagent_subscription_claim,
+            fx_rate::fx_rate_usd_jpy,
             clipboard::clipboard_write,
             quick_ask::quickask_continue,
             quick_ask::quickask_folder,

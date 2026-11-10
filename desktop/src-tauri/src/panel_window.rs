@@ -13,7 +13,7 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// The panels: (kind, width, height).
-const KINDS: [(&str, f64, f64); 8] = [
+const KINDS: [(&str, f64, f64); 9] = [
     ("librarian", 1400.0, 880.0),
     ("reader", 1360.0, 880.0),
     ("write", 900.0, 720.0),
@@ -22,6 +22,8 @@ const KINDS: [(&str, f64, f64); 8] = [
     ("rules", 760.0, 640.0),
     ("plan", 1100.0, 720.0),
     ("git", 1320.0, 860.0),
+    // The Office window of one tab: `project` is that tab's session id.
+    ("office", 1320.0, 880.0),
 ];
 pub const LABEL_PREFIX: &str = "panel-";
 
@@ -127,7 +129,17 @@ pub fn open_panel_window(
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true)
         .traffic_light_position(tauri::LogicalPosition::new(18.0, 20.5));
-    builder.build().map(|_| ()).map_err(|e| e.to_string())
+    let window = builder.build().map_err(|e| e.to_string())?;
+    if kind == "office" {
+        // The window's subagent-frame claims end with it (`agent/subscription.rs`).
+        let (app, label) = (app.clone(), label.clone());
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                crate::release_subscription_claims(&app, &label);
+            }
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]

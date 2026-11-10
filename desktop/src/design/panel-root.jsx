@@ -45,6 +45,8 @@ function PanelRoot() {
   if (kind === "librarian") return <LibrarianWindow bridge={window.OMP_BRIDGE} project={project} profile={profile} onClose={close} />;
   if (kind === "reader") return <ReaderWindow bridge={window.OMP_BRIDGE} project={project} anchor={anchor} path={path} onClose={close} />;
   if (kind === "write") return <WriteWindow bridge={window.OMP_BRIDGE} project={project} profile={profile} onClose={close} />;
+  // The Office window of one tab: `project` is that tab's session id (app/office-live.js).
+  if (kind === "office") return <OfficeWindow sessionId={project} onClose={close} />;
   if (kind === "stats") return <UsageStatsPanel onClose={close} profileLabel={profile ?? "default"} />;
   if (Object.hasOwn(window.OMP_PANEL_LINK.CALLS, kind)) return <LinkedPanel kind={kind} onClose={close} />;
   return null;

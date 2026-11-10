@@ -21,6 +21,10 @@ A panel page sets `window.OMP_PANEL`, keeps `live.js` inert (no tabs, no listene
 - A call that ends the panel (resuming a session, sending review comments to the agent) is answered before the panel window closes, and the main window takes focus.
 - The git window remounts per project and per open (`seq`), so an edit card's path is selected each time; the other three follow the active tab as it changes.
 
+## The Office window
+
+Kind `office` opens per tab and reads that tab's omp itself, not through `panel-link.js`: see `office-window.md`.
+
 ## Not built
 
 Settings as a window: it uses most of the main window's state and handlers (profiles, keymap, widgets, terminal, panes, logins, Computer Use), so it stays an in-window app tab. No panel restores its window position.

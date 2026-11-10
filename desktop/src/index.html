@@ -61,6 +61,7 @@
        Before everything that renders text; read late (inside functions) by the schema and the components. -->
   <script src="app/i18n.js"></script>
   <script src="app/i18n/ui.js"></script>
+  <script src="app/i18n/office.js"></script>
   <script src="app/i18n/settings.js"></script>
   <script src="app/i18n/settings-desc.js"></script>
   <script src="app/tooltip.js"></script>
@@ -468,6 +469,15 @@
   <script type="text/babel" src="design/usage-stats-panel.jsx"></script>
   <script type="text/babel" src="design/context-insight-charts.jsx"></script>
   <script type="text/babel" src="design/context-insight-modal.jsx"></script>
+  <!-- The Office window (panel kind "office"): the window's own line to one
+       tab's omp (office-live.js), the pure view of omp's OfficeState and the
+       meter (office-model.js, office-meter.js), then its two pages. After the
+       subagent bits (saModelName, OMP_SUBAGENTS) and before panel-root. -->
+  <script src="app/office-model.js"></script>
+  <script src="app/office-meter.js"></script>
+  <script src="app/office-live.js"></script>
+  <script type="text/babel" src="design/office/office-window.jsx"></script>
+  <script type="text/babel" src="design/office/office-detail.jsx"></script>
   <script type="text/babel" src="design/panel-root.jsx"></script>
   <script type="text/babel" src="design/handoff-card.jsx"></script>
   <script type="text/babel" src="design/review-card.jsx"></script>

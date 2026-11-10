@@ -19,13 +19,17 @@ function sidebarHint(actionId, fallback) {
 
 function ProjectSidebar({
   tabs, activeId, recents, profileLabel, saved = [], historyProfile, onResume,
-  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode,
+  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode, office, onOffice, onTabOffice,
 }) {
   const ctx = window.useContextMenu();
   const tabMenu = t => [
     ...(t.path ? [{ label: _PSB_T("Open in Finder"), onClick: () => onReveal(t.path) }, "-"] : []),
     { label: _PSB_T("Mark as unread"), key: "U", onClick: () => onMarkUnread(t.id) },
     { label: _PSB_T("Rename"), key: "R", onClick: () => startRename(t.id) },
+    ...(onTabOffice && t.path ? ["-", {
+      label: _PSB_T(t.office ? "Turn Virtual Office off for this tab" : "Turn Virtual Office on for this tab"),
+      onClick: () => onTabOffice(t, !t.office),
+    }] : []),
     "-",
     { label: _PSB_T("Close"), onClick: () => onCloseTab(t.id) },
     { label: _PSB_T("Archive"), key: "A", onClick: () => onArchiveTab(t) },
@@ -77,6 +81,14 @@ function ProjectSidebar({
         <button className="psb-navitem" onClick={onHistory}>
           <Icon name="clock" size={15} /><span>{_PSB_T("History")}</span>
         </button>
+        {office && (
+          <button className={`psb-navitem${office.on ? " on" : ""}`} onClick={onOffice}
+            title={_PSB_T(office.on ? "Open the Office window" : "Turn Virtual Office on for this tab")}>
+            <Icon name="grid" size={15} />
+            <span>{office.hint ? _PSB_T("Virtual Office is not on for this tab") : _PSB_T("Office")}</span>
+            {office.on && <span className="psb-office-dot" aria-hidden="true" />}
+          </button>
+        )}
       </nav>
 
       <div className="psb-scroll" onPointerDown={reorder.onPointerDown}>
