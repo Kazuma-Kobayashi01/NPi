@@ -900,12 +900,15 @@ function App() {
   // Virtual Office is a tab's own switch (Code tabs with a folder); its window shows that tab's company.
   const officeTab = appModeName === "code" && activeProject.id && activeProject.path ? activeProject : null;
   const [officeHint, setOfficeHint] = React.useState(false);
+  React.useEffect(() => { setOfficeHint(false); }, [activeProject.id]);
   const setTabOffice = async (tab, on) => {
+    if (officeHint) setOfficeHint(false);
     await bridge?.setOfficeEnabled(tab.id, on);
     if (on) bridge?.openOffice(tab.id);
   };
   const handleOfficeNav = () => {
     if (!officeTab) return;
+    if (officeHint) setOfficeHint(false);
     if (officeTab.office) bridge?.openOffice(officeTab.id);
     else setTabOffice(officeTab, true);
   };
@@ -997,9 +1000,10 @@ function App() {
     "desktop.panel.changes":   () => openGit({ path: null, project: gitProject }),
     "desktop.panel.rules":     () => openRules(),
     "desktop.panel.stats":     () => openStats(),
-    // Opens the active tab's Office window; a tab without Office only says so.
+    // Opens the active tab's Office window; a tab without Office offers to turn it on.
     "desktop.office.open":     () => {
-      if (officeTab?.office) { bridge?.openOffice(officeTab.id); return; }
+      if (!officeTab) return;
+      if (officeTab.office) { bridge?.openOffice(officeTab.id); return; }
       setOfficeHint(true);
       setTimeout(() => setOfficeHint(false), 2600);
     },
@@ -1302,6 +1306,7 @@ function App() {
                 office={officeTab ? { on: !!officeTab.office, hint: officeHint } : null}
                 onOffice={handleOfficeNav}
                 onTabOffice={appModeName === "code" ? setTabOffice : null}
+                onToggleOffice={officeTab ? on => setTabOffice(officeTab, on) : null}
                 onReorder={handleReorder}
                 footer={<SidebarAccount avatar={t.accountAvatar} name={t.accountName || t.accountCall} onClick={() => openSettings("account")} />}
               />

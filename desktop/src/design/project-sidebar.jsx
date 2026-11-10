@@ -19,7 +19,7 @@ function sidebarHint(actionId, fallback) {
 
 function ProjectSidebar({
   tabs, activeId, recents, profileLabel, saved = [], historyProfile, onResume,
-  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode, office, onOffice, onTabOffice,
+  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode, office, onOffice, onTabOffice, onToggleOffice,
 }) {
   const ctx = window.useContextMenu();
   const tabMenu = t => [
@@ -82,12 +82,25 @@ function ProjectSidebar({
           <Icon name="clock" size={15} /><span>{_PSB_T("History")}</span>
         </button>
         {office && (
-          <button className={`psb-navitem${office.on ? " on" : ""}`} onClick={onOffice}
-            title={_PSB_T(office.on ? "Open the Office window" : "Turn Virtual Office on for this tab")}>
-            <Icon name="grid" size={15} />
-            <span>{office.hint ? _PSB_T("Virtual Office is not on for this tab") : _PSB_T("Office")}</span>
-            {office.on && <span className="psb-office-dot" aria-hidden="true" />}
-          </button>
+          <div className={`psb-navitem psb-navitem-office${office.on ? " on" : ""}`}
+            title={office.hint ? _PSB_T("Virtual Office is off — click to turn on") : _PSB_T(office.on ? "Open the Office window" : "Turn Virtual Office on for this tab")}>
+            <button type="button" className="psb-navitem-main" onClick={onOffice}>
+              <Icon name="grid" size={15} />
+              <span className="psb-navitem-label">{office.hint ? _PSB_T("Virtual Office is off — click to turn on") : _PSB_T("Office")}</span>
+            </button>
+            <button type="button"
+              className={`psb-office-switch${office.on ? " on" : ""}`}
+              role="switch"
+              aria-checked={!!office.on}
+              aria-label={_PSB_T(office.on ? "Turn Virtual Office off for this tab" : "Turn Virtual Office on for this tab")}
+              title={_PSB_T(office.on ? "Turn Virtual Office off for this tab" : "Turn Virtual Office on for this tab")}
+              onClick={e => {
+                e.stopPropagation();
+                onToggleOffice(!office.on);
+              }}>
+              <span className="psb-office-switch-thumb" />
+            </button>
+          </div>
         )}
       </nav>
 
