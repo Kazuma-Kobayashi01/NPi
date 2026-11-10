@@ -1,19 +1,20 @@
 /* office-window.jsx — the Office window (index.html?panel=office&project=<session id>).
-   One tab's company: the meter and the pull-request funnel on top, a card per
-   office below; a card opens that office's member conversations
-   (office-detail.jsx). Data comes over the window's own line to the tab's omp
-   (app/office-live.js), shaped by app/office-model.js and app/office-meter.js.
-   The owner's actions are merging or sending back an approved office pull request,
-   configuring the roster (company scale, office sizes, member capability, model,
-   thinking effort, and leader role, worker add/remove), and clearing an office's memory,
-   all run as `/office` commands. */
+   One tab's research department: the meter on top, a card per office below;
+   a card opens that office's member conversations and reports
+   (office-detail.jsx). Offices only investigate and report; the general
+   manager acts on the reports. Data comes over the window's own line to the
+   tab's omp (app/office-live.js), shaped by app/office-model.js and
+   app/office-meter.js. The owner's actions are reading reports, configuring the
+   roster (company scale, office sizes, member capability, model, thinking
+   effort, and leader role, worker add/remove), and clearing an office's memory,
+   the latter two run as `/office` commands. */
 
 const _OF_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon: _OF_Icon, OMP_OFFICE_MODEL: _OF_M, OMP_OFFICE_METER: _OF_P } = window;
 const _OF_SCALES = [["team", "Team", 1], ["studio", "Studio", 3], ["enterprise", "Enterprise", 6]];
 const _OF_CAPS = ["common", "professional", "expert"];
 const _OF_RANGE_KEY = "npi.office.range";
-const _OF_FLOW = ["Assigned", "Worker PRs in review", "Office PRs in review", "Waiting for you", "Merged"];
+const _OF_FLOW = ["You ask", "The office investigates", "You get a report"];
 const _OF_PENDING_MS = 10000;
 
 /** The company of tab `sessionId`: `{ state, online, reason, link }`; `link` runs commands. */
@@ -38,7 +39,7 @@ function useOffice(sessionId) {
     }, _OF_P.msToMidnight(new Date()) + 1500);
     return () => clearTimeout(timer);
   }, [link, state?.usage?.day]);
-  // Another process (a shell's `npi office merge`) is not pushed: catch up when the window is looked at.
+  // Another process (a shell's `npi office`) is not pushed: catch up when the window is looked at.
   React.useEffect(() => {
     const onFocus = () => link.refresh();
     window.addEventListener("focus", onFocus);
@@ -135,17 +136,12 @@ function OfMeter({ view, range, onRange, fx, compact }) {
   );
 }
 
-function OfFunnel({ funnel }) {
-  const steps = [["Assigned", funnel.assigned], ["Worker PRs in review", funnel.workerReview], ["Office PRs in review", funnel.officeReview],
-    ["Waiting for you", funnel.awaitingOwner, "hot"], ["Merged", funnel.merged]];
+/** How many members are investigating and how many reports are in. */
+function OfSummary({ view }) {
   return (
     <div className="of-funnel">
-      {steps.map(([label, n, hot], i) => (
-        <React.Fragment key={label}>
-          {i > 0 && <span className="of-funnel-arrow">→</span>}
-          <span className={`of-funnel-step${hot && n > 0 ? " hot" : ""}${n === 0 ? " zero" : ""}`}>{_OF_T(label)} <b className="mono">{n}</b></span>
-        </React.Fragment>
-      ))}
+      <span className={`of-funnel-step${view.investigating === 0 ? " zero" : ""}`}>{_OF_T("Investigating")} <b className="mono">{view.investigating}</b></span>
+      <span className={`of-funnel-step${view.reports === 0 ? " zero" : ""}`}>{_OF_T("Reports")} <b className="mono">{view.reports}</b></span>
     </div>
   );
 }
@@ -163,7 +159,7 @@ function OfMemberRow({ member, range, fx }) {
   );
 }
 
-function OfCard({ office, range, fx, branch, onOpen, onMerge, onReject, onMemory }) {
+function OfCard({ office, range, fx, onOpen, onReport, onMemory }) {
   const u = office.usage[range];
   const act = fn => e => { e.stopPropagation(); fn(); };
   return (
@@ -178,15 +174,13 @@ function OfCard({ office, range, fx, branch, onOpen, onMerge, onReject, onMemory
       </div>
       <div className="of-card-total mono">{_OF_P.fmtTokensShort(u.tokens)} Token · {_OF_P.fmtUsd(u.cost)} · {_OF_P.fmtJpy(_OF_P.toJpy(u.cost, fx.rate))}</div>
       {office.task && <div className="of-card-task" title={office.task}>{_OF_T("Now: {task}", { task: office.task })}</div>}
-      {office.waiting && (
-        <div className="of-card-waiting">
-          <span className="of-card-pr">#{office.waiting.number} {office.waiting.title}</span>
-          <button className="btn primary" onClick={act(() => onMerge(office.waiting))}>{_OF_T("Merge into {branch}", { branch: office.waiting.target || branch })}</button>
-          <button className="btn outlined" onClick={act(() => onReject(office.waiting))}>{_OF_T("Send back")}</button>
-        </div>
+      {office.reports[0] && (
+        <button className="of-link of-card-report" title={office.reports[0].report} onClick={act(() => onReport(office.reports[0]))}>
+          {_OF_T("Latest report: {title}", { title: office.reports[0].report })}
+        </button>
       )}
       <div className="of-card-foot">
-        <span>{_OF_T("Open PRs: {n}", { n: office.openPulls })}</span>
+        <span>{_OF_T("Reports: {n}", { n: office.reports.length })}</span>
         <button className="of-link" onClick={act(onMemory)}>{_OF_T("Lessons kept: {n}", { n: office.lessons })}</button>
       </div>
     </div>
@@ -237,25 +231,22 @@ function useOfCommand(link) {
   return { busy, error, run };
 }
 
-function OfMergeDialog({ pull, link, onClose }) {
-  const cmd = useOfCommand(link);
+/** One report, read through the tab's omp; shown as text. */
+function OfReportDialog({ run, link, onClose }) {
+  const [text, setText] = React.useState(null);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    let live = true;
+    link.report(run.id).then(
+      report => { if (live) report == null ? setError(_OF_T("No report is kept for this run.")) : setText(report); },
+      e => { if (live) setError(String(e?.message ?? e)); },
+    );
+    return () => { live = false; };
+  }, [link, run.id]);
   return (
-    <OfDialog title={_OF_T("Merge #{n} “{title}” into {branch}?", { n: pull.number, title: pull.title, branch: pull.target })}
-      note={_OF_T("The change lands on your checked-out branch as one commit.")} action={_OF_T("Merge")} busy={cmd.busy} error={cmd.error}
-      onAction={async () => { if (await cmd.run(["merge", String(pull.number)])) onClose(); }} onClose={onClose}>
-      {pull.body && <div className="of-dialog-body selectable">{pull.body}</div>}
-    </OfDialog>
-  );
-}
-
-function OfRejectDialog({ pull, link, onClose }) {
-  const cmd = useOfCommand(link);
-  const [reason, setReason] = React.useState("");
-  return (
-    <OfDialog title={_OF_T("Why does #{n} go back?", { n: pull.number })} note={_OF_T("The office reads this as the review comment.")}
-      action={_OF_T("Send back")} busy={cmd.busy || !reason.trim()} error={cmd.error}
-      onAction={async () => { if (await cmd.run(["reject", String(pull.number), reason.trim()])) onClose(); }} onClose={onClose}>
-      <textarea className="of-input" rows={4} autoFocus value={reason} onChange={e => setReason(e.target.value)} />
+    <OfDialog title={run.report || _OF_T("Report")} note={`${run.member} · ${new Date(run.startedAt).toLocaleString()}`} error={error} onClose={onClose}>
+      {text === null && !error && <div className="of-empty">{_OF_T("Loading…")}</div>}
+      {text !== null && <div className="of-dialog-body of-report selectable">{text}</div>}
     </OfDialog>
   );
 }
@@ -263,8 +254,8 @@ function OfRejectDialog({ pull, link, onClose }) {
 function OfMemoryDialog({ office, link, onClose }) {
   const cmd = useOfCommand(link);
   const [confirming, setConfirming] = React.useState(false);
-  const { notes, log } = office.memory;
-  const empty = notes.length + log.length === 0;
+  const { notes } = office.memory;
+  const empty = notes.length === 0;
   if (confirming) {
     return (
       <OfDialog title={_OF_T("Clear what office {n} remembers about this project?", { n: office.number })} action={_OF_T("Forget everything")} danger
@@ -277,8 +268,6 @@ function OfMemoryDialog({ office, link, onClose }) {
         {empty && <div className="of-empty">{_OF_T("Nothing remembered yet.")}</div>}
         {notes.length > 0 && <div className="of-block-k">{_OF_T("Lessons")}</div>}
         {notes.map((n, i) => <div key={i} className="of-memory-row">{n.text}<span className="of-memory-by mono">{n.by}</span></div>)}
-        {log.length > 0 && <div className="of-block-k">{_OF_T("Merged work")}</div>}
-        {log.map((e, i) => <div key={i} className="of-memory-row">#{e.pr} {e.title}<span className="of-memory-by mono">{e.author} → {e.target}</span></div>)}
       </div>
       {!empty && <button className="btn danger outlined of-forget" onClick={() => setConfirming(true)}>{_OF_T("Forget everything")}</button>}
     </OfDialog>
@@ -471,9 +460,9 @@ function OfOff({ busy, disabled, onEnable }) {
       <div className="of-off-panel">
         <span className="of-off-icon" aria-hidden="true"><_OF_Icon name="grid" size={18} /></span>
         <h1 className="of-off-title">{_OF_T("Virtual Office is off for this tab")}</h1>
-        <p className="of-off-text">{_OF_T("Turn it on and the general manager splits your requests among offices of agents. Each office reviews its own pull requests; only work that passes reaches you to merge.")}</p>
-        <ol className="of-flow" aria-label={_OF_T("How work reaches you")}>
-          {_OF_FLOW.map(label => <li key={label} className={label === "Waiting for you" ? "hot" : undefined}>{_OF_T(label)}</li>)}
+        <p className="of-off-text">{_OF_T("Turn it on and the general manager can hand questions to offices of agents. They read the project and the web, never change anything, and report back; the general manager acts on the reports.")}</p>
+        <ol className="of-flow" aria-label={_OF_T("How a question is answered")}>
+          {_OF_FLOW.map(label => <li key={label} className={label === "You get a report" ? "hot" : undefined}>{_OF_T(label)}</li>)}
         </ol>
         <button type="button" className="btn primary of-off-action" disabled={disabled || busy} onClick={onEnable}>
           {busy ? _OF_T("Turning on…") : _OF_T("Enable Office")}
@@ -484,7 +473,7 @@ function OfOff({ busy, disabled, onEnable }) {
   );
 }
 
-/** No state yet: the outline of the meter, the funnel and the cards. */
+/** No state yet: the outline of the meter, the summary and the cards. */
 function OfLoading() {
   return (
     <div className="of-body of-loading" role="status" aria-label={_OF_T("Loading…")}>
@@ -515,7 +504,7 @@ function OfficeWindow({ sessionId, profile, onClose }) {
       <div className="of-head" {...wc.headProps}>
         {wc.lights}
         <span className="of-head-title">NPi Office</span>
-        {view?.company && <span className="mono of-head-repo">{view.company.name} @ {view.company.branch}</span>}
+        {view?.company && <span className="mono of-head-repo" title={view.company.checkout}>{view.company.name}</span>}
         {view && <span className="of-head-meta">{_OF_T(scaleLabel)} · {_OF_T("{offices} offices · {members} members", { offices: view.offices.length, members: view.memberCount })}</span>}
         <span className="of-head-fill" />
         <span className={`of-online${status === "General manager online" ? " on" : ""}`} title={_OF_T(status)}>
@@ -542,12 +531,12 @@ function OfficeWindow({ sessionId, profile, onClose }) {
       ) : (
         <div className="of-body">
           <OfMeter view={view} range={range} onRange={setRange} fx={fx} />
-          <OfFunnel funnel={view.funnel} />
+          <OfSummary view={view} />
           <div className={`of-grid n${Math.min(view.offices.length, 6)}`}>
             {view.offices.map(office => (
-              <OfCard key={office.number} office={office} range={range} fx={fx} branch={view.company?.branch ?? ""}
+              <OfCard key={office.number} office={office} range={range} fx={fx}
                 onOpen={() => setDetail(office.number)}
-                onMerge={pull => setDialog({ kind: "merge", pull })} onReject={pull => setDialog({ kind: "reject", pull })}
+                onReport={run => setDialog({ kind: "report", run })}
                 onMemory={() => setDialog({ kind: "memory", office: office.number })} />
             ))}
           </div>
@@ -555,10 +544,9 @@ function OfficeWindow({ sessionId, profile, onClose }) {
       )}
       {openOffice && (
         <OfficeDetail office={openOffice} state={state} range={range} fx={fx} link={link}
-          onMerge={pull => setDialog({ kind: "merge", pull })} onReject={pull => setDialog({ kind: "reject", pull })} onClose={() => setDetail(null)} />
+          onReport={run => setDialog({ kind: "report", run })} onClose={() => setDetail(null)} />
       )}
-      {dialog?.kind === "merge" && <OfMergeDialog pull={dialog.pull} link={link} onClose={() => setDialog(null)} />}
-      {dialog?.kind === "reject" && <OfRejectDialog pull={dialog.pull} link={link} onClose={() => setDialog(null)} />}
+      {dialog?.kind === "report" && <OfReportDialog run={dialog.run} link={link} onClose={() => setDialog(null)} />}
       {dialog?.kind === "memory" && view?.offices.find(o => o.number === dialog.office) && (
         <OfMemoryDialog office={view.offices.find(o => o.number === dialog.office)} link={link} onClose={() => setDialog(null)} />
       )}

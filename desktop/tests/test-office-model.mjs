@@ -30,21 +30,19 @@ function check(label, fn) {
 
 const member = (id, role, capability = "common") => ({ id, role, capability, model: "" });
 const amount = (tokens, cost, requests = 1) => ({ tokens, cost, requests });
-const pull = (number, kind, office, status, author = "Worker-b") => ({ number, kind, office, author, status, title: `PR ${number}`, body: "", source: "s", target: "main", reviews: [] });
 
 function state() {
   return {
     enabled: true,
     scale: "studio",
-    company: { checkout: "/Users/x/Code/NPi Desktop", baseBranch: "main" },
+    company: { checkout: "/Users/x/Code/NPi Desktop" },
     offices: [
       { number: 1, members: [member("Worker-b", "worker"), member("Worker-a", "leader", "expert"), member("Worker-c", "worker")] },
       { number: 2, members: [member("Worker-d", "leader"), member("Worker-e", "worker"), member("Worker-f", "worker")] },
     ],
-    pulls: [pull(1, "worker", 1, "merged"), pull(2, "office", 1, "approved", "Worker-a"), pull(3, "worker", 2, "open", "Worker-e"), pull(4, "office", 2, "open", "Worker-d")],
-    memory: [{ office: 1, notes: [{ by: "owner", text: "x" }], log: [] }, { office: 2, notes: [], log: [] }],
+    memory: [{ office: 1, notes: [{ by: "owner", text: "x" }] }, { office: 2, notes: [] }],
     activity: [
-      { office: 1, phase: "awaiting_owner", working: [] },
+      { office: 1, phase: "idle", working: [] },
       { office: 2, phase: "working", working: ["Worker-d", "Worker-e"], task: "Refactor login" },
     ],
     usage: {
@@ -59,6 +57,7 @@ function state() {
       },
     },
     runs: [
+      { id: "r0", office: 1, member: "Worker-a", by: "general-manager", task: "t0", startedAt: "a", endedAt: "b", report: "Login lives in auth.ts" },
       { id: "r1", office: 1, member: "Worker-b", by: "Worker-a", task: "t", startedAt: "a", endedAt: "b", failed: true },
       { id: "r2", office: 2, member: "Worker-e", by: "Worker-d", task: "t2", startedAt: "c" },
     ],
@@ -67,9 +66,9 @@ function state() {
 
 check("no state, no view", () => assert.equal(M.view(null), null));
 
-check("the company line names the repository folder and branch", () => {
+check("the company line names the repository folder", () => {
   const v = M.view(state());
-  assert.deepEqual(v.company, { name: "NPi Desktop", checkout: "/Users/x/Code/NPi Desktop", branch: "main" });
+  assert.deepEqual(v.company, { name: "NPi Desktop", checkout: "/Users/x/Code/NPi Desktop" });
   assert.equal(v.memberCount, 6);
   assert.equal(v.working, true);
 });
@@ -91,19 +90,17 @@ check("a member's thinking effort passes through and defaults to empty", () => {
   assert.equal(byId["Worker-a"].thinking, "");
 });
 
-check("an office adds up its members and knows what waits for the owner", () => {
-  const [one, two] = M.view(state()).offices;
+check("an office adds up its members and lists only the reports it handed in", () => {
+  const v = M.view(state());
+  const [one, two] = v.offices;
   assert.equal(one.usage.today.tokens, 200);
   assert.equal(one.usage.total.tokens, 1000);
-  assert.equal(one.waiting.number, 2);
-  assert.equal(one.openPulls, 1);
   assert.equal(one.lessons, 1);
-  assert.equal(two.waiting, null);
-  assert.equal(two.openPulls, 2);
-});
-
-check("the funnel counts each stage once", () => {
-  assert.deepEqual(M.view(state()).funnel, { assigned: 2, workerReview: 1, officeReview: 1, awaitingOwner: 1, merged: 1 });
+  // A failed run without a report and a running one are not reports.
+  assert.deepEqual(one.reports.map(r => r.id), ["r0"]);
+  assert.deepEqual(two.reports, []);
+  assert.equal(v.reports, 1);
+  assert.equal(v.investigating, 2);
 });
 
 check("shares split the range between the manager and the offices", () => {
@@ -115,7 +112,7 @@ check("shares split the range between the manager and the offices", () => {
 });
 
 check("a state without a company still draws", () => {
-  const v = M.view({ enabled: true, scale: "team", offices: [], company: null, reason: "not a git repository", pulls: [], memory: [], activity: [], usage: null, runs: [] });
+  const v = M.view({ enabled: true, scale: "team", offices: [], company: null, reason: "not a git repository", memory: [], activity: [], usage: null, runs: [] });
   assert.equal(v.company, null);
   assert.equal(v.reason, "not a git repository");
   assert.deepEqual(v.usage.today, { tokens: 0, cost: 0, requests: 0 });

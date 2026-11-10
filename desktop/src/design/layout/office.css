@@ -1,4 +1,4 @@
-/* office.css — the Office window (design/office/): the meter, the funnel,
+/* office.css — the Office window (design/office/): the meter, the summary,
    a card per office, and the member columns of one office. Colours are the
    theme's tokens only (styles.css / themes.css), so every theme, light or
    dark, reads the same. Smallest window: 520 × 360. */
@@ -111,12 +111,9 @@
 
 /* ── Funnel ── */
 .of-funnel { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--fg-2); font-size: var(--d-text-sm); }
-.of-funnel-arrow { color: var(--fg-4); }
 .of-funnel-step { padding: 3px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg-surface); white-space: nowrap; }
 .of-funnel-step b { font-weight: 600; color: var(--fg); }
 .of-funnel-step.zero, .of-funnel-step.zero b { color: var(--fg-3); }
-.of-funnel-step.hot { border-color: var(--amber); color: var(--amber); background: color-mix(in oklab, var(--amber) 12%, var(--bg-window)); }
-.of-funnel-step.hot b { color: inherit; }
 
 /* ── Cards ── */
 .of-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -127,14 +124,11 @@
 .of-card { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-surface); box-shadow: var(--shadow-card); cursor: pointer; transition: border-color 120ms, background 120ms; min-width: 0; }
 .of-card:hover { border-color: var(--line-bright); background: var(--bg-elevated); }
 .of-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.of-card.working, .of-card.reviewing { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 1px var(--accent-soft), 0 0 22px -8px var(--accent-glow); }
-.of-card.awaiting_owner { border-color: color-mix(in oklab, var(--amber) 60%, var(--line)); }
+.of-card.working { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 1px var(--accent-soft), 0 0 22px -8px var(--accent-glow); }
 .of-card-head { display: flex; align-items: center; gap: 10px; }
 .of-card-title { font-weight: 600; font-size: var(--d-text-lg); }
 .of-phase { font-size: var(--d-text-xs); padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid var(--line); color: var(--fg-3); white-space: nowrap; }
-.of-phase.working, .of-phase.reviewing { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 40%, var(--line)); background: var(--accent-soft); }
-.of-phase.awaiting_owner { color: var(--amber); border-color: color-mix(in oklab, var(--amber) 40%, var(--line)); background: color-mix(in oklab, var(--amber) 10%, transparent); }
-.of-phase.awaiting_manager { color: var(--lilac); border-color: color-mix(in oklab, var(--lilac) 40%, var(--line)); }
+.of-phase.working { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 40%, var(--line)); background: var(--accent-soft); }
 .of-members { display: flex; flex-direction: column; gap: 5px; }
 .of-member { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 1px; font-size: var(--d-text-sm); }
 .of-member-name { color: var(--fg); white-space: nowrap; }
@@ -146,8 +140,7 @@
 .of-cap.expert { color: var(--amber); background: color-mix(in oklab, var(--amber) 16%, transparent); }
 .of-card-total { padding-top: 8px; border-top: 1px solid var(--line-soft); color: var(--fg-2); font-size: var(--d-text-sm); font-variant-numeric: tabular-nums; }
 .of-card-task { color: var(--fg-2); font-size: var(--d-text-sm); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.of-card-waiting { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; border-radius: var(--r-1); border: 1px solid color-mix(in oklab, var(--amber) 25%, transparent); background: color-mix(in oklab, var(--amber) 10%, transparent); }
-.of-card-pr { flex: 1 1 100%; min-width: 0; font-size: var(--d-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.of-card-report { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: var(--d-text-sm); }
 .of-card-foot { display: flex; justify-content: space-between; gap: 10px; color: var(--fg-3); font-size: var(--d-text-xs); }
 .of-link { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
 .of-link:hover { text-decoration: underline; }
@@ -194,17 +187,6 @@
 .od-head > .btn, .od-head > .of-card-title, .od-head > .of-phase { flex: none; }
 @media (max-width: 640px) { .od-head .chip, .od-head .of-meter.compact .of-dial:not(:first-child) { display: none; } }
 .od-task { padding: 6px var(--d-pad); color: var(--fg-2); font-size: var(--d-text-sm); border-bottom: 1px solid var(--line-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.od-pulls { padding: 6px var(--d-pad); border-bottom: 1px solid var(--line-soft); font-size: var(--d-text-sm); }
-.od-pulls-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 28vh; overflow-y: auto; }
-.od-pull { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.od-pull-title { color: var(--fg); }
-.od-pull-from, .od-pull-review { color: var(--fg-3); font-size: var(--d-text-xs); }
-.od-pull-actions { display: inline-flex; gap: 6px; margin-left: auto; }
-.od-pull-status { font-size: 10px; padding: 0 6px; border-radius: 4px; line-height: 16px; background: var(--bg-active); color: var(--fg-2); }
-.od-pull-status.approved { color: var(--amber); }
-.od-pull-status.merged { color: var(--lime); }
-.od-pull-status.changes_requested { color: var(--rose); }
-.od-pull-status.open { color: var(--accent); }
 .od-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--od-cols), minmax(320px, 1fr)); overflow-x: auto; }
 .od-col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line-soft); }
 .od-col:last-child { border-right: 0; }
@@ -238,3 +220,7 @@
   .of-dot.working, .of-meter.pumping .of-lamp, .of-switch.pending .of-switch-track::after, .of-skel::after { animation: none; }
   .of-switch-track, .of-switch-track::after { transition: none; }
 }
+
+/* A report in its dialog: plain text, wrapped, scrollable. */
+.of-report { white-space: pre-wrap; max-height: 60vh; overflow-y: auto; font-size: var(--d-text-sm); line-height: 1.5; }
+.od-report { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

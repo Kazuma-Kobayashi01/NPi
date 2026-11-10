@@ -68,10 +68,9 @@ const OdMessages = React.memo(function OdMessages({ messages }) {
   return <>{rows}</>;
 });
 
-function OdRun({ run, link, open, onToggle, pulls }) {
+function OdRun({ run, link, open, onToggle, onReport }) {
   const ended = !!run.endedAt;
   const transcript = useOdTranscript(run, link, open);
-  const pull = run.pr ? pulls.find(p => p.number === run.pr) : null;
   const outcome = !ended ? "In progress" : run.failed ? "Did not finish" : "Finished";
   return (
     <div className={`od-run${ended ? "" : " live"}${run.failed ? " failed" : ""}`}>
@@ -88,13 +87,13 @@ function OdRun({ run, link, open, onToggle, pulls }) {
       )}
       <div className="od-run-foot">
         <span className={`od-outcome${ended ? "" : " live"}${run.failed ? " failed" : ""}`}>{_OD_T(outcome)}</span>
-        {run.pr && <span className="mono">{_OD_T("Left pull request #{n}", { n: run.pr })}{pull ? ` · ${_OD_T(`pr.${pull.status}`)}` : ""}</span>}
+        {run.report && <button className="of-link od-report" title={run.report} onClick={() => onReport(run)}>{_OD_T("Report: {title}", { title: run.report })}</button>}
       </div>
     </div>
   );
 }
 
-function OdColumn({ member, state, range, fx, link }) {
+function OdColumn({ member, state, range, fx, link, onReport }) {
   const runs = React.useMemo(() => _OD_M.memberRuns(state, member.id), [state, member.id]);
   const last = runs[runs.length - 1];
   // The latest run is open; earlier ones open on demand. A new run takes over.
@@ -140,7 +139,7 @@ function OdColumn({ member, state, range, fx, link }) {
         {runs.length > 1 && !showEarlier && (
           <button className="of-link od-earlier" onClick={() => setShowEarlier(true)}>{_OD_T("Earlier assignments: {n}", { n: runs.length - 1 })}</button>
         )}
-        {shown.map(run => <OdRun key={run.id} run={run} link={link} open={isOpen(run)} onToggle={() => toggle(run)} pulls={state.pulls ?? []} />)}
+        {shown.map(run => <OdRun key={run.id} run={run} link={link} open={isOpen(run)} onToggle={() => toggle(run)} onReport={onReport} />)}
       </div>
       {!following && (
         <button className="btn outlined od-latest" onClick={() => { setFollowing(true); }}>{_OD_T("Back to latest")}</button>
@@ -149,40 +148,7 @@ function OdColumn({ member, state, range, fx, link }) {
   );
 }
 
-function OdPulls({ office, onMerge, onReject }) {
-  const [open, setOpen] = React.useState(false);
-  const pulls = [...office.pulls].reverse();
-  return (
-    <div className="od-pulls">
-      <button className="of-link" onClick={() => setOpen(o => !o)} aria-expanded={open}>{_OD_T("Pull requests")} · {pulls.length}</button>
-      {open && (
-        <div className="od-pulls-list selectable">
-          {pulls.length === 0 && <div className="of-empty">{_OD_T("No pull requests yet.")}</div>}
-          {pulls.map(p => {
-            const review = p.reviews[p.reviews.length - 1];
-            return (
-              <div key={p.number} className="od-pull">
-                <span className="mono">#{p.number}</span>
-                <span className={`od-pull-status ${p.status}`}>{_OD_T(`pr.${p.status}`)}</span>
-                <span className="od-pull-title">{p.title}</span>
-                <span className="od-pull-from mono">{p.kind === "office" ? _OD_T("Office {n}", { n: p.office }) : p.author} → {p.target}</span>
-                {review?.comment && <span className="od-pull-review">{review.by}: {review.comment}</span>}
-                {p.kind === "office" && p.status === "approved" && (
-                  <span className="od-pull-actions">
-                    <button className="btn primary" onClick={() => onMerge(p)}>{_OD_T("Merge")}</button>
-                    <button className="btn outlined" onClick={() => onReject(p)}>{_OD_T("Send back")}</button>
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function OfficeDetail({ office, state, range, fx, link, onMerge, onReject, onClose }) {
+function OfficeDetail({ office, state, range, fx, link, onReport, onClose }) {
   React.useEffect(() => {
     const onKey = e => { if (e.key === "Escape" && !document.querySelector(".of-scrim")) onClose(); };
     window.addEventListener("keydown", onKey);
@@ -200,9 +166,8 @@ function OfficeDetail({ office, state, range, fx, link, onMerge, onReject, onClo
         <window.OfMeter view={view} compact={office.usage[range]} fx={fx} />
       </div>
       {office.task && <div className="od-task" title={office.task}>{_OD_T("Now: {task}", { task: office.task })}</div>}
-      <OdPulls office={office} onMerge={onMerge} onReject={onReject} />
       <div className="od-cols" style={{ "--od-cols": office.members.length }}>
-        {office.members.map(m => <OdColumn key={m.id} member={m} state={state} range={range} fx={fx} link={link} />)}
+        {office.members.map(m => <OdColumn key={m.id} member={m} state={state} range={range} fx={fx} link={link} onReport={onReport} />)}
       </div>
     </div>
   );

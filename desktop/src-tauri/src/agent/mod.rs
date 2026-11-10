@@ -123,6 +123,7 @@ const ALLOWED_COMMAND_TYPES: &[&str] = &[
     "get_subagents",
     // Virtual Office (src/app/office-live.js, the tab's Office switch).
     "get_office_state",
+    "get_office_report",
     "office_command",
     "set_office_enabled",
     "get_subagent_messages",

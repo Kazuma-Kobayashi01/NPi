@@ -29,7 +29,7 @@
    * Connects to tab `sessionId`. `onState(state)` gets every company state,
    * `onUsage(frame)` every `office_usage` delta, `onOnline(bool, reason)`
    * whether its omp answers. Returns
-   * `{ request(cmd), command(args), refresh(), transcript(file, fromByte), close() }`.
+   * `{ request(cmd), command(args), refresh(), transcript(file, fromByte), report(runId), close() }`.
    */
   function connect(sessionId, { onState, onUsage, onOnline }) {
     const tauri = window.__TAURI__;
@@ -79,6 +79,11 @@
       return { text: data?.text ?? "", failed: !!data?.failed };
     }
 
+    /** The Markdown report of run `runId`, or null when none is kept. */
+    function report(runId) {
+      return request({ type: "get_office_report", runId });
+    }
+
     function transcript(sessionFile, fromByte) {
       return request({ type: "get_subagent_messages", sessionFile, fromByte: fromByte ?? 0 });
     }
@@ -99,7 +104,7 @@
     }
 
     return {
-      request, command, refresh, transcript,
+      request, command, refresh, transcript, report,
       close() {
         closed = true;
         for (const un of unlisten) { try { un(); } catch (_) {} }
