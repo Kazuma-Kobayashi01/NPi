@@ -11,6 +11,7 @@ const _OF_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon: _OF_Icon, OMP_OFFICE_MODEL: _OF_M, OMP_OFFICE_METER: _OF_P } = window;
 const _OF_SCALES = [["team", "Team", 1], ["studio", "Studio", 3], ["enterprise", "Enterprise", 6]];
 const _OF_CAPS = ["common", "professional", "expert"];
+const _OF_EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const _OF_RANGE_KEY = "npi.office.range";
 const _OF_FLOW = ["Assigned", "Worker PRs in review", "Office PRs in review", "Waiting for you", "Merged"];
 const _OF_PENDING_MS = 10000;
@@ -148,7 +149,7 @@ function OfMemberRow({ member, range, fx }) {
       <span className={`of-dot ${member.status}`} title={member.status === "failed" ? _OF_T("failed") : undefined} />
       <span className="of-member-name mono">{member.role === "leader" ? "★ " : ""}{member.id}</span>
       <span className={`of-cap ${member.capability}`}>{_OF_T(`cap.${member.capability}`)}</span>
-      <span className="of-member-model" title={member.model || undefined}>{member.model ? window.saModelName(member.model) : _OF_T("default model")}</span>
+      <span className="of-member-model" title={member.model || undefined}>{member.model ? window.saModelName(member.model) : _OF_T("default model")}{member.thinking ? ` · ${member.thinking}` : ""}</span>
       <span className="of-member-use mono">{_OF_P.fmtTokensShort(u.tokens)} · {_OF_P.fmtUsd(u.cost)} · {_OF_P.fmtJpy(_OF_P.toJpy(u.cost, fx.rate))}</span>
     </div>
   );
@@ -284,6 +285,7 @@ function OfRoster({ view, link, onClose }) {
     window.__TAURI__?.core.invoke("model_usage_list", { profile: null }).then(list => setModels(Array.isArray(list) ? list : []), () => {});
   }, []);
   const setModel = (id, value) => { const v = value.trim(); cmd.run(["set", id, "model", v || "default"]); };
+  const setEffort = (id, value) => cmd.run(["set", id, "thinking", value || "default"]);
   if (removing) {
     return (
       <OfDialog title={_OF_T("Remove {name}? The name is not reused.", { name: removing })} action={_OF_T("Remove")} danger busy={cmd.busy} error={cmd.error}
@@ -298,6 +300,7 @@ function OfRoster({ view, link, onClose }) {
           <button className="btn icon ghost" aria-label={_OF_T("Close")} onClick={onClose}><_OF_Icon name="close" size={12} /></button>
         </div>
         <div className="of-drawer-note">{_OF_T("The roster is shared by every tab.")}</div>
+        <div className="of-drawer-note">{_OF_T("An empty model uses the capability's tier from Settings → Subagents; an empty effort uses that model's default.")}</div>
         {cmd.error && <div className="of-error selectable">{cmd.error}</div>}
         <div className="of-roster-row">
           <span className="of-block-k">{_OF_T("Company size")}</span>
@@ -324,6 +327,10 @@ function OfRoster({ view, link, onClose }) {
                 <input key={m.model} className="of-input mono" list="of-models" aria-label={_OF_T("Model")} defaultValue={m.model} placeholder={_OF_T("default model")} disabled={cmd.busy}
                   onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   onBlur={e => { if (e.target.value.trim() !== m.model) setModel(m.id, e.target.value); }} />
+                <select aria-label={_OF_T("Effort")} value={m.thinking} disabled={cmd.busy} onChange={e => setEffort(m.id, e.target.value)}>
+                  <option value="">{_OF_T("default effort")}</option>
+                  {_OF_EFFORTS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
                 {m.role !== "leader" && (
                   <>
                     <button className="btn ghost" disabled={cmd.busy} onClick={() => cmd.run(["set", m.id, "role", "leader"])}>{_OF_T("Make leader")}</button>

@@ -131,7 +131,7 @@ function OdColumn({ member, state, range, fx, link }) {
         </div>
         <div className="od-col-meta">
           <span>{_OD_T(member.role === "leader" ? "Leader" : "Worker")}</span>
-          <span title={member.model || undefined}>{member.model ? window.saModelName(member.model) : _OD_T("default model")}</span>
+          <span title={member.model || undefined}>{member.model ? window.saModelName(member.model) : _OD_T("default model")}{member.thinking ? ` · ${member.thinking}` : ""}</span>
         </div>
         <div className="od-col-use mono">{_OD_P.fmtTokensShort(u.tokens)} · {_OD_P.fmtUsd(u.cost)} · {_OD_P.fmtJpy(_OD_P.toJpy(u.cost, fx.rate))}</div>
       </div>

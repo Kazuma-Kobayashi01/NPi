@@ -38,6 +38,7 @@
       role: member.role,
       capability: member.capability,
       model: member.model || "",
+      thinking: member.thinking || "",
       status: busy ? "working" : last?.failed ? "failed" : "idle",
       usage: usageOf(state, member.id),
       // The run to show first: the one in progress, else the latest.

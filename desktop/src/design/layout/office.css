@@ -174,7 +174,7 @@
 .of-roster-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .of-roster-row .btn { margin-left: auto; }
 .of-roster-office { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
-.of-roster-member { display: grid; grid-template-columns: 132px 128px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; font-size: var(--d-text-sm); }
+.of-roster-member { display: grid; grid-template-columns: 132px 128px minmax(0, 1fr) 112px auto auto; align-items: center; gap: 8px; font-size: var(--d-text-sm); }
 .of-roster-member select { border: 1px solid var(--line); border-radius: var(--r-1); background: var(--bg-input); color: var(--fg); font: inherit; padding: 4px 6px; }
 .of-roster-member .of-input { padding: 4px 6px; font-size: var(--d-text-xs); }
 @media (max-width: 600px) {
