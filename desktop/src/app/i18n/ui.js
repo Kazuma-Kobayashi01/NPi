@@ -428,6 +428,7 @@
     ["Your profile", "你的资料", "你的個人資料", "あなたのプロフィール"],
 
     // Project sidebar
+    ["Virtual Office is off — click to turn on", "Virtual Office 已关闭 — 点击开启", "Virtual Office 已關閉 — 點擊開啟", "Virtual Office はオフです — クリックしてオン"],
     ["New", "新建", "新增", "新規"],
     ["History", "历史", "歷史", "履歴"],
     ["Open", "已打开", "已開啟", "開いている項目"],

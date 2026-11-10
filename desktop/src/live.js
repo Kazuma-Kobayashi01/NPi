@@ -1248,6 +1248,12 @@
       sessionId: id,
       json: JSON.stringify({ type: "set_interaction_policy", policy: interactionPolicy }),
     });
+    if (sessionRegistry.get(id)?.office) {
+      await window.__TAURI__.core.invoke("send_command", {
+        sessionId: id,
+        json: JSON.stringify({ type: "set_office_enabled", enabled: true }),
+      });
+    }
     // A fresh incarnation owns this id now, and `start_session` cleared the
     // backend's cached error for it — so a *new* startup failure must be
     // reportable again. Cleared after the spawn resolved, so a spawn that
@@ -3093,8 +3099,6 @@
         // Subscription level is per process and survives tab switches, but a
         // respawned process starts at "off" — so (re)assert it every time.
         _claimSubscription(SUB.subscriptionLevelFor({ inspecting: subagentInspecting }));
-        // Virtual Office is the tab's own switch and omp starts with it off.
-        if (sessionRegistry.get(activeSessionId)?.office) _send({ type: "set_office_enabled", enabled: true });
         _send({ type: "get_subagents" });
       });
   }
@@ -4000,7 +4004,7 @@
 
     /** Turn Virtual Office on or off for tab `sessionId`: the tab remembers
      *  it (open-tabs.json) and its omp is told now; a restart tells it again
-     *  (`_initFetch`). Resolves to whether omp took the command. */
+     *  (`_spawnSession`). Resolves to whether omp took the command. */
     async setOfficeEnabled(sessionId, on) {
       const entry = sessionRegistry.get(sessionId);
       if (!entry || !window.__TAURI__) return false;
@@ -4012,7 +4016,7 @@
         });
         return true;
       } catch (e) {
-        // Not running yet: `_initFetch` sends it when the tab's omp is up.
+        // Not running yet: `_spawnSession` sends it when the tab's omp is up.
         console.warn(`[live] set_office_enabled for '${sessionId}' not sent:`, e);
         return false;
       }
@@ -5251,6 +5255,14 @@
     document.documentElement.classList.add("tauri-native");
   } else if (window.__TAURI__) {
     document.documentElement.classList.add("tauri-native");
+    // Cross-window contract: the Office window asks the main window to toggle Office.
+    window.__TAURI__.event.listen("office://set-enabled", event => {
+      const payload = event?.payload;
+      if (!payload || typeof payload !== "object") return;
+      const { sessionId, enabled } = payload;
+      if (typeof sessionId !== "string" || !sessionId || typeof enabled !== "boolean") return;
+      void window.OMP_BRIDGE.setOfficeEnabled(sessionId, enabled);
+    }).catch(error => console.error("[live] office://set-enabled listener failed:", error));
     window.__TAURI__.event.listen("computer-use://state", event => {
       const { sessionId, state: computerState } = event.payload;
       computerStates.set(sessionId, { state: computerState, error: null });

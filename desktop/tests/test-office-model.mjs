@@ -83,6 +83,14 @@ check("the leader comes first and members carry their own status", () => {
   assert.equal(two.task, "Refactor login");
 });
 
+check("a member's thinking effort passes through and defaults to empty", () => {
+  const s = state();
+  s.offices[0].members[0].thinking = "high";
+  const byId = Object.fromEntries(M.view(s).offices[0].members.map(m => [m.id, m]));
+  assert.equal(byId["Worker-b"].thinking, "high");
+  assert.equal(byId["Worker-a"].thinking, "");
+});
+
 check("an office adds up its members and knows what waits for the owner", () => {
   const [one, two] = M.view(state()).offices;
   assert.equal(one.usage.today.tokens, 200);

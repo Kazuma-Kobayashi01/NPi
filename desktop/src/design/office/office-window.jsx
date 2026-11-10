@@ -11,7 +11,10 @@ const _OF_T = (key, vars) => window.OMP_I18N.t(key, vars);
 const { Icon: _OF_Icon, OMP_OFFICE_MODEL: _OF_M, OMP_OFFICE_METER: _OF_P } = window;
 const _OF_SCALES = [["team", "Team", 1], ["studio", "Studio", 3], ["enterprise", "Enterprise", 6]];
 const _OF_CAPS = ["common", "professional", "expert"];
+const _OF_EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const _OF_RANGE_KEY = "npi.office.range";
+const _OF_FLOW = ["Assigned", "Worker PRs in review", "Office PRs in review", "Waiting for you", "Merged"];
+const _OF_PENDING_MS = 10000;
 
 /** The company of tab `sessionId`: `{ state, online, reason, link }`; `link` runs commands. */
 function useOffice(sessionId) {
@@ -146,7 +149,7 @@ function OfMemberRow({ member, range, fx }) {
       <span className={`of-dot ${member.status}`} title={member.status === "failed" ? _OF_T("failed") : undefined} />
       <span className="of-member-name mono">{member.role === "leader" ? "★ " : ""}{member.id}</span>
       <span className={`of-cap ${member.capability}`}>{_OF_T(`cap.${member.capability}`)}</span>
-      <span className="of-member-model" title={member.model || undefined}>{member.model ? window.saModelName(member.model) : _OF_T("default model")}</span>
+      <span className="of-member-model" title={member.model || undefined}>{member.model ? window.saModelName(member.model) : _OF_T("capability tier")}{member.thinking ? ` · ${member.thinking}` : ""}</span>
       <span className="of-member-use mono">{_OF_P.fmtTokensShort(u.tokens)} · {_OF_P.fmtUsd(u.cost)} · {_OF_P.fmtJpy(_OF_P.toJpy(u.cost, fx.rate))}</span>
     </div>
   );
@@ -282,6 +285,7 @@ function OfRoster({ view, link, onClose }) {
     window.__TAURI__?.core.invoke("model_usage_list", { profile: null }).then(list => setModels(Array.isArray(list) ? list : []), () => {});
   }, []);
   const setModel = (id, value) => { const v = value.trim(); cmd.run(["set", id, "model", v || "default"]); };
+  const setEffort = (id, value) => cmd.run(["set", id, "thinking", value || "default"]);
   if (removing) {
     return (
       <OfDialog title={_OF_T("Remove {name}? The name is not reused.", { name: removing })} action={_OF_T("Remove")} danger busy={cmd.busy} error={cmd.error}
@@ -296,6 +300,7 @@ function OfRoster({ view, link, onClose }) {
           <button className="btn icon ghost" aria-label={_OF_T("Close")} onClick={onClose}><_OF_Icon name="close" size={12} /></button>
         </div>
         <div className="of-drawer-note">{_OF_T("The roster is shared by every tab.")}</div>
+        <div className="of-drawer-note">{_OF_T("An empty model uses the capability's tier from Settings → Models; an empty effort uses that model's default.")}</div>
         {cmd.error && <div className="of-error selectable">{cmd.error}</div>}
         <div className="of-roster-row">
           <span className="of-block-k">{_OF_T("Company size")}</span>
@@ -319,9 +324,13 @@ function OfRoster({ view, link, onClose }) {
                 <select aria-label={_OF_T("Capability")} value={m.capability} disabled={cmd.busy} onChange={e => cmd.run(["set", m.id, "capability", e.target.value])}>
                   {_OF_CAPS.map(c => <option key={c} value={c}>{_OF_T(`cap.${c}`)}</option>)}
                 </select>
-                <input key={m.model} className="of-input mono" list="of-models" aria-label={_OF_T("Model")} defaultValue={m.model} placeholder={_OF_T("default model")} disabled={cmd.busy}
+                <input key={m.model} className="of-input mono" list="of-models" aria-label={_OF_T("Model")} defaultValue={m.model} placeholder={_OF_T("capability tier")} disabled={cmd.busy}
                   onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   onBlur={e => { if (e.target.value.trim() !== m.model) setModel(m.id, e.target.value); }} />
+                <select aria-label={_OF_T("Effort")} value={m.thinking} disabled={cmd.busy} onChange={e => setEffort(m.id, e.target.value)}>
+                  <option value="">{_OF_T("default effort")}</option>
+                  {_OF_EFFORTS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
                 {m.role !== "leader" && (
                   <>
                     <button className="btn ghost" disabled={cmd.busy} onClick={() => cmd.run(["set", m.id, "role", "leader"])}>{_OF_T("Make leader")}</button>
@@ -337,6 +346,70 @@ function OfRoster({ view, link, onClose }) {
   );
 }
 
+/** The tab's Office switch. The main window owns the tab's flag (it stores it and
+   sends omp `set_office_enabled`), so this window only asks it to. `pending`
+   holds the asked value until omp's state shows it; the main window may also
+   refuse silently, so the ask lapses after a while. */
+function useOfEnabled(sessionId, enabled) {
+  const [pending, setPending] = React.useState(null);
+  React.useEffect(() => { if (pending !== null && enabled === pending) setPending(null); }, [enabled, pending]);
+  React.useEffect(() => {
+    if (pending === null) return undefined;
+    const timer = setTimeout(() => setPending(null), _OF_PENDING_MS);
+    return () => clearTimeout(timer);
+  }, [pending]);
+  const set = on => {
+    setPending(on);
+    window.__TAURI__.event.emitTo("main", "office://set-enabled", { sessionId, enabled: on }).catch(() => setPending(null));
+  };
+  return { pending, set };
+}
+
+function OfSwitch({ on, pending, disabled, onChange }) {
+  const busy = pending !== null;
+  const shown = busy ? pending : on;
+  const label = busy ? _OF_T(pending ? "Turning on…" : "Turning off…") : _OF_T("Office");
+  return (
+    <button type="button" className={`btn ghost of-switch${busy ? " pending" : ""}`} role="switch" aria-checked={shown} aria-busy={busy}
+      disabled={disabled || busy} title={_OF_T(on ? "Turn Virtual Office off for this tab" : "Turn Virtual Office on for this tab")}
+      onClick={() => onChange(!on)}>
+      <span className="of-switch-track" aria-hidden="true" />
+      <span className="of-switch-label">{label}</span>
+    </button>
+  );
+}
+
+/** Office is off for this tab: what it is, how work flows, and the way to turn it on. */
+function OfOff({ busy, disabled, onEnable }) {
+  return (
+    <div className="of-off">
+      <div className="of-off-panel">
+        <span className="of-off-icon" aria-hidden="true"><_OF_Icon name="grid" size={18} /></span>
+        <h1 className="of-off-title">{_OF_T("Virtual Office is off for this tab")}</h1>
+        <p className="of-off-text">{_OF_T("Turn it on and the general manager splits your requests among offices of agents. Each office reviews its own pull requests; only work that passes reaches you to merge.")}</p>
+        <ol className="of-flow" aria-label={_OF_T("How work reaches you")}>
+          {_OF_FLOW.map(label => <li key={label} className={label === "Waiting for you" ? "hot" : undefined}>{_OF_T(label)}</li>)}
+        </ol>
+        <button type="button" className="btn primary of-off-action" disabled={disabled || busy} onClick={onEnable}>
+          {busy ? _OF_T("Turning on…") : _OF_T("Enable Office")}
+        </button>
+        <span className="of-off-note">{_OF_T("Applies to this tab only. The roster is shared by every tab.")}</span>
+      </div>
+    </div>
+  );
+}
+
+/** No state yet: the outline of the meter, the funnel and the cards. */
+function OfLoading() {
+  return (
+    <div className="of-body of-loading" role="status" aria-label={_OF_T("Loading…")}>
+      <div className="of-skel of-skel-meter" />
+      <div className="of-skel-row">{_OF_FLOW.map(label => <span key={label} className="of-skel of-skel-pill" />)}</div>
+      <div className="of-grid">{[1, 2, 3].map(n => <div key={n} className="of-skel of-skel-card" />)}</div>
+    </div>
+  );
+}
+
 function OfficeWindow({ sessionId, onClose }) {
   const rootRef = React.useRef(null);
   const wc = window.useWindowChrome(onClose, rootRef);
@@ -347,9 +420,10 @@ function OfficeWindow({ sessionId, onClose }) {
   const [detail, setDetail] = React.useState(null);
   const [dialog, setDialog] = React.useState(null);
   const view = React.useMemo(() => _OF_M.view(state), [state]);
-  const openOffice = view?.offices.find(o => o.number === detail) ?? null;
+  const enabled = useOfEnabled(sessionId, view?.enabled);
+  const openOffice = view?.enabled ? view.offices.find(o => o.number === detail) ?? null : null;
   const scaleLabel = _OF_SCALES.find(s => s[0] === view?.scale)?.[1] ?? "";
-  const live = online.on && view?.enabled;
+  const status = !online.on ? "Offline" : view?.enabled ? "General manager online" : "Office off";
 
   return (
     <div className="of-window" ref={rootRef}>
@@ -358,19 +432,29 @@ function OfficeWindow({ sessionId, onClose }) {
         <span className="of-head-title">NPi Office</span>
         {view?.company && <span className="mono of-head-repo">{view.company.name} @ {view.company.branch}</span>}
         {view && <span className="of-head-meta">{_OF_T(scaleLabel)} · {_OF_T("{offices} offices · {members} members", { offices: view.offices.length, members: view.memberCount })}</span>}
-        <span className={`of-online${live ? " on" : ""}`}><span className="of-dot" />{live ? _OF_T("General manager online") : _OF_T("Offline")}</span>
         <span className="of-head-fill" />
+        <span className={`of-online${status === "General manager online" ? " on" : ""}`} title={_OF_T(status)}>
+          <span className="of-dot" /><span className="of-online-label">{_OF_T(status)}</span>
+        </span>
+        {view && <OfSwitch on={view.enabled} pending={enabled.pending} disabled={!online.on} onChange={enabled.set} />}
         {view && <button className="btn outlined" onClick={() => setDialog({ kind: "roster" })}>{_OF_T("Roster")}</button>}
       </div>
       {!online.on && (
-        <div className="of-banner">
-          {_OF_T("The general manager's tab is closed or its agent stopped. The figures below are the last ones received.")}
-          <button className="btn outlined" onClick={() => link.refresh()}>{_OF_T("Retry")}</button>
+        <div className="of-banner warn" role="alert">
+          <_OF_Icon name="warn" size={13} />
+          <span className="of-banner-text">{_OF_T("The general manager's tab is closed or its agent stopped. The figures below are the last ones received.")}</span>
+          <button className="btn outlined" onClick={() => link.refresh()}><_OF_Icon name="refresh" size={11} /> {_OF_T("Retry")}</button>
         </div>
       )}
-      {online.on && view && !view.enabled && <div className="of-banner">{_OF_T("Virtual Office is off for this tab. Turn it on from the tab's Office button.")}</div>}
-      {view && !view.company && <div className="of-banner">{_OF_T("No company here: {reason}", { reason: view.reason })}</div>}
-      {!view ? <div className="of-empty of-loading">{online.on ? _OF_T("Loading…") : ""}</div> : (
+      {view?.enabled && !view.company && (
+        <div className="of-banner">
+          <_OF_Icon name="info" size={13} />
+          <span className="of-banner-text">{_OF_T("No company here: {reason}", { reason: view.reason })}</span>
+        </div>
+      )}
+      {!view ? (online.on && <OfLoading />) : !view.enabled ? (
+        <OfOff busy={enabled.pending !== null} disabled={!online.on} onEnable={() => enabled.set(true)} />
+      ) : (
         <div className="of-body">
           <OfMeter view={view} range={range} onRange={setRange} fx={fx} />
           <OfFunnel funnel={view.funnel} />
