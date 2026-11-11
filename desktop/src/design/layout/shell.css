@@ -539,6 +539,13 @@ html.tauri-native .window {
 .sp-bar > span { display: block; height: 100%; }
 .sp-swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; }
 .sp-note { color: var(--fg-4); font-size: var(--d-text-xs); }
+.sp-spend { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.sp-spend-usd { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); }
+.sp-spend.is-estimate .sp-spend-usd { color: var(--fg-3); }
+.sp-spend-tok { color: var(--fg-3); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; }
+.sp-live { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: sp-live-pulse 1.2s ease-in-out infinite; }
+@keyframes sp-live-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .sp-live { animation: none; } }
 .sp-sub { margin-top: 4px; color: var(--fg-3); font-size: var(--d-text-xs); letter-spacing: 0.02em; }
 .sp-limits, .sp-other { display: flex; flex-direction: column; gap: 10px; }
 .sp-limit { display: flex; flex-direction: column; gap: 4px; }

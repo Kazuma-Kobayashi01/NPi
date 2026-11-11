@@ -199,7 +199,7 @@ function MoreMenu({ items }) {
 // ── Right panel: environment, context, usage, then what is running ─────
 // Always for a tab; below them the running subagents, the branch's PR and the
 // user's widgets (passed as children).
-function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, provider, quotas,
+function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, liveSpend = null, streaming = false, provider, quotas,
   subagents, subagentPaneOpen, onOpenSubagent, onToggleSubagentPane, show = {}, todoCounts, kanban, onCompact, onContextDetails, compacting, children }) {
   const isLive = window.OMP_SUBAGENTS?.isLive ?? (s => s === "pending" || s === "running");
   const hasActiveAgents = Array.isArray(subagents) && subagents.some(a => isLive(a.status));
@@ -208,7 +208,8 @@ function AmbientRail({ project, profileLabel, ctxBreakdown, sessionStats, provid
     <aside className="rail">
       <EnvironmentCard project={project} profileLabel={profileLabel} />
       <ContextCard breakdown={ctxBreakdown} onCompact={onCompact} onDetails={onContextDetails} compacting={compacting} />
-      <UsageCard provider={provider} quotas={quotas} stats={sessionStats} />
+      <SpendCard stats={sessionStats} estimate={liveSpend} live={streaming} />
+      <UsageCard provider={provider} quotas={quotas} />
       {(show.subagents ?? true) && hasActiveAgents && (
         <SubagentRailCard agents={subagents} paneOpen={subagentPaneOpen}
           onOpen={onOpenSubagent} onTogglePane={onToggleSubagentPane} />

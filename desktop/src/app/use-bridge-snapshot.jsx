@@ -17,6 +17,7 @@ function useBridgeSnapshot(bridge, setters) {
       setters.setCompacting(snap.isCompacting);
       setters.setCtx(snap.ctx);
       setters.setSessionStats(snap.sessionStats ?? null);
+      setters.setLiveSpend?.(snap.liveSpend ?? null);
       setters.setCtxBreakdown(snap.ctxBreakdown ?? null);
       setters.setKanban(snap.kanban);
       setters.setPlanMeta(snap.planMeta);

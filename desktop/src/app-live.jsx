@@ -106,6 +106,7 @@ function App() {
   const [thinkingLevel, setThinkingLevel] = React.useState(null);
   const [ctx,           setCtx]           = React.useState(data.ctx);
   const [sessionStats,   setSessionStats]   = React.useState(null);
+  const [liveSpend,      setLiveSpend]      = React.useState(null);
   const [ctxBreakdown,   setCtxBreakdown]   = React.useState(null);
   const [kanban,        setKanban]        = React.useState([]);
   const [planMeta,      setPlanMeta]      = React.useState(data.planMeta);
@@ -156,7 +157,7 @@ function App() {
 
   // ── Cross-cutting effects ─────────────────────────────────────────────────
   useBridgeSnapshot(bridge, {
-    setMessages, setStreaming, setCompacting, setCtx, setSessionStats, setCtxBreakdown, setKanban, setPlanMeta,
+    setMessages, setStreaming, setCompacting, setCtx, setSessionStats, setLiveSpend, setCtxBreakdown, setKanban, setPlanMeta,
     setModels, setActivity, setSparkline,
     setModelState, setThinkingLevel,
     setSessions, setActiveSessionId, setProfiles, setStartupProfileId, setRecentProjects,
@@ -1425,6 +1426,8 @@ function App() {
                   profileLabel={profileLabel(activeProject.profile)}
                   ctxBreakdown={ctxBreakdown}
                   sessionStats={sessionStats}
+                  liveSpend={liveSpend}
+                  streaming={streaming}
                   provider={model?.provider}
                   quotas={quotas}
                   subagents={subagentList}

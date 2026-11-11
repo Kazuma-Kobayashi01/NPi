@@ -149,6 +149,16 @@ check("cost formatting", () => {
   assert.equal(U.formatCost(0.004), "<$0.01");
   assert.equal(U.formatCost(0), "$0.00");
   assert.equal(U.formatCost(undefined), "$0.00");
+  assert.equal(U.formatCostPrecise(0.04213), "$0.0421");
+  assert.equal(U.formatCostPrecise(3.456), "$3.46");
+  assert.equal(U.formatCostPrecise(0.00004), "<$0.0001");
+  assert.equal(U.formatCostPrecise(undefined), "$0.0000");
+  const s1 = U.liveSpend(null, "abcdefgh", { output: 15 });
+  assert.equal(s1.tokens, 2);
+  assert.equal(s1.cost, 2 * 15 / 1e6);
+  const s2 = U.liveSpend(s1, "\u4f60\u597d", { output: 15 });
+  assert.equal(s2.tokens, 4);
+  assert.equal(U.liveSpend(null, "abcd", undefined).cost, null);
 });
 
 if (failed) process.exit(1);

@@ -151,11 +151,26 @@
     return cost < 0.01 ? "<$0.01" : `$${cost.toFixed(2)}`;
   }
 
+  /** Adds streamed output `delta` to the running estimate `prev` ({ tokens, cost }), priced at the
+   *  model's output rate (`price.output`, USD per million tokens; no price, no cost). */
+  function liveSpend(prev, delta, price) {
+    const tokens = (prev?.tokens ?? 0) + estimateTokens(delta);
+    const rate = Number(price?.output);
+    return { tokens, cost: rate > 0 ? (tokens * rate) / 1e6 : null };
+  }
+
+  /** Running spend at a glance: four decimals under $1 ($0.0123), two above; $0.0000 when unknown. */
+  function formatCostPrecise(cost) {
+    if (!(cost > 0)) return "$0.0000";
+    if (cost < 0.0001) return "<$0.0001";
+    return "$" + (cost < 1 ? cost.toFixed(4) : cost.toFixed(2));
+  }
+
   /** Percent of a limit already used (0-100), or null when unknown. */
   function usedPct(limit) {
     const left = leftPct(limit);
     return left === null ? null : 100 - left;
   }
 
-  window.OMP_USAGE = { estimateTokens, contextBreakdown, quotaFor, untilReset, leftPct, usedPct, tokenRows, formatCost };
+  window.OMP_USAGE = { estimateTokens, contextBreakdown, quotaFor, untilReset, leftPct, usedPct, tokenRows, formatCost, formatCostPrecise, liveSpend };
 })();

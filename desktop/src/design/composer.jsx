@@ -711,11 +711,11 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
         onRemove={onRemoveBrowserChip}
         onChipClick={onBrowserChipClick} />
 
-      {attachments.length > 0 && <ComposerAttachments key={sessionId}
+      {attachments.length > 0 && <ComposerAttachments key={`attach-${sessionId}`}
         attachments={attachments} onRemove={removeAttachment} />}
 
       {/* Keyed by tab: an open preview is that tab's, not the next one's. */}
-      <PasteStrip key={sessionId} pastes={collapsed} onExpand={expandPaste} />
+      <PasteStrip key={`paste-${sessionId}`} pastes={collapsed} onExpand={expandPaste} />
 
       <div className="composer-row">
         <ComposerAttachMenu key={sessionId}

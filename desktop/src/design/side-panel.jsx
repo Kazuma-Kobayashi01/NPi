@@ -2,9 +2,10 @@
    side-panel.jsx — the right panel's cards, always shown for a tab:
      Environment  where the conversation runs: computer, folder, branch
      Context      how full the model's window is, split into its parts
+     Spend        this conversation's estimated USD cost and tokens, running
+                  while a reply streams and settled after every response
      Usage        the subscription's remaining limits (a signed-in
-                  subscription) and this conversation's spend and tokens
-                  (always: with an API key those are all there is)
+                  subscription)
    The numbers are prepared in app/usage-view.js; this only draws them.
    ═════════════════════════════════════════════════════════════════════ */
 
@@ -160,12 +161,10 @@ function _SP2_Limits({ row }) {
   );
 }
 
-function UsageCard({ provider, quotas, stats }) {
+function UsageCard({ provider, quotas }) {
   const U = window.OMP_USAGE;
   const M = window.OMP_MODELS;
-  const fmt = window.formatTokens;
   const { mine, others } = U.quotaFor(quotas?.rows, provider);
-  const rows = U.tokenRows(stats);
   const title = mine ? "Plan usage" : "Usage";
   const [othersOpen, setOthersOpen] = React.useState(false);
   return (
@@ -203,11 +202,41 @@ function UsageCard({ provider, quotas, stats }) {
         ))}
       </>)}
 
-      <div className="sp-sub">This conversation</div>
-      <div className="sp-trow">
-        <span className="sp-label">Spend</span>
-        <span className="sp-num">{U.formatCost(stats?.cost)}</span>
+      {!mine && others.length === 0 && !quotas?.loading && !quotas?.error && (
+        <div className="sp-dim">No subscription limits for this model.</div>
+      )}
+    </SideCard>
+  );
+}
+
+// This conversation's spend: omp's estimate in USD from catalog prices, and the
+// tokens behind it. omp books usage per finished model response; while a reply
+// streams, `estimate` ({ tokens, cost } from the streamed text at the output
+// price) is added on top and the totals show muted with a "~" until the real
+// figures arrive.
+function SpendCard({ stats, estimate = null, live = false }) {
+  const U = window.OMP_USAGE;
+  const fmt = window.formatTokens;
+  const rows = U.tokenRows(stats);
+  const booked = rows.reduce((sum, r) => sum + r.tokens, 0);
+  const guessing = !!estimate && estimate.tokens > 0;
+  const cost = (stats?.cost ?? 0) + (guessing ? estimate.cost ?? 0 : 0);
+  const total = booked + (guessing ? estimate.tokens : 0);
+  const mark = guessing ? "~" : "";
+  return (
+    <SideCard title="Spend"
+      extra={live && <span className="sp-live" title="A reply is streaming; the figures are estimated until it ends" aria-label="updating" />}>
+      <div className={`sp-spend${guessing ? " is-estimate" : ""}`}
+        title={guessing ? `Includes ~${fmt(estimate.tokens)} streamed output tokens, estimated until the reply ends` : undefined}>
+        <span className="sp-spend-usd">{mark}{U.formatCostPrecise(cost)}</span>
+        <span className="sp-spend-tok">{mark}{fmt(total)} tokens</span>
       </div>
+      {guessing && (
+        <div className="sp-trow">
+          <span className="sp-label sp-dim">Streaming</span>
+          <span className="sp-num sp-dim">~{fmt(estimate.tokens)}</span>
+        </div>
+      )}
       {rows.map(r => (
         <div key={r.key} className="sp-trow">
           <span className="sp-label sp-dim">{r.label}</span>
@@ -258,4 +287,4 @@ function TodoPlanCard({ counts, kanban }) {
   );
 }
 
-Object.assign(window, { SideCard, EnvironmentCard, ContextCard, UsageCard, TodoPlanCard });
+Object.assign(window, { SideCard, EnvironmentCard, ContextCard, SpendCard, UsageCard, TodoPlanCard });

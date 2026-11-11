@@ -68,6 +68,7 @@
     rpcState:       null,
     sessionCost:    null,
     sessionStats:   null,   // get_session_stats: tokens in/out/cache, cost (the side panel)
+    liveSpend:      null,   // OMP_USAGE.liveSpend: output streamed since the last stats, estimated
     ctxBreakdown:   null,   // OMP_USAGE.contextBreakdown of rpcState
     isCompacting:   false,
     contextMessages: null,
@@ -355,6 +356,7 @@
       thinkingLevel:   state.thinkingLevel,
       ctx:             state.ctx,
       sessionStats:    state.sessionStats,
+      liveSpend:       state.liveSpend,
       ctxBreakdown:    state.ctxBreakdown,
       kanban:          state.kanban,
       planMeta:        state.planMeta,
@@ -808,6 +810,7 @@
       rpcState:      null,
       sessionCost:   null,
       sessionStats:  null,
+      liveSpend:     null,
       ctxBreakdown:  null,
       isCompacting:  false,
       contextMessages: null,
@@ -860,6 +863,7 @@
       rpcState:      state.rpcState,
       sessionCost:   state.sessionCost,
       sessionStats:  state.sessionStats,
+      liveSpend:     state.liveSpend,
       ctxBreakdown:  state.ctxBreakdown,
       isCompacting:  state.isCompacting,
       contextMessages: state.contextMessages,
@@ -908,6 +912,7 @@
       rpcState:      snap.rpcState,
       sessionCost:   snap.sessionCost,
       sessionStats:  snap.sessionStats ?? null,
+      liveSpend:     snap.liveSpend ?? null,
       ctxBreakdown:  snap.ctxBreakdown ?? null,
       isCompacting:  snap.isCompacting ?? false,
       contextMessages: snap.contextMessages ?? null,
@@ -2227,6 +2232,7 @@
     } else if (command === "get_session_stats") {
       // SessionStats: the side panel's token table and spend.
       state.sessionStats = data ?? null;
+      state.liveSpend = null;
       notify();
     }
   }
@@ -2644,6 +2650,13 @@
       streamAcc = step.acc;
       const ame = ev.assistantMessageEvent;
       if (!step.skip) changed = DELTA.applyEvent(streamAcc.blocks, ame) || changed;
+      // The Spend card's running estimate: streamed output at the model's output price,
+      // until get_session_stats brings the real figures.
+      if (!step.skip && ame && typeof ame.delta === "string" &&
+          (ame.type === "text_delta" || ame.type === "thinking_delta" || ame.type === "toolcall_delta")) {
+        state.liveSpend = window.OMP_USAGE.liveSpend(state.liveSpend, ame.delta, state.rpcState?.model?.cost);
+        changed = true;
+      }
       if (!step.skip && ame) {
         if (ame.type === "thinking_start" || ame.type === "thinking_delta") {
           if (streamingBubble.thinkingActive !== true) {
