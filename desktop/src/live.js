@@ -3824,6 +3824,24 @@
     usageLimits(profile = _activeProfileId(), force = false) {
       return _invokeResult("usage_limits", { profile, force });
     },
+    /** Signed-in OAuth accounts by provider — `{ok, value: [{provider, providerName,
+     *  credentialId, name, label?, email?, detail, state: "active"|"idle"|"rotating"}]}`
+     *  (accounts.rs → `omp account --json`). The changes below return the re-read list. */
+    accountsList(profile = _activeProfileId()) {
+      return _invokeResult("accounts_list", { profile });
+    },
+    /** Make one account the only one omp uses for its provider; the others go idle. */
+    accountActivate(provider, credentialId, profile = _activeProfileId()) {
+      return _invokeResult("account_activate", { profile, provider, credentialId });
+    },
+    /** Put a provider back to rotating across its accounts. */
+    accountRotate(provider, profile = _activeProfileId()) {
+      return _invokeResult("account_rotate", { profile, provider });
+    },
+    /** Name an account; a blank name clears it. */
+    accountRename(provider, credentialId, name, profile = _activeProfileId()) {
+      return _invokeResult("account_rename", { profile, provider, credentialId, name: name ?? null });
+    },
     /** Live completion notifications include background tabs and never replay. */
     onSessionSettled(callback) {
       settledSubscribers.add(callback);

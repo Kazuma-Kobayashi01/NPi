@@ -172,6 +172,11 @@
         custom("memory", "Memory", "The assistant notes short facts about you as you talk, such as your field, work, interests and projects, in Chat, Code and Academic, and reads them when a conversation starts. They stay on this computer. Off, nothing is noted or read.", "memory remember personal facts notes sqlite"),
       ] },
     ] },
+    { id: "oauthAccounts", icon: "link", title: "Accounts", blurb: "Signed-in subscription accounts: which one each provider uses, and their names.", groups: [
+      { name: "Subscription accounts", src: "omp account", rows: [
+        custom("oauthAccounts", "Accounts by provider", "Activate one account per provider: it is the only one used for that provider and the provider's other accounts sit idle. A provider with no active account rotates its accounts by remaining quota. Names show in the usage views and the CLI.", "account oauth login subscription activate idle rotate rename name claude chatgpt codex"),
+      ] },
+    ] },
     { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", groups: [
       { name: "Subscription", src: "omp usage", rows: [
         custom("usageLimits", "Subscription limits", "How much of each limit is used, as each provider reports it.", "subscription quota limit remaining plan claude chatgpt codex antigravity"),
@@ -262,6 +267,7 @@
     { id: "conversations", icon: "clock", title: "Conversations", blurb: "Manage, search, preview, export and organize your conversation history across projects.", from: ["conversations"] },
     { id: "memory", icon: "layers", title: "Memory", blurb: "What the assistant remembers about you, in Chat, Code and Academic.", from: ["memory"] },
     { id: "models", icon: "bolt", title: "Models", blurb: "The default model, favourites and vendors.", from: ["models"] },
+    { id: "oauthAccounts", icon: "link", title: "Accounts", blurb: "Signed-in subscription accounts: which one each provider uses, and their names.", from: ["oauthAccounts"] },
     { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", from: ["usage"] },
     { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
     { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Screen access, app control and macOS permissions.", from: ["computerUse"] },

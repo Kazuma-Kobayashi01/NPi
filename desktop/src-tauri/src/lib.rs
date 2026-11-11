@@ -8,6 +8,7 @@
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
 mod academic_space;
+mod accounts;
 mod agent;
 mod approval;
 mod app_mode;
@@ -1558,6 +1559,79 @@ async fn usage_limits(
     off_ipc(move || model_config::usage_limits(profile.as_deref(), force)).await?
 }
 
+/// Signed-in OAuth accounts by provider — see `accounts::run`.
+#[tauri::command]
+async fn accounts_list(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || accounts::run(profile.as_deref(), &accounts::Action::List)).await?
+}
+
+/// Activate one account of `provider` (the only one omp then uses for it); returns the list.
+#[tauri::command]
+async fn account_activate(
+    profile: Option<String>,
+    provider: String,
+    credential_id: u64,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || {
+        accounts::run(
+            profile.as_deref(),
+            &accounts::Action::Activate {
+                provider: &provider,
+                credential_id,
+            },
+        )
+    })
+    .await?
+}
+
+/// Put `provider` back to rotating across its accounts; returns the list.
+#[tauri::command]
+async fn account_rotate(
+    profile: Option<String>,
+    provider: String,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || {
+        accounts::run(
+            profile.as_deref(),
+            &accounts::Action::Rotate {
+                provider: &provider,
+            },
+        )
+    })
+    .await?
+}
+
+/// Name an account (`None` or blank clears the name); returns the list.
+#[tauri::command]
+async fn account_rename(
+    profile: Option<String>,
+    provider: String,
+    credential_id: u64,
+    name: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || {
+        accounts::run(
+            profile.as_deref(),
+            &accounts::Action::Rename {
+                provider: &provider,
+                credential_id,
+                name: name.as_deref(),
+            },
+        )
+    })
+    .await?
+}
+
 /// The `default` model role of `profile`, `None` when unset.
 #[tauri::command]
 async fn model_default_get(
@@ -2297,6 +2371,10 @@ pub fn run() {
             computer_overlay::computer_use_stop,
             models_catalog,
             usage_limits,
+            accounts_list,
+            account_activate,
+            account_rotate,
+            account_rename,
             model_default_get,
             model_default_set,
             model_roster_get,

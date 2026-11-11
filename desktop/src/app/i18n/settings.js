@@ -202,5 +202,22 @@
     ["Not asked yet. Turning this on asks the system for permission.", "尚未请求权限。开启后会向系统请求权限。", "尚未請求權限。開啟後會向系統請求權限。", "まだ確認していません。オンにするとシステムに許可を求めます。"],
     ["Not available in an unpackaged dev build.", "未打包的开发版本中不可用。", "未打包的開發版本中不可用。", "パッケージ化されていない開発ビルドでは利用できません。"],
     ["Checking…", "检查中…", "檢查中…", "確認中…"],
+    // Settings → Accounts
+    ["Accounts", "账号", "帳號", "アカウント"],
+    ["Signed-in subscription accounts: which one each provider uses, and their names.", "已登录的订阅账号：每个厂商使用哪一个，以及它们的名称。", "已登入的訂閱帳號：每個廠商使用哪一個，以及它們的名稱。", "サインイン済みのサブスクリプションアカウント：各プロバイダーで使うアカウントとその名前。"],
+    ["Subscription accounts", "订阅账号", "訂閱帳號", "サブスクリプションアカウント"],
+    ["Accounts by provider", "按厂商分组的账号", "依廠商分組的帳號", "プロバイダー別のアカウント"],
+    ["Active", "激活", "啟用", "アクティブ"],
+    ["Idle", "闲置", "閒置", "待機"],
+    ["Rotating", "轮换", "輪換", "ローテーション"],
+    ["Activate", "激活", "啟用", "アクティブにする"],
+    ["Rename", "重命名", "重新命名", "名前を変更"],
+    ["Account name", "账号名称", "帳號名稱", "アカウント名"],
+    ["Rotate all accounts", "改为全部轮换", "改為全部輪換", "すべてローテーションにする"],
+    ["Loading accounts…", "正在读取账号…", "正在讀取帳號…", "アカウントを読み込み中…"],
+    ["No OAuth account is signed in. Sign in under Models.", "尚未登录任何 OAuth 账号。请在“模型”中登录。", "尚未登入任何 OAuth 帳號。請在「模型」中登入。", "OAuth アカウントにサインインしていません。「モデル」でサインインしてください。"],
+    ["No active account · accounts rotate", "无激活账号 · 账号轮换使用", "無啟用帳號 · 帳號輪換使用", "アクティブなし · ローテーション"],
+    ["One active account · the others are idle", "一个激活账号 · 其余闲置", "一個啟用帳號 · 其餘閒置", "アクティブは 1 つ · ほかは待機"],
+    ["Use only this account for {provider}; its other accounts go idle", "{provider} 只使用这个账号，其余账号闲置", "{provider} 只使用這個帳號，其餘帳號閒置", "{provider} ではこのアカウントだけを使い、ほかは待機にします"],
   ]);
 })();

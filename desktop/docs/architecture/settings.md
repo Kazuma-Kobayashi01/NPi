@@ -73,6 +73,8 @@ Settings (`design/settings/settings-window.jsx`), the Librarian, the git browser
 
 A section shows only if `MERGED` gathers it: an authored section with no destination is dropped silently, so `UNPLACED` lists any and a test keeps it empty.
 
+`rows-oauth-accounts.jsx` (Settings → Accounts): the signed-in OAuth accounts grouped by provider, from `bridge.accountsList` (`accounts.rs` → `omp account --json`). Activate makes an account the only one omp uses for its provider (the others show Idle), Rename names it (blank clears), "Rotate all accounts" returns a provider to rotation; each change runs one `omp account … --json` and the reply is the re-read list. A refused change keeps the list and shows omp's message. `accounts.rs` checks the provider id and name before they reach omp's argv (no leading `-`, at most 64 characters).
+
 `rows-usage.jsx`: the subscription bars (`bridge.usageLimits`, the same `usage_limits` the side panel reads; `app/usage-limits.js` names and orders them, drops a repeated shared quota and any limit with no fraction) and `UsageStatsBody` from `usage-stats-panel.jsx`, which the usage window also shows.
 
 ## Model roster (3.0.0.136)

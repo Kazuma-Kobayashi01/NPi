@@ -27,6 +27,18 @@
 .st-quota { display: flex; flex-direction: column; gap: 16px; width: 100%; }
 .st-quota-account { display: flex; flex-direction: column; gap: 10px; }
 .st-quota-account h4 { margin: 0; color: var(--fg-1); font-size: var(--d-text-sm); font-weight: 600; }
+.st-acct-group h4 { display: flex; align-items: baseline; gap: 10px; }
+.st-acct-group h4 small { color: var(--fg-4); font-weight: 400; font-size: var(--d-text-xs); }
+.st-acct-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.st-acct-row.is-active { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+.st-acct-row.is-idle .st-acct-name { color: var(--fg-3); }
+.st-acct-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-acct-who small { color: var(--fg-4); font-size: var(--d-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-acct-name { color: var(--fg-1); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-acct-state { font-size: var(--d-text-xs); padding: 2px 8px; border-radius: 999px; background: var(--bg-hover); color: var(--fg-3); }
+.st-acct-state.is-active { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent); }
+.st-acct-actions { display: flex; gap: 6px; }
+.st-acct-foot { display: flex; justify-content: flex-end; }
 .st-quota-account h4 small { color: var(--fg-4); font-weight: 400; }
 .st-quota-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr) 76px; align-items: center; gap: 14px; }
 .st-quota-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: var(--fg-1); }

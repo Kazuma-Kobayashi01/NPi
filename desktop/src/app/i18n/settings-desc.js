@@ -134,5 +134,9 @@
       "拖动分栏边缘调整宽度，双击边缘可重置。", "拖曳欄位邊緣調整寬度，雙擊邊緣可重設。", "カラムの端をドラッグして幅を変え、端をダブルクリックして元に戻します。"],
     ["Rebind an action, add a second chord or reset it to its default.",
       "重新绑定某个操作，添加第二个组合键，或恢复默认。", "重新綁定某個動作，新增第二個組合鍵，或還原為預設值。", "操作のキーを割り当て直したり、2 つ目のキーを追加したり、初期値に戻したりできます。"],
+    ["Activate one account per provider: it is the only one used for that provider and the provider's other accounts sit idle. A provider with no active account rotates its accounts by remaining quota. Names show in the usage views and the CLI.",
+      "每个厂商激活一个账号：该厂商只使用这个账号，其余账号闲置。没有激活账号的厂商会按剩余额度轮换使用各账号。名称会显示在用量视图和命令行中。",
+      "每個廠商啟用一個帳號：該廠商只使用這個帳號，其餘帳號閒置。沒有啟用帳號的廠商會依剩餘額度輪換使用各帳號。名稱會顯示在用量檢視和命令列中。",
+      "プロバイダーごとに 1 つのアカウントをアクティブにします。そのプロバイダーではこのアカウントだけを使い、ほかのアカウントは待機します。アクティブなアカウントがないプロバイダーは、残りの利用枠に応じてアカウントをローテーションします。名前は使用量の表示と CLI に表示されます。"],
   ]);
 })();
