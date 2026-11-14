@@ -1,16 +1,19 @@
+// The UI language (app/i18n.js): fixed chrome goes through it at render; model-provided text never does.
+const _GUI_T = (key, vars) => window.OMP_I18N.t(key, vars);
+
 // All model strings render as React text; no HTML, actions, URLs or code.
 class GenerativeUiBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error: error.message }; }
   render() {
-    if (this.state.error) return <section className="gui-card gui-failed" role="alert">UI unavailable: {this.state.error}</section>;
+    if (this.state.error) return <section className="gui-card gui-failed" role="alert">{_GUI_T("gui.unavailable", { error: this.state.error })}</section>;
     return this.props.children;
   }
 }
 
 // Bounded per-document drafts survive tab unmounts, never cross task identities.
 const generativeUiDrafts = new Map();
-function generativeUiIdentity(msg) { return JSON.stringify([msg.session_id, msg.ui_id, msg.task_id, msg.message_id]); }
+function generativeUiIdentity(msg) { return JSON.stringify(msg.schema?.mode === "display" ? [msg.session_id, msg.ui_id] : [msg.session_id, msg.ui_id, msg.task_id, msg.message_id]); }
 function generativeUiRemember(key, record) {
   generativeUiDrafts.delete(key);
   generativeUiDrafts.set(key, record);
@@ -25,7 +28,7 @@ function GenerativeUiImage({ component: c }) {
   const source = c.sourceUrl && /^https:\/\//i.test(c.sourceUrl)
     ? <a href={c.sourceUrl} target="_blank" rel="noopener noreferrer" className="md-image-attribution"
       title={c.sourceUrl} onClick={e => { e.stopPropagation(); onLink?.(e); }}>
-      {c.attribution || "Source"}
+      {c.attribution || _GUI_T("gui.imageSource")}
     </a>
     : null;
   const credit = source || (c.attribution && <span className="gui-image-credit">{c.attribution}</span>);
@@ -34,12 +37,12 @@ function GenerativeUiImage({ component: c }) {
 
   if (image.status === "error") {
     const failed = <>
-      <span className="chip danger">Image unavailable</span>
+      <span className="chip danger">{_GUI_T("gui.imageUnavailable")}</span>
       <span className="md-image-error-msg">{image.error}</span>
-      <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>Retry image</button>
+      <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>{_GUI_T("gui.retryImage")}</button>
     </>;
-    if (!side) return <div className="gui-image-card is-error" role="group" aria-label={c.alt || c.title || "Image"}>{failed}{credit}</div>;
-    return <div className="gui-image-card gui-image-side" role="group" aria-label={c.alt || c.title || "Image"}>
+    if (!side) return <div className="gui-image-card is-error" role="group" aria-label={c.alt || c.title || _GUI_T("gui.image")}>{failed}{credit}</div>;
+    return <div className="gui-image-card gui-image-side" role="group" aria-label={c.alt || c.title || _GUI_T("gui.image")}>
       <div className="gui-image-media is-error">{failed}</div>
       <div className="gui-image-body">
         {c.title && <h4 className="gui-image-title">{c.title}</h4>}
@@ -50,7 +53,7 @@ function GenerativeUiImage({ component: c }) {
   }
 
   const loading = <div className="gui-image-loading" role="status">
-    <span className="pulse-dot" /> Loading {c.alt || "image"}…
+    <span className="pulse-dot" /> {_GUI_T("gui.imageLoading", { name: c.alt || _GUI_T("gui.imageName") })}
   </div>;
   if (!image.displayUrl && !side) return loading;
 
@@ -60,11 +63,11 @@ function GenerativeUiImage({ component: c }) {
     {image.displayKind === "thumbnail" && (
       <span className={`md-image-status${image.status === "full-error" ? " is-error" : ""}`} role="status">
         <span className="pulse-dot" />
-        {image.status === "full-error" ? "Full image unavailable" : image.status === "preview" ? "Preview" : "Loading full image…"}
+        {_GUI_T(image.status === "full-error" ? "gui.fullImageUnavailable" : image.status === "preview" ? "gui.imagePreview" : "gui.loadingFullImage")}
       </span>
     )}
     {image.status === "full-error" && (
-      <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>Retry full image</button>
+      <button type="button" className="md-image-retry" onClick={e => { e.stopPropagation(); image.retry(); }}>{_GUI_T("gui.retryFullImage")}</button>
     )}
   </> : loading;
 
@@ -82,6 +85,118 @@ function GenerativeUiImage({ component: c }) {
     {picture}
     {c.title && <span className="md-image-caption">{c.title}</span>}
     {credit}
+  </div>;
+}
+
+function GenerativeUiTable({ component: c }) {
+  const [sort, setSort] = React.useState(null);
+  const [filter, setFilter] = React.useState("");
+  const rows = React.useMemo(() => {
+    const query = filter.toLocaleLowerCase();
+    const filtered = c.rows.filter(row => c.columns.some(col => String(row[col.key] ?? "").toLocaleLowerCase().includes(query)));
+    if (sort) filtered.sort((a, b) => {
+      const left = a[sort.key] ?? "", right = b[sort.key] ?? "";
+      const compared = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { numeric: true });
+      return sort.direction === "ascending" ? compared : -compared;
+    });
+    return filtered;
+  }, [c, sort, filter]);
+  const csvCell = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csv = [c.columns.map(col => col.label), ...rows.map(row => c.columns.map(col => row[col.key]))].map(row => row.map(csvCell).join(",")).join("\r\n");
+  return <div className="gui-table-wrap">
+    <div className="gui-table-tools">
+      {c.title && <h4 className="gui-table-title">{c.title}</h4>}
+      <span className="gui-copy-csv">{_GUI_T("gui.copyCsv")} <CopyButton text={csv} label={_GUI_T("gui.copyCsv")} /></span>
+    </div>
+    {c.rows.length > 8 && <input className="gui-table-filter" type="search" aria-label={_GUI_T("gui.filterTable")} placeholder={_GUI_T("gui.filterRows")} value={filter} onChange={e => setFilter(e.target.value)} />}
+    <table className="gui-table">
+      <thead><tr>{c.columns.map(col => <th key={col.key} style={{ textAlign: col.align || "left" }} aria-sort={sort?.key === col.key ? sort.direction : "none"}>
+        <button type="button" onClick={() => setSort({ key: col.key, direction: sort?.key === col.key && sort.direction === "ascending" ? "descending" : "ascending" })}>{col.label}{sort?.key === col.key ? sort.direction === "ascending" ? " ↑" : " ↓" : ""}</button>
+      </th>)}</tr></thead>
+      <tbody>{rows.map((row, i) => <tr key={i}>{c.columns.map(col => <td key={col.key} style={{ textAlign: col.align || "left" }}>{String(row[col.key] ?? "")}</td>)}</tr>)}</tbody>
+    </table>
+    {!rows.length && <span className="gui-empty" role="status">{_GUI_T("gui.noRows")}</span>}
+  </div>;
+}
+
+function GenerativeUiSuggestions({ component: c, chosen, onChoose, disabled }) {
+  return <div className={`gui-suggestions gui-suggestions-${c.style}`}>
+    {c.label && <strong className="gui-label">{c.label}</strong>}
+    <div className="gui-suggestion-items">{c.items.map(item => <button type="button" key={item.id}
+      className={`gui-suggestion${chosen === item.id ? " is-chosen" : ""}`} aria-pressed={chosen === item.id}
+      disabled={disabled || !!chosen} onClick={() => onChoose(c.id, item)}>
+      <span>{chosen === item.id ? "✓ " : ""}{item.label}</span>
+      {c.style === "cards" && item.description && <small>{item.description}</small>}
+    </button>)}</div>
+  </div>;
+}
+
+function GenerativeUiRanking({ component: c, value, update, id, a11y, disabled }) {
+  const refs = React.useRef(new Map());
+  const reorder = window.useDragReorder((_list, source, target, after) => {
+    if (disabled) return;
+    const next = value.filter(v => v !== source);
+    next.splice(next.indexOf(target) + (after ? 1 : 0), 0, source);
+    update(c.id, next);
+  });
+  const move = (index, delta) => {
+    const target = index + delta;
+    if (disabled || target < 0 || target >= value.length) return;
+    const next = [...value];
+    [next[index], next[target]] = [next[target], next[index]];
+    update(c.id, next);
+    refs.current.get(value[index])?.focus();
+  };
+  return <ol id={id} className="gui-ranking" aria-label={c.label} {...a11y} onPointerDown={disabled ? undefined : reorder.onPointerDown}>{value.map((v, index) => {
+    const option = c.options.find(o => o.value === v);
+    return <li key={v} tabIndex={disabled ? -1 : 0} {...reorder.itemProps(c.id, v, "y")} className={reorder.dropClass(c.id, v)} ref={node => { if (node) refs.current.set(v, node); else refs.current.delete(v); }}
+      onKeyDown={e => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); move(index, e.key === "ArrowUp" ? -1 : 1); } }}>
+      <span className="gui-ranking-index">{index + 1}</span>
+      <span className="gui-ranking-label">{option.label}{option.description && <small>{option.description}</small>}</span>
+      <button type="button" data-no-reorder disabled={disabled || index === 0} aria-label={_GUI_T("gui.moveUp", { item: option.label })} onClick={() => move(index, -1)}>↑</button>
+      <button type="button" data-no-reorder disabled={disabled || index === value.length - 1} aria-label={_GUI_T("gui.moveDown", { item: option.label })} onClick={() => move(index, 1)}>↓</button>
+    </li>;
+  })}</ol>;
+}
+
+const _GUI_PATH_KIND = { any: "gui.pathAny", file: "gui.pathFile", directory: "gui.pathDir" };
+
+function GenerativeUiPathPicker({ component: c, value, update, listFiles, id, a11y, disabled }) {
+  const [query, setQuery] = React.useState("");
+  const [hits, setHits] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [kindFilter, setKindFilter] = React.useState(c.kind);
+  React.useEffect(() => {
+    if (disabled || !listFiles) return;
+    let current = true;
+    setLoading(true);
+    const timer = setTimeout(() => {
+      listFiles(query, 100).then(items => { if (current) { setHits(items); setError(null); } },
+        failure => { if (current) setError(failure.message); }).finally(() => { if (current) setLoading(false); });
+    }, 80);
+    return () => { current = false; clearTimeout(timer); };
+  }, [query, listFiles, disabled]);
+  const matching = hits.filter(hit => kindFilter === "any" || (kindFilter === "directory" ? hit.isDir : !hit.isDir));
+  const select = path => {
+    if (disabled) return;
+    update(c.id, value.includes(path) ? value.filter(v => v !== path) : c.multiple ? [...value, path] : [path]);
+  };
+  return <div className="gui-path-picker">
+    <div className="gui-path-chips">{value.map(path => <button type="button" key={path} onClick={() => select(path)} aria-label={_GUI_T("gui.removePath", { path })}>{path} ×</button>)}</div>
+    <input id={id} type="search" value={query} disabled={disabled} placeholder={c.placeholder ?? _GUI_T("gui.searchPaths")} aria-label={_GUI_T("gui.searchLabel", { label: c.label })} {...a11y} onChange={e => setQuery(e.target.value)} />
+    {c.kind === "any" && <select aria-label={_GUI_T("gui.pathType")} disabled={disabled} value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="any">{_GUI_T("gui.pathAny")}</option><option value="file">{_GUI_T("gui.pathFile")}</option><option value="directory">{_GUI_T("gui.pathDir")}</option></select>}
+    <div className="gui-path-results" role="group" aria-label={c.label} aria-busy={loading}>
+      {matching.map(hit => <div className="gui-path-hit" key={hit.path}>
+        <button type="button" aria-pressed={value.includes(hit.path)} disabled={disabled || (c.multiple && !value.includes(hit.path) && value.length >= c.maxItems)}
+          onClick={() => select(hit.path)}><span>{value.includes(hit.path) ? "✓ " : ""}{hit.isDir ? "▸ " : ""}{hit.path}</span></button>
+        {hit.isDir && <button type="button" aria-label={_GUI_T("gui.browsePath", { path: hit.path })} onClick={() => setQuery(`${hit.path}/`)}>→</button>}
+      </div>)}
+      {kindFilter === "file" && hits.filter(hit => hit.isDir).map(hit => <button className="gui-path-browse" type="button" key={hit.path} onClick={() => setQuery(`${hit.path}/`)}>{_GUI_T("gui.browseLink", { path: hit.path })}</button>)}
+      {!loading && !matching.length && <span className="gui-empty">{_GUI_T("gui.noPaths")}</span>}
+    </div>
+    {error && <span className="gui-error" role="alert">{error}</span>}
+    <small className="gui-empty">{_GUI_T("gui.pathCount", { n: value.length, max: c.multiple ? c.maxItems : 1, kind: _GUI_T(_GUI_PATH_KIND[c.kind]) })}</small>
   </div>;
 }
 
@@ -149,27 +264,8 @@ const GenerativeUiRegistry = {
     </div>;
   },
 
-  table({ component: c }) {
-    return <div className="gui-table-wrap" key={c.id}>
-      {c.title && <h4 className="gui-table-title">{c.title}</h4>}
-      <table className="gui-table">
-        <thead>
-          <tr>
-            {c.columns.map(col => <th key={col.key} style={{ textAlign: col.align || "left" }}>{col.label}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {c.rows.map((row, i) => (
-            <tr key={i}>
-              {c.columns.map(col => (
-                <td key={col.key} style={{ textAlign: col.align || "left" }}>{String(row[col.key] ?? "")}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>;
-  },
+  table: GenerativeUiTable,
+  suggestions: GenerativeUiSuggestions,
 
   "key-value"({ component: c }) {
     return <div className="gui-key-value" key={c.id}>
@@ -306,7 +402,7 @@ const GenerativeUiRegistry = {
           <div className="gui-option-card-head">
             <strong className="gui-option-card-title">{card.title}</strong>
             <div className="gui-option-card-tags">
-              {card.recommended && <span className="gui-badge success">Recommended</span>}
+              {card.recommended && <span className="gui-badge success">{_GUI_T("gui.recommended")}</span>}
               {card.tag && <span className="gui-badge default">{card.tag}</span>}
             </div>
           </div>
@@ -317,7 +413,7 @@ const GenerativeUiRegistry = {
   },
 };
 
-function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
+function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, onSuggestion, listFiles, disabled }) {
   const helper = window.OMP_GENERATIVE_UI;
   if (msg.error) throw new Error(msg.error);
   const schema = React.useMemo(() => helper.normalizeSchema(msg.schema), [msg.schema]);
@@ -325,7 +421,7 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
   const identity = generativeUiIdentity(msg);
   const record = React.useRef(null);
   if (record.current === null) {
-    record.current = generativeUiDrafts.get(identity) ?? { draft: helper.initialValues(schema), accepted: null, rendered: isDisplayMode };
+    record.current = generativeUiDrafts.get(identity) ?? { draft: helper.initialValues(schema), accepted: null, rendered: isDisplayMode, chosen: {}, step: 0 };
     generativeUiRemember(identity, record.current);
   }
   const [draft, setDraft] = React.useState(() => helper.cloneValues(record.current.draft));
@@ -334,6 +430,8 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
   const pendingRef = React.useRef(false);
   const [errors, setErrors] = React.useState({});
   const [error, setError] = React.useState(null);
+  const [chosen, setChosen] = React.useState(() => record.current.chosen ?? {});
+  const [step, setStep] = React.useState(() => record.current.step ?? 0);
   const status = isDisplayMode ? "rendered" : (helper.isTerminal(msg.status) ? msg.status : accepted?.status ?? msg.status);
   const terminal = helper.isTerminal(status);
   const values = status === "submitted" && msg.values ? msg.values : accepted?.values ?? draft;
@@ -363,12 +461,41 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
     setErrors(old => { const next = { ...old }; delete next[id]; return next; });
     setError(null);
   };
+  const chooseSuggestion = async (id, item) => {
+    if (disabled || !onSuggestion || record.current.chosen?.[id]) return;
+    record.current.chosen = { ...record.current.chosen, [id]: item.id };
+    setChosen(record.current.chosen);
+    generativeUiRemember(identity, record.current);
+    try {
+      if (await onSuggestion(msg, item.prompt ?? item.label) === false) throw new Error(_GUI_T("gui.suggestionUnavailable"));
+    } catch (failure) {
+      const next = { ...record.current.chosen }; delete next[id];
+      record.current.chosen = next; setChosen(next);
+      setError(failure.message);
+    }
+  };
+  const changeStep = next => {
+    if (next > step) {
+      const invalid = helper.validateValues(schema, draft);
+      const currentErrors = Object.fromEntries(Object.entries(invalid).filter(([id]) => schema.steps[step].components.includes(id)));
+      setErrors(currentErrors);
+      if (Object.keys(currentErrors).length) return;
+    }
+    record.current.step = next;
+    generativeUiRemember(identity, record.current);
+    setStep(next);
+  };
 
   const act = async action => {
     if (pendingRef.current || (terminal && !(action === "resume" && resumable)) || disabled || isDisplayMode) return;
     if (action === "submit") {
       const invalid = helper.validateValues(schema, draft);
+      if (schema.steps && !terminal && step < schema.steps.length - 1) { changeStep(step + 1); return; }
       setErrors(invalid);
+      if (schema.steps && Object.keys(invalid).length) {
+        const invalidStep = schema.steps.findIndex(s => s.components.some(id => invalid[id]));
+        record.current.step = invalidStep; setStep(invalidStep);
+      }
       if (Object.keys(invalid).length) return;
     }
     pendingRef.current = true;
@@ -378,7 +505,7 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
       const submittedValues = helper.cloneValues(action === "resume" ? values : draft);
       const result = action === "cancel" ? await onCancel(msg) : await onSubmit(msg, submittedValues);
       const expected = action === "cancel" ? "cancelled" : "submitted";
-      if (result?.status !== expected || result.ui_id !== msg.ui_id) throw new Error("The form action was not confirmed.");
+      if (result?.status !== expected || result.ui_id !== msg.ui_id) throw new Error(_GUI_T("gui.actionNotConfirmed"));
       const receipt = { status: expected, continuation: result.continuation, ...(action !== "cancel" ? { values: submittedValues } : {}) };
       record.current.accepted = receipt;
       setAccepted(receipt);
@@ -391,47 +518,52 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
   };
 
   const displayValue = (c, value) => {
-    if (c.type === "checkbox" || c.type === "switch") return value ? "On" : "Off";
-    if (c.type === "multiselect" || c.type === "checkbox-group") return value?.length ? value.map(v => c.options.find(o => o.value === v)?.label ?? v).join(", ") : "None";
-    if (c.type === "select" || c.type === "radio" || c.type === "segmented-control" || c.type === "searchable-select") return c.options.find(o => o.value === value)?.label ?? (value || "None");
-    if (c.type === "option-cards") return c.cards.find(card => card.id === value)?.title ?? (value || "None");
+    if (c.type === "checkbox" || c.type === "switch") return _GUI_T(value ? "gui.on" : "gui.off");
+    if (c.type === "multiselect" || c.type === "checkbox-group" || c.type === "ranking") return value?.length ? value.map(v => c.options.find(o => o.value === v)?.label ?? v).join(c.type === "ranking" ? " → " : ", ") : _GUI_T("gui.none");
+    if (c.type === "select" || c.type === "radio" || c.type === "segmented-control" || c.type === "searchable-select") return c.options.find(o => o.value === value)?.label ?? (value || _GUI_T("gui.none"));
+    if (c.type === "option-cards") return c.cards.find(card => card.id === value)?.title ?? (value || _GUI_T("gui.none"));
+    if (c.type === "path-picker") return value?.length ? value.join(", ") : _GUI_T("gui.none");
     return value === "" ? "—" : value;
   };
 
-  const eyebrowLabel = isDisplayMode ? "Display UI" : "Interactive form";
-  const stateLabel = isDisplayMode
-    ? "Displayed"
-    : (status === "submitted" ? "Submitted" : status === "cancelled" ? "Cancelled" : status === "expired" ? "Expired" : "Waiting for input");
+  const eyebrowLabel = _GUI_T(isDisplayMode ? "gui.displayUi" : "gui.interactiveForm");
+  const stateLabel = _GUI_T(isDisplayMode
+    ? "gui.stateDisplayed"
+    : (status === "submitted" ? "gui.stateSubmitted" : status === "cancelled" ? "gui.stateCancelled" : status === "expired" ? "gui.stateExpired" : "gui.stateWaiting"));
 
   return <section className={`gui-card gui-${schema.layout} ${isDisplayMode ? "gui-mode-display" : "gui-mode-interactive"}`} aria-label={schema.title ?? eyebrowLabel}>
     <header className="gui-head">
       <div>
         <span className="gui-eyebrow">{eyebrowLabel}</span>
-        <h3>{schema.title ?? (isDisplayMode ? "Information overview" : "Choose your values")}</h3>
+        <h3>{schema.title ?? _GUI_T(isDisplayMode ? "gui.titleDisplay" : "gui.titleForm")}</h3>
       </div>
       <span className={`gui-state${terminal ? " is-terminal" : ""}${status === "submitted" ? " is-submitted" : ""}`}>{stateLabel}</span>
     </header>
-    <div className="gui-id">UI · {msg.ui_id}</div>
+    <div className="gui-id">{_GUI_T("gui.uiId", { id: msg.ui_id })}</div>
 
     {isDisplayMode ? (
+      <>
       <div className="gui-fields">
         {schema.components.map(c => {
           const renderer = GenerativeUiRegistry[c.type];
-          if (renderer) return renderer({ component: c });
+          if (renderer) return React.createElement(renderer, { key: c.id, component: c, chosen: chosen[c.id], onChoose: chooseSuggestion, disabled: disabled || !onSuggestion });
           return null;
         })}
       </div>
+      {error && <p className="gui-error" role="alert">{error}</p>}
+      </>
     ) : (
       <form onSubmit={e => { e.preventDefault(); act("submit"); }} noValidate>
+        {schema.steps && <ol className="gui-steps" aria-label={_GUI_T("gui.steps")}>{schema.steps.map((s, index) => <li key={s.id} aria-current={!terminal && index === step ? "step" : undefined}><span>{index + 1}</span>{s.title}</li>)}</ol>}
         <fieldset disabled={locked} className="gui-fields">
-          {schema.components.filter(c => c.type !== "button" && helper.isComponentVisible(c, values)).map(c => {
+          {schema.components.filter(c => c.type !== "button" && helper.isComponentVisible(c, values) && (terminal || !schema.steps || schema.steps[step].components.includes(c.id))).map(c => {
             const value = values[c.id];
             const id = `gui-${msg.ui_id}-${c.id}`, errorId = `${id}-error`, labelId = `${id}-label`;
             const a11y = { "aria-invalid": !!errors[c.id], "aria-describedby": errors[c.id] ? errorId : undefined };
 
             // Check display component renderer inside interactive form
             if (GenerativeUiRegistry[c.type] && !helper.isInteractive(c)) {
-              return GenerativeUiRegistry[c.type]({ component: c });
+              return React.createElement(GenerativeUiRegistry[c.type], { key: c.id, component: c });
             }
 
             if (c.type === "option-cards") {
@@ -447,14 +579,16 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
               {terminal ? <output className="gui-result" aria-labelledby={labelId}>{displayValue(c, value)}</output> : <>
                 {c.type === "input" && <input id={id} type="text" value={value} placeholder={c.placeholder} required={c.required} minLength={c.minLength} maxLength={c.maxLength} {...a11y} onChange={e => update(c.id, e.target.value)} />}
                 {c.type === "textarea" && <textarea id={id} value={value} placeholder={c.placeholder} rows={c.rows} required={c.required} minLength={c.minLength} maxLength={c.maxLength} {...a11y} onChange={e => update(c.id, e.target.value)} />}
+                {c.type === "ranking" && <GenerativeUiRanking component={c} value={value} update={update} id={id} a11y={a11y} disabled={locked} />}
+                {c.type === "path-picker" && <GenerativeUiPathPicker component={c} value={value} update={update} listFiles={listFiles} id={id} a11y={a11y} disabled={locked} />}
                 {(c.type === "date" || c.type === "date-picker") && <input id={id} type="date" value={value} min={c.min} max={c.max} required={c.required} {...a11y} onChange={e => update(c.id, e.target.value)} />}
                 {c.type === "time-picker" && <input id={id} type="time" value={value} required={c.required} {...a11y} onChange={e => update(c.id, e.target.value)} />}
                 {(c.type === "number" || c.type === "number-input") && <div className="gui-number-wrap"><input id={id} type="number" value={Number.isNaN(value) ? "" : value} min={c.min} max={c.max} step={c.step} {...a11y} onChange={e => update(c.id, e.target.valueAsNumber)} />{c.unit && <span className="gui-input-unit">{c.unit}</span>}</div>}
                 {c.type === "checkbox" && <input id={id} type="checkbox" checked={value} {...a11y} onChange={e => update(c.id, e.target.checked)} />}
                 {c.type === "switch" && <Toggle label={c.label} value={value} onChange={v => update(c.id, v)} />}
                 {(c.type === "multiselect" || c.type === "checkbox-group") && <div className="gui-options" role="group" aria-labelledby={labelId} {...a11y}>{c.options.map((o, i) => <label key={o.value} htmlFor={`${id}-${i}`}><input id={`${id}-${i}`} type="checkbox" checked={value.includes(o.value)} onChange={e => update(c.id, e.target.checked ? [...value, o.value] : value.filter(v => v !== o.value))} /><span>{o.label}</span>{o.description && <small className="gui-opt-desc">{o.description}</small>}</label>)}</div>}
-                {(c.type === "select" || c.type === "searchable-select") && <select id={id} value={value} required={c.required} {...a11y} onChange={e => update(c.id, e.target.value)}>{!c.required && <option value="">None</option>}{c.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}
-                {(c.type === "radio" || c.type === "segmented-control") && <Seg label={c.label} value={value} options={!c.required ? [{ label: "None", value: "" }, ...c.options] : c.options} onChange={v => update(c.id, v)} />}
+                {(c.type === "select" || c.type === "searchable-select") && <select id={id} value={value} required={c.required} {...a11y} onChange={e => update(c.id, e.target.value)}>{!c.required && <option value="">{_GUI_T("gui.none")}</option>}{c.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}
+                {(c.type === "radio" || c.type === "segmented-control") && <Seg label={c.label} value={value} options={!c.required ? [{ label: _GUI_T("gui.none"), value: "" }, ...c.options] : c.options} onChange={v => update(c.id, v)} />}
                 {c.type === "slider" && <Slider label={c.label} value={value} min={c.min} max={c.max} step={c.step} onChange={v => update(c.id, v)} />}
               </>}
               {errors[c.id] && <span className="gui-error" id={errorId} role="alert">{errors[c.id]}</span>}
@@ -463,9 +597,9 @@ function GenerativeUiForm({ msg, onSubmit, onCancel, onRendered, disabled }) {
         </fieldset>
         {error && <p className="gui-error" role="alert">{error}</p>}
         <footer className="gui-footer">
-          <span role="status">{status === "submitted" ? resumable ? "Values recorded. Resume to continue the task without submitting new values." : "Values recorded in the conversation." : terminal ? msg.reason ?? `This form is ${status}.` : pending ? (pending === "submit" ? "Submitting…" : "Cancelling…") : disabled ? "This form is unavailable in the current session." : "Changes stay here until you submit."}</span>
-          {!terminal && <div className="gui-actions">{onCancel && <Button disabled={locked} onClick={() => act("cancel")}>Cancel</Button>}<Button accent disabled={locked} onClick={() => act("submit")}>{pending === "submit" ? "Submitting…" : schema.components.find(c => c.type === "button")?.label ?? "Submit"}</Button></div>}
-          {resumable && <Button accent disabled={!!pending || disabled} onClick={() => act("resume")}>{pending === "resume" ? "Resuming…" : "Resume task"}</Button>}
+          <span role="status">{status === "submitted" ? _GUI_T(resumable ? "gui.recordedResume" : "gui.recordedConv") : terminal ? msg.reason ?? _GUI_T(status === "cancelled" ? "gui.formCancelled" : "gui.formExpired") : pending ? _GUI_T(pending === "submit" ? "gui.submitting" : "gui.cancelling") : disabled ? _GUI_T("gui.formUnavailable") : _GUI_T("gui.changesStay")}</span>
+          {!terminal && <div className="gui-actions">{onCancel && <Button disabled={locked} onClick={() => act("cancel")}>{_GUI_T("gui.cancel")}</Button>}{schema.steps && step > 0 && <Button disabled={locked} onClick={() => changeStep(step - 1)}>{_GUI_T("gui.back")}</Button>}{schema.steps && step < schema.steps.length - 1 ? <Button accent disabled={locked} onClick={() => changeStep(step + 1)}>{_GUI_T("gui.next")}</Button> : <Button accent disabled={locked} onClick={() => act("submit")}>{pending === "submit" ? _GUI_T("gui.submitting") : schema.components.find(c => c.type === "button")?.label ?? _GUI_T("gui.submit")}</Button>}</div>}
+          {resumable && <Button accent disabled={!!pending || disabled} onClick={() => act("resume")}>{pending === "resume" ? _GUI_T("gui.resuming") : _GUI_T("gui.resume")}</Button>}
         </footer>
       </form>
     )}

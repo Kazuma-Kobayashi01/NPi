@@ -45,6 +45,7 @@ Feature internals (RPC frames, state machines, measured omp behaviour) live in `
 |`panel-windows.md`|secondary OS windows (Librarian, reader, Write, stats, history, approvals, plan, git browser), the main-window link for the last four|`panel_window.rs`, `app/panel-mode.js`, `app/panel-link.js`, `design/panel-root.jsx`|
 |`python-runtime.md`|embedded CPython/uv bundle, `--npi-python-host` re-entry, content-addressed install and versioned managed environments, Tauri status/ensure/packages commands|`python_runtime/`, `scripts/build-python-runtime.sh`, `resources/`|
 |`pr-automation.md`|Changes rail card: current-branch PR discovery (gix + trusted `gh`, GraphQL + head-filtered REST, fail-closed selection), CI line, read cadence and visibility gating, `ghMissing`/`retryable` errors, opt-in Auto-fix dispatch and feedback identities|`pr_automation/`, `app/pr-automation.js`, `app/use-pr-automation.jsx`, `design/pr-automation-*.jsx`, `design/pr-checks.jsx`, `live.js` `prAutomationSnapshot`/`prAutomationSend`|
+|`reply-interactions.md`|selection toolbar over assistant replies (Quote / Ask / Steer), 👍/👎 feedback with local per-conversation storage and the "Tell assistant" message|`app/reply-quote.js`, `app/reply-feedback.js`, `design/chat/selection-toolbar.jsx`, `design/chat/reply-feedback.jsx`, `app-live.jsx` `handleReplyAction`|
 
 User-facing rail widget contract (`widgets.json`, approval, output schema v1, limits, trust model): `docs/widgets.md`. Keep it in sync with any change to those.
 

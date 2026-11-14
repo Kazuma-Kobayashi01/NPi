@@ -681,6 +681,25 @@ function App() {
   // A Rewind waiting for the user's choice about the files (design/rewind-dialog.jsx).
   const [rewindAsk, setRewindAsk] = React.useState(null);
   const handlePickHistoryPrompt = (text) => setPromptInsert({ text, nonce: Date.now() });
+  // Selection toolbar and 👍/👎 on assistant replies (chat/selection-toolbar.jsx,
+  // chat/reply-feedback.jsx). `quote` puts the blockquote after the composer's draft,
+  // unsent. The rest are ordinary user messages, never approvals and never routed
+  // through goal or plan framing: a prompt when idle, a follow-up while a turn runs;
+  // "steer" steers the running turn (a prompt if it ended while the note was typed).
+  // `streaming` is read through a ref so the callback stays stable for the memoised bubbles.
+  const streamingRef = React.useRef(streaming);
+  streamingRef.current = streaming;
+  const handleReplyAction = React.useCallback((kind, text) => {
+    if (kind === "quote") { setPromptInsert({ text, quote: true, nonce: Date.now() }); return; }
+    const running = streamingRef.current;
+    if (kind === "steer" && running) bridge?.steer(text);
+    else if (running) bridge?.followUp(text);
+    else bridge?.send(text);
+  }, [bridge]);
+  // Stable for the memoised bubbles; `openPlan` is rebuilt on every render.
+  const openPlanRef = React.useRef(null);
+  openPlanRef.current = openPlan;
+  const handleOpenPlan = React.useCallback(() => openPlanRef.current(), []);
   // `action` (OMP_WIDGETS.insertAction, from widgets.json only): "new-tab"
   // always opens a fresh tab on the project and fills that tab's draft (never
   // sent); a failed open is reported by openSession and inserts nothing.
@@ -1335,6 +1354,8 @@ function App() {
                     onUiSubmit={bridge?.submitUi}
                     onUiCancel={bridge?.cancelUi}
                     onUiRendered={bridge?.renderedUi}
+                    onUiSuggestion={bridge?.sendUiSuggestion}
+                    uiListFiles={bridge?.listFiles}
                     uiDisabled={compacting || !bridge?.isConnected}
                     onCancelAsk={handleCancelAsk}
                     onGrantApproval={handleGrantApproval}
@@ -1357,6 +1378,9 @@ function App() {
                     kanban={kanban}
                     subagents={subagentList}
                     showWorkflowPipeline={t.showWorkflowPipeline !== false}
+                    conversation={window.OMP_REPLY_FEEDBACK.conversationKey(activeProject.sessionFile)}
+                    onReplyAction={handleReplyAction}
+                    onOpenPlan={handleOpenPlan}
                   />
                   {isChat && handoffs[activeSessionId] && (
                     <HandoffCard offer={handoffs[activeSessionId]} onAccept={handleAcceptHandoff}

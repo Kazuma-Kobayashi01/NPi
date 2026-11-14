@@ -1,6 +1,6 @@
 /* ═════════════════════════════════════════════════════════════════════
    panels.jsx — Kanban execution surface (running → done)
-   Opened after plan approval; populated by agent's todo_write tool.
+   Opened after plan approval; populated by the agent's todo tool.
    ═════════════════════════════════════════════════════════════════════ */
 
 const { Icon, TOOL_META } = window;

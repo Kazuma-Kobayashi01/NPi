@@ -1,10 +1,52 @@
 # 总进度与下一步
 
-整理于 2026-11-06(分支 `3.0.0.137`)。这是**唯一的进度入口**:`PLAN.md`(1.1.0 规划,唯一仍在推进的计划)写"打算做什么";已完成的计划与交接记录在 [`archive/`](archive/README.md),本文写"现在到了哪里、下一步做什么"。每做完一批就回来改这里。
+整理于 2026-11-14(分支 `3.1.0.103`)。这是**唯一的进度入口**:`PLAN.md`(1.1.0 规划,唯一仍在推进的计划)写"打算做什么";已完成的计划与交接记录在 [`archive/`](archive/README.md),本文写"现在到了哪里、下一步做什么"。每做完一批就回来改这里。
 
 验证记录:用户装 `3.0.0.132` 后在真实 app 里点过上面列的功能(含 3.0.0.122–132 新增部分),反馈没有问题;2026-11-06 用户装 `3.0.0.136` 完整包完成验收(会话搜索、画像、技能撤销、模型排班、多专家评审)。逐行的"未验证"标记保留原样,没有逐条改,以后遇到具体问题再回写。
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
+
+## 内核分支与上游移植（2026-11-15，已提交、未推送、未打包）
+
+- `kernel.2.1.1-universal`（`836bccb6c3`）：把 `kernel.2.1.0-universal` 工作区的全部改动提交为下一个版本（Remote Connect、`/rc`、按块审批、Generative UI、Hydrogen、用量减负、会话名乱码修复等，106 个文件）。
+- `kernel.2.1.1-coldfix`，在其上移植上游 oh-my-pi（我们基于上游 `6a86df8539`，与上游无共同 git 历史，只能逐个摘取）：
+  - `fcc6ecd90e`：暂停 Google Antigravity。移植上游 `55689486f8`（KDL `disabled` 规则）、`e3fde96e2a`（`login-warning`）、`9a37046d3a`（暂停）。上游理由：Google 会封停在第三方工具里登录 Antigravity 的账号（上游 #18341）。规则在时，新登录、已存凭据、用量查询和请求都不会到达 Antigravity；删掉 `disabled` 一行即恢复。
+  - `0c49301831`：Gemini 4 长回答跨 65,536 token 分段续写（上游 `74e3cfa574`，#19081），Gemini API 与 Vertex 的输出上限改为 262,144。`models.json` 保留我们自己的（上游表无法单独合并），`rules.json` 重新生成。
+  - 未移植：上游其余 Hydrogen 提交（多为 Antigravity 订阅档位折叠，已暂停用不上）、第二档会话与账号修复。
+- 验证：三个包类型检查通过；ai 包全量 6800 项中 11 项失败，其中 7 项在移植前的提交上同样失败，4 项为全量负载下的 5 秒超时、单独运行通过；内核远程、`/rc`、RPC、模型发现等 250 项中 1 项失败，同样是原有问题。
+
+## 用量查询减负（2026-11-15，内核已随 `kernel.2.1.1-universal` 提交，Desktop 未提交，未打包）
+
+- 起因：一个 Google 账号的 Antigravity 服务被 Google 以违反服务条款停用（日志 `403 PERMISSION_DENIED … violation of Terms of Service`，首次 11-14 11:00）。根本原因是内核冒充 Antigravity 官方客户端（上游设计）；NPi 额外放大了请求：桌面端每轮对话结束都 `npi usage invalidate` + `npi usage --json`，强制向所有已登录提供方的额度接口重新查询。
+- 桌面端：一轮结束后只读内核缓存，且同一 profile 每分钟最多读一次；只有手动刷新才强制重新查询（`app/use-quotas.jsx`，`session-model.md` 已更新）。
+- 内核（所有提供方）：用量查询遇到 401/403 后冷却 6 小时，手动失效也不绕过；提供方遇到 403 时即使不抛错、只返回空结果也同样处理。Antigravity 在额度接口被拒后不再继续查模型列表和 sandbox 接口。
+- 已验证：ai 包用量/认证相关 830 项测试通过（含新增 3 项），类型检查通过；Desktop `npm test` 通过。
+- 待定：后台任务（Memory、标题生成、维护路由）是否继续用 Antigravity（方案 A/B，用户未定）。
+
+## 内核 `/rc` 远程控制与会话名乱码（2026-11-15，未提交、未重编译）
+
+- 内核 `kernel.2.1.0-universal` 工作区新增 `/rc`：已配对的手机直接接入终端正在运行的会话（不另起进程）。手机发的提示词在这个会话里执行并显示在终端；审批和 ask 弹窗两边同时出现，先答的生效，另一边自动撤回。用法 `/rc <wss://relay>`（保存到 `remote.relayUrl`）、`/rc --listen host:port`、`/rc status`、`/rc off`。手机端不能新建、切换、分支、fork 或跳转终端的会话。需要先用 `npi remote pair` 配对。
+- 实现：`runRpcMode` 新增嵌入模式（输出走内存管道，不接管终端弹窗、不初始化扩展、不调度 goal、不写 stderr，断开时只停止监听不销毁会话）；守护进程新增“终端会话通道”（不回收、手机关不掉）；弹窗抢答从 collab 访客扩展为多方（`guest-ui-peers.ts`）。
+- 会话名乱码已修：列表只读前 4 KB，长中文/emoji 首条消息被截在字符中间，显示为 `�`。
+- 已验证：新增 `remote-control.test.ts`（嵌入服务 + 守护进程 + 模拟手机走加密通道：会话匹配、弹窗应答与撤回、断开后会话仍在）和乱码回归测试；相关远程/RPC/弹窗测试 78 项通过，类型检查通过。`test/rpc` 剩 1 项 goal 测试失败，改动前同样失败；collab 注册表冒烟 1 项失败，原因是注册目录 `.omp` 与 NPi 不一致，与本次无关。
+- 追加（2026-11-15，未重新打包）：设置 `remote.autoStart`（Interaction → Remote Control → Start /rc Automatically，默认关）在启动交互会话时自动 `/rc`；`/rc` 模式下手机只能看到和打开终端正在共享的那个会话（列表过滤、其他会话和新建会话被拒，`host.info` 带 `remoteControl: true`）。手机端（`npi-remote`，未编译：Flutter/Android 环境所在外接存储离线）已写：采用守护进程返回的通道 id、`/rc` 模式自动打开该会话并隐藏“新会话”、会话离线时显示 Claude 式的离线卡片与“已与电脑断开”提示条并禁用输入。
+- 已打包：`dist/3.1.0.103/NPi Desktop_3.1.0.103_rc_aarch64.dmg`（见 RELEASES）。未验证：没有在真实终端和手机上跑过 `/rc`。
+
+## 对话内交互 P0–P2（2026-11-13，未提交、未打包）
+
+- 工作区：Desktop `3.1.0.102`，内核 `kernel.2.0.10-universal`；与 Hydrogen 改动同在未提交工作区。
+- Generative UI（内核 + Desktop 镜像）：`ui.present` 增加 `ui_id` 参数，可原地更新 display 卡片（持久化为 `ui.update`，按 revision 重放）；新增 `suggestions`（chips 用于追问，cards 用于非阻塞选择，点击后作为普通 prompt 发出，运行中作为 follow-up）、`ranking`、`path-picker`（提交时内核校验路径存在、类型匹配且在项目内）、schema 级 `steps` 向导；Display 表格支持排序、筛选、复制 CSV。RPC wire 已重新生成（`revision`、`hunks`、`selectedHunks`）。
+- 写入审批可按 hunk 部分接受（`approval-hunks.ts`）：只写入勾选的 hunk，文件已变化则拒绝执行；结果会告诉模型哪些 hunk 被拒；全选等同 Approve，全不选等同 Deny。部分接受不会生成长期授权。
+- Desktop：选中回复文本后出现 Quote / Ask / Steer 浮条；回复 👍/👎，原因只存本地，选择 Tell assistant 时作为普通消息发出；对话内计划支持勾选、重排、删除，暂存后 Apply，运行中走 steer，空闲走 prompt。
+- 已验证：内核 generative-ui / approval-hunks / rpc-wire 定向测试 41 项通过，`tsc --noEmit` 干净，`sdk/rust/omp-rpc` 的 `cargo check`（DevStore）通过；Desktop `npm test` 全部通过（含 dist 构建）。用 Chromium 加载 dist 组件做了冒烟（桥接为桩）：原地更新、排序与筛选、suggestion 发送、向导 ranking + path-picker 提交、部分 hunk 应答、计划 Apply、反馈持久化、选区 Quote 均符合预期。
+- 未验证：真实 Tauri 应用和真实模型调用；tools/rpc 目录下另有 49 个失败用例，集中在 browser relay、Tern、computer、read 截断、IRC、Fireworks，与本次改动的文件无关，未做基线对比。
+- 遗留已修（同日）：
+  - 计划块会从历史重建（`adapter.js` 的 `buildInlinePlan`，按 `toolCallId` 挂到发起调用的那一轮），切换标签或重开会话后不再丢失。
+  - 修了一个连带 bug：内核的工具名是 `todo` 而不是 `todo_write`，原先实时事件从未触发计划块和看板更新；计划批准提示词和计划编辑消息也已改为 `todo`。
+  - Quick Ask 窗口接入了选区浮条（Quote 写入窗口输入框）、👍/👎，以及 suggestion / path-picker 回调。
+  - Generative UI 卡片和计划编辑的固定文案已接入四语言（`gui.*` / `plan.*`）。
+  - 验证：`npm test` 全部通过，`test-transcript-merge` 新增历史计划块用例；在 Chromium 中以 zh-CN 渲染 QuickWindow（桩桥接）冒烟通过，确认历史计划块可编辑、Quote 写入输入框、suggestion 能发出。
+- 仍未处理：计划块标题栏的“打开看板 →”按钮没有点击处理（原有问题）。
 
 ## NPi for VScode（2026-11-08）
 
@@ -27,67 +69,7 @@
 
 ## 1. 版本与产物
 
-| 版本 | 状态 | dmg(`dist/<版本>/`) | 签名 | 说明 |
-|---|---|---|---|---|
-| 3.0.0.52 | 已提交、dmg 已有 | `3.0.0.52/` | 临时 | CLI 改版与工具输出预算 |
-| 3.0.0.72 | 已提交并已推送 | — | — | Librarian L2/L3、图片删除修复 |
-| 3.0.0.101 | 已提交并推送(`bb79b6e`) | `3.0.0.101/` | 临时 | Research Core、快速询问、托盘 |
-| 3.0.0.102 | 与 101 同一提交(内容在 121 里) | `3.0.0.102/` | 临时 | Cmd+W、独立窗口、Chat 裁剪与转交 |
-| 3.0.0.103 | 与 101 同一提交(内容在 121 里) | `3.0.0.103/` | **稳定证书** | 加左图右文、图片 429、快速询问玻璃、新内核 |
-| 3.0.0.121 | 已提交并推送(`bb1d949`) | `3.0.0.121/` | **稳定证书** | 加 Academic 阅读器、摘要与对照表、数值核对、OCR |
-| 3.0.0.122–125 | 内容并入 126(中间版本,dmg 已有) | `3.0.0.12x/` | **稳定证书** | PDF 阅读器、OCR 工具、内建文献库工具、Copy as…、Copy 修复 |
-| 3.0.0.126 | 已提交(`4ca309d`,未推送) | `3.0.0.126/` | **稳定证书** | Librarian 完善:多选与批量、合并、对齐面板、导入面板与新格式、OpenAlex、拖拽入组、找回附件;SHA-256 `74780a8a…8cf2`(未在真机实测) |
-| 3.0.0.127 | 内容并入 130 | `3.0.0.127/` | **稳定证书** | Copilot 整理文献、`copilot_ask` 与 `npi-copilot` MCP、宿主工具审批自动应答 |
-| 3.0.0.128 | 内容并入 130 | `3.0.0.128/` | **稳定证书** | Write 流水线、文献栏 Open in Reader |
-| 3.0.0.129 | 内容并入 130 | `3.0.0.129/` | **稳定证书** | Agent 绑定 PDF、Academic 提示词与工具整理、Librarian UI 修复 |
-| 3.0.0.130 | 已提交(`aa7753b`) | `3.0.0.130/` | **稳定证书** | Memory、设置里的 Usage 页;SHA-256 `80660874…8713`(未在真机实测) |
-| 3.0.0.131 | 内容并入 132 | `3.0.0.131/` | **稳定证书** | 设置左侧菜单加入 Memory 与 Usage(原先写了配置但没进菜单) |
-| 3.0.0.132 | 已提交并推送 | `3.0.0.132/` | **稳定证书** | 内核 `read-path.md` 修复、提示词/工具/MCP 与实际一致、附件缺失标记;SHA-256 `651cc8bd…8509`(未在真机实测) |
-| 3.0.0.133 | 内容并入 135 | `3.0.0.133/` | **稳定证书** | worktree 任务、diff 行评论与单处撤销、Rewind 还原文件(内核)、快速询问悬浮面板 |
-| 3.0.0.134 | 内容并入 135 | `3.0.0.134/` | **稳定证书** | 内核含 CLI 界面改版与阿里四个入口的模型信息、思考等级;`alibaba` 显示为国际站;SHA-256 `caa0fed5…863d`(未在真机实测) |
-| 3.0.0.135 | 已提交并推送(分支 `3.0.0.135`) | `3.0.0.135/` | **稳定证书** | 内核含 CLI 右侧栏额度、设置页二级菜单、面板式弹窗;Desktop 前端相对 134 未改;SHA-256 `dae2b473…a1f5`(未在真机实测) |
-| 3.0.0.136 | 内容并入下一行完整包 | — | **稳定证书** | 目录整理:配置跟随 CLI 到 `~/.local/share/npi/desktop`,缓存统一到 `~/.cache/npi`(含内核缓存与 Rewind 快照),worktree 到 `~/Documents/NPi/Code/.worktrees`、`.agent-worktrees`;界面设置写一份到 `ui-state.json`;首次启动自动迁移;旧 dmg 已被完整包替换 |
-| 3.0.0.136 完整包 | 已提交并推送(`f78c829`)、**已验证**(用户真机验收,2026-11-06) | `3.0.0.136/NPi Desktop_3.0.0.136_aarch64.dmg` | **稳定证书** | 包含统一记忆、会话搜索、分模式画像、技能撤销、模型排班表、多专家模拟评审；278876587 字节；SHA-256 `9f6d6b92d4be551de6dc9e4f138c1b496a206e721dccf99aac6ca1b26854d809`；已替换仅含目录整理的旧 dmg |
-| 3.0.0.137 | 已提交并推送(`b046186`,分支 `3.0.0.137`) | `3.0.0.137/` | **稳定证书** | 清遗留:聊天里 `[anchor N]` 点开阅读器;Librarian"让模型读第 1 页";历史会话、审批规则、Plan、Git 浏览器改独立窗口(`app/panel-link.js`);CLI 会话标签条(内核 `bcbabfad9f`);`PLAN.md` 修订;278924606 字节;SHA-256 `84cf9c8075b63e14393d86cd2677caa4798bcb0901e833c7040a86a5c15fdec9`(未在真机实测) |
-| 3.0.0.138 | 已提交(分支 `3.0.0.138`)、**已验证**(用户真机测试,2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_aarch64.dmg` | **稳定证书** | Option+Space 弹窗改用 macOS 原生 Liquid Glass(`objc2-app-kit` 的 `NSGlassEffectView` + `NSGlassEffectContainerView`,卡片与模式胶囊各一块,macOS 26 前退回 `NSVisualEffectView`);页面不再自绘玻璃;去掉输入框蓝色焦点环;内核未变;277359635 字节;SHA-256 `df095d3eaa1a4bf5ecff4a4bb116c68a1279d0b85cbd3806c9f924de71cb1bea` |
-| 3.0.0.138 CLI loading | 已构建，内核已提交推送(`09930e2f0e`)、未安装(2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-loading_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，CLI 等待行随机选择 25 组颜文字与英文短语，流光跟随主题 accent 高光；277357521 字节；SHA-256 `f39c0bfaec099ecbdefb7ba3bb238c00beeafc62129d7401dae090244dc9acea`；镜像校验、挂载后深度签名校验及包内内核隔离 `get_state` 启动冒烟通过，无模型请求；保留原版 138 dmg，未替换正在使用的应用 |
-| 3.0.0.138 读图与登录页 | 已构建、已提交推送(内核 `31660c16f6`)，待用户真机试用(2026-11-07) | `3.0.0.138/NPi Desktop_3.0.0.138_vision-login_aarch64.dmg` | **稳定证书** | 重编译内核(含 CLI loading 改动)：OAuth 回调页改为 NPi 标识与中英文文案；`images.blockImages` 移到"Model → Vision"并改名 "Block Image Input"。读图不出图的根因是用户配置 `images.blockImages: true`，已改为 `false`；277358286 字节；SHA-256 `bec8e7018e1f4399db2af0658dc4fd43234a223be4308988c7061df11d44ee13`；镜像校验与挂载后深度签名校验通过 |
-| 3.0.0.138 生图卡片与 Chat 接入 | 已构建，待用户真机试用(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_aarch64.dmg` | **稳定证书** | 接入 `generate_image`（含 `write xd://generate_image`）结果卡片缩略图、灯箱、路径、模型/尺寸/质量与失败态；Chat 模式在会话配置 `generate_image.enabled: true` 时放行 `generate_image`；全局配置已开启并通过 Codex Plus 实测生成 WebP；277363194 字节；SHA-256 `f90258c7c7fb0d895deea6340611bbb558af4bedaa117c09521c37ea4c7dc2ba`；镜像校验、挂载后深度签名校验及包内内核隔离 `get_state` 启动冒烟通过，保留 `vision-login` dmg，未替换正在使用的应用 |
-| 3.0.0.138 CLI themes | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-themes_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，启动 Logo／字标／流光跟随主题，新增三款 `dark-tokyo-{neon,rain,chrome}`；277372924 字节；SHA-256 `df33e96c41b0abc6885c2c26347ced2c9d7158c0fa174d296d60490f98250ebf`；镜像校验、挂载后深度签名校验和包内内核隔离 `get_state` 通过，无模型请求；保留原有 dmg，已清理 app 中间产物，未替换正在使用的应用 |
-| 3.0.0.138 CLI Wide | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_cli-wide_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`，Content Width 命名档位 Common（100 列）／Wide（140 列），保留数字配置与默认 100 列；277373974 字节；SHA-256 `8974d327a9b7e25e2e5713727cdd018203fe461855e22b4e3962e98fabc4b9ac`；镜像校验、挂载后深度签名校验、包内内核隔离 `get_state` 通过，无模型请求；保留已有 dmg，清理 app 中间产物，未替换已安装应用 |
-| 3.0.0.138 Collapse | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_collapse_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`：Appearance → Display 新增 Collapse 四档（Off / Thinking / Thinking + Tools / All，默认 All），取代 `expandThinkingBlocks`，Ctrl+T／Ctrl+O 仅作用于当前会话；CLI 等待行全程保持颜文字动画，工具意图只显示在工具卡片；含 API Key 登录不自动打开网页、LM Studio v1 模型元数据与 Codex `gpt-6.1+` 上下文规则；277407320 字节；SHA-256 `7bca41b417037f72f918485b7ee8160bd2bf1871e0d0a483e58dfe63581dbe6b`；镜像校验、挂载后深度签名校验（`NPi Desktop Local`）、包内内核隔离 `get_state` 及 `display.collapse` 读取通过，无模型请求；已清理 app 中间产物，未替换已安装应用 |
-| 3.0.0.138 Sandbox | 已构建、未安装(2026-11-08) | `3.0.0.138/NPi Desktop_3.0.0.138_sandbox_aarch64.dmg` | **稳定证书** | 进程沙盒：内核 `sandbox.mode` / `--sandbox`（off / workspace-write / read-only），macOS 下以 Seatbelt 重启内核，命令、eval、文件工具、MCP 只能写项目、npi 目录与临时目录；Desktop 设置 → Approvals → Sandbox 读写同一设置（`sandbox_config.rs`），CLI `/settings` 在 Interaction → Approvals。同包含：科研 Python 套件离线 wheelhouse（numpy/scipy/matplotlib/pandas/sympy，+76 MB）、`python` 工具降为 `xd://`、连续连接失败只重试 3 次、Flash lite 提示词批量调用；重编译内核 `npi/2.0.10`；353382211 字节；SHA-256 `efc86c34b0fa18d323fb216e4f0ee5e02555eea0c3b25836ff2873590f58a816`；镜像校验、挂载后深度签名校验、包内内核 `--sandbox workspace-write` 隔离 `get_state` 通过，无模型请求；未替换已安装应用 |
-| 3.0.0.201 | 已构建、已提交(分支 `3.0.0.201`,未推送)、未安装(2026-11-09) | `3.0.0.201/NPi Desktop_3.0.0.201_aarch64.dmg` | **稳定证书** | 重编译内核 `npi/2.0.10`:CLI 输入框打字时按提示词历史前缀补全整行(当前项目优先,淡色 ghost text),行尾 → 或 Tab 接受、不发送;设置 `composer.historySuggestions`(Interaction → Input → History Suggestions,默认开);内核提交 `f1f35a53fa`(`omp` `kernel.2.0.10-universal`,未推送)。含 138 Sandbox 包的全部内容;353392036 字节;SHA-256 `8c00bbe31d89d47b5fea66ee6bdc017b29f17489192c826861d03ede8551313f`;镜像校验、挂载后深度签名校验通过,包内内核含新设置;未在真机试用,未替换已安装应用 |
-| 3.0.0.201 Context | 已构建、已提交(分支 `3.0.0.201`,未推送)、未安装(2026-11-09) | `3.0.0.201/NPi Desktop_3.0.0.201_context_aarch64.dmg` | **稳定证书** | 右侧栏 Context 卡片加 Details:Context details 面板(消息构成细分、每次请求上下文柱状图与缓存命中率、工具/命令/文件统计),纯前端从现有 `get_messages` 上下文计算(`app/context-insight.js`、`design/context-insight-modal.jsx`),思路参考 dsh-context(Apache-2.0,未复用代码);同日重打:修命令解析(引号、转义空格、heredoc、`2>&1`)、消息构成按比例对齐总数(不再有约一半的"Overhead")、趋势图标注"last 60 of N"与首尾上下文量;再次重打:参考 dsh-context 改版(KPI 磁贴、构成环形图与图例条、带坐标轴/轮次分段/悬停详情的趋势图、工具与命令标签、文件读写标记),面板可拖角调整大小、默认约 1120×900 并记住尺寸(`npi.contextDetails.size`);内核未变(仍为 201 的 `npi/2.0.10`);`npm test` 全部通过;353389313 字节;SHA-256 `ee0bcc06b34d722a53345fd7baa78dd2f29bda6f01a0c4d896a283c3f8f5be1f`;镜像校验、挂载后深度签名校验通过;未在真机试用,保留 201 原 dmg,未替换已安装应用 |
-| 3.0.0.201 Web search | 已构建、已提交(Desktop 分支 `3.0.0.201`、内核 `d3cb82e110`,均未推送)、未安装(2026-11-09) | `3.0.0.201/NPi Desktop_3.0.0.201_websearch_aarch64.dmg` | **稳定证书** | 含 Context 版全部内容;重编内核 `npi/2.0.10` 修复 Google 搜索:Google 结果改用 `/goto?url=` 跳转链接后解析全部丢弃,现识别并逐条跟一次跳转取真实网址(未跳转的保留 `/goto`);用户配置 `modelRoles.web: web/google,web/hosted,web/exa`(Google 优先,失败按内核默认顺序兜底);353389704 字节;SHA-256 `dd0b39a280c30ae0aa260b4cf2985481242ea0c27c5a81905205a7c283026bc8`;镜像校验、挂载后深度签名校验通过,包内内核含修复;未在真机试用,未替换已安装应用 |
-| 3.0.0.201 Night city | 已构建、已提交(Desktop 分支 `3.0.0.201`、内核 `0a326b29b0`,均未推送)、未安装(2026-11-10) | `3.0.0.201/NPi Desktop_3.0.0.201_nightcity_aarch64.dmg` | **稳定证书** | 含 Web search 版全部内容;重编内核 `npi/2.0.10`:CLI 首页全屏动态背景(日本夜城视差左移:远景楼群、东京塔、霓虹招牌楼群、透视网格地面、故障扫描线,上层自动游玩的半块像素横版弹幕射击,含敌方旋转激光与我方散射激光;色调仅比背景浅一点,跟随主题),Logo 渐变缓慢流动;BGM:交互式 TUI 启动循环播放 `<agent dir>/bgm/*.mp3`(macOS `afplay`),设置 `startup.bgm` 可关,音乐不入仓库;`/rank [day|week|month|year]` 全屏 Token 排行榜(周期标签页 ←/→ 切换、↑/↓ 滚动、Enter 查看输入/输出/缓存堆叠条明细、r 刷新、Esc 关闭,单位 M Token/周期,周期从当日 0 点、周一、月初、年初起算);353647478 字节;SHA-256 `1e9936b2d41e3073a2f035b0dae0bf91530db88e6fc51e77e98375d8a025cca2`;镜像校验、挂载后深度签名校验通过,包内内核含新功能;未在真机试用桌面端,未替换已安装应用 |
-| 3.0.0.201 Office | 已构建、已提交(Desktop 分支 `3.0.0.201`、内核 `b2b2cc04fd`,均未推送)、未安装(2026-11-10) | `3.0.0.201/NPi Desktop_3.0.0.201_office_aarch64.dmg` | **稳定证书** | 含 Night city 版全部内容;重编内核 `npi/2.0.10`:Virtual Office(`/office on`,主聊天为总经理,Team/Studio/Enterprise 对应 1/3/6 个 Office,每个 Office 1 名 Leader + 2–5 名 Worker,固定名 `Worker-xxxxxx`、可指定模型与能力;各成员独立分支与 worktree,只能经本地 PR 逐级审核合并,最终合并到当前分支须用户 `/office merge`);Office 按项目记忆(合并日志 + `remember` 经验,派工时带给成员);RPC `get_office_state` / `office_command` 供 GUI 接入;用户目录启动 CLI 默认进入 `~/Documents/NPi/Code`;同日清空 `/tmp` 项目的 npi 记忆;离线模拟模型跑通完整派工,未用真实模型试运行;353586198 字节;SHA-256 `5816ad3d07cfc0fb41e333b1f45dbde789e1e9097a52a24cfb57ffc65cacad56`;镜像校验、挂载后深度签名校验(`NPi Desktop Local`)通过,包内内核含新功能;桌面端尚无 Office 界面,未替换已安装应用 |
-| 3.0.0.201 Office GUI | 已构建、已提交(Desktop `4ef77c1`、内核 `0b2e58fea3`,均未推送)、未安装(2026-11-10) | `3.0.0.201/NPi Desktop_3.0.0.201_officegui_aarch64.dmg` | **稳定证书** | 含 Office 版全部内容;重编内核 `npi/2.0.10`:CLI 无参数 `/office` 打开全屏面板(方向键/回车/Esc,文字版改为 `/office status`);RPC 会话默认关闭 Office、`set_office_enabled` 按会话开关,`office_state` 帧推送变化,`OfficeState` 增加各 Office 阶段、按本地日期的成员用量(含总经理)与派工记录,工位改为跨进程锁;桌面端 Virtual Office 窗口:侧边栏 Office 项与标签页右键菜单按标签页开关(随 `open-tabs.json` 恢复),Cmd+Shift+O 打开独立窗口,加油机式计量器(USD/JPY,汇率由 Rust 从 Frankfurter 每日获取并缓存)、PR 漏斗、Office 卡片,点开为每名成员一列的只读对话;合并/退回、名册、记忆均经 `office_command`;子代理订阅级别改为按窗口登记取最高;353673778 字节;SHA-256 `0f7e6ba371c552f195d3bbcc5b987b95bbc276a45bd1d17b1c1a5067fa4a7e79`;镜像校验、挂载后深度签名校验(`NPi Desktop Local`)通过,包内内核含新命令;Office 窗口仅在浏览器中用假数据验证过,未在真实应用中运行,未替换已安装应用 |
-| 3.0.0.201 Office GUI 修复 | 已合并到 `3.0.0.201`(`fa584ec`)、随下行 Office dispatch 包构建并安装(2026-11-10) | 见下行 | — | Office 窗口自带开关与“启用 Office”页(经 `office://set-enabled` 交给主窗口保存并发 `set_office_enabled`),侧边栏 Office 项内联开关,Cmd+Shift+O 在未开启的标签页上给出可点击提示;`set_office_enabled` 改在 `_spawnSession` 重发,后台恢复与重启的标签页也生效;加载骨架、关闭页、离线横幅,头部状态分“在线 / Office 已关闭 / 离线”,配色只用主题变量;名册加每名成员的思考强度。内核分支 `office-o1-dispatch`(`05b196cb53`,已快进合入 `kernel.2.0.10-universal`):成员按名册模型/强度派发、强度按模型夹取、不再弹子代理模型询问,`office` 工具不再需批准;`tsgo` 通过,`bun run gen:rpc` 与 omp 定向测试见下行。在临时 HOME 的 `tauri dev`(内核为已安装 2.0.10)中验证:开关→RPC→`office_state`→窗口渲染、侧边栏开关、重启后恢复开/关、快捷键提示;未截图(无屏幕录制权限),新派发内核随下行包安装,尚未在桌面窗口中运行 |
-| 3.0.0.201 Office dispatch | 已构建、已安装到 `/Applications`(Desktop `fa584ec`、内核 `f2e5ec9272`,均未推送)(2026-11-10) | `3.0.0.201/NPi Desktop_3.0.0.201_officedispatch_aarch64.dmg` | **稳定证书** | 含 Office GUI 修复全部内容(PR #6);重编内核 `npi/2.0.10`:`office-o1-dispatch`(`05b196cb53`)快进合入 `kernel.2.0.10-universal`,并提交 `bun run gen:rpc` 重新生成的 Go/Python/Rust SDK(`f2e5ec9272`,`OfficeMember.thinking`);Office 成员按名册模型/强度派发、强度按模型夹取、不再弹子代理模型询问,`office` 工具不再需批准;omp 定向测试 7 个文件 92 项全部通过(`office`、`task/delegation-preferences`、`rpc-wire/generated`、`task/wire-schema`、`rpc-frame`、`rpc-compatible-primitives`、`rpc-output`),再跑 `gen:rpc` 无差异;353679686 字节;SHA-256 `8868fddb50194522b289eb041da31f93ff0b6ef940b546741e18e3df68532ba3`;镜像校验、挂载后深度签名校验(`NPi Desktop Local`)通过;已从镜像替换 `/Applications/NPi Desktop.app`(未关闭正在运行的 NPi,需用户自行重启),安装后深度签名校验、包内内核 `--version`、临时 HOME 下 RPC `get_state` 通过,包内内核含新派发代码(上一内核 `0b2e58fea3` 没有);未用真实模型试运行 Office 派工,新内核未在桌面窗口中运行 |
-| 3.0.0.201 Office roster | 已构建、未安装(Desktop `4f4f605`、内核 `f2e5ec9272`,均未推送)(2026-11-10) | `3.0.0.201/NPi Desktop_3.0.0.201_officeroster_aarch64.dmg` | **稳定证书** | 含 Office dispatch 全部内容(内核未重编,沿用 `f2e5ec9272` 的随包内核);Office 窗口名册(PR #8):成员模型(设置同源模型列表,首项“能力档位”)、按模型可用档位的思考强度、能力,Office 人数 −/+(`size`)、公司规模(`scale`),均经 `/office` 命令发送,命令出错时在该行显示内核原文;353680576 字节;SHA-256 `375419e2cd8c0d6fb0bfdb885f73d0c6635be37cfbad93fe724dd2e4330e8bc0`;镜像校验、挂载后深度签名校验(`NPi Desktop Local`)通过;未安装,未在打包后的应用中运行 |
-| 3.1.0.72 | 已构建、已提交(Desktop 分支 `3.1.0.72`、内核 `a32ad0bf2e`,均未推送)、未安装(2026-11-10) | `3.1.0.72/NPi Desktop_3.1.0.72_aarch64.dmg` | **稳定证书** | 含 Office roster 全部内容;重编内核 `npi/2.0.10`(`kernel.2.0.10-universal`,`7593755e2d`、`a32ad0bf2e`):Office 用量本地计费——成员记账不再触发整份 `office_state` 重建与推送,改发合并后的 `office_usage` 增量帧(每成员每日每 250 ms 一帧),Office 窗口与 CLI 面板自行累加并在本地午夜翻日(`bun run gen:rpc` 重生成 SDK);CLI `/office` 面板补全:成员思考强度、各 Office 阶段与任务、PR 漏斗、今日/累计花费(公司/总经理/Office/成员)、最近派工,打开期间实时更新;Office 瘦身:桌面只含 tracked 文件,`node_modules`/`.venv`/`venv`/`vendor`/`bower_components` 用软链接指向主 checkout(设置 `office.shareDependencies`,默认开),派工结束与合并后回收已提交完的空闲桌面(分支保留,下次自动重建),`/office clean` 与面板“Free disk space”手动清理,删除成员同时回收其桌面与已合并分支,PR 账本只留最近 200 条已结束 PR(最近 40 条保留正文);Desktop 版本号 3.0.0-201 → 3.1.0-72;`tsgo` 通过,omp 定向测试(`office` 22 项、`rpc-wire`/`rpc-frame`/`rpc-output`、tui `office-panel` 9 项)与桌面 `test-office-model` 20 项通过;353701759 字节;SHA-256 `327967544688e5f9ac3c423f79987005f92f42b3700021a08e59dead34c9a563`;镜像校验、挂载后深度签名校验通过,包内内核 `--version` 为 `npi/2.0.10` 且含新设置与 `office_usage` 帧;未在真实项目里试运行 Office 派工,未替换已安装应用 |
-| 3.1.0.72 Office fast | 已构建、未安装、未提交(内核基于 `a32ad0bf2e` + `kernel.2.0.10-universal` 工作区未提交改动)(2026-11-10) | `3.1.0.72/NPi Desktop_3.1.0.72_officefast_aarch64.dmg` | **稳定证书** | 含 3.1.0.72 全部内容;重编内核 `npi/2.0.10`,Office 调度提速:总经理派工标 `Size: small/large`,小任务由组长在 office 桌面自己完成并直接提交给总经理(不再拆给 worker),大任务默认 1 个 worker、仅真正独立的部分并行、同一文件/模块不拆;同一 PR 最多退回 2 次(代码强制,用户否决不受限);`office.assignmentTimeoutMs` 默认 15 分钟(组长 4 倍),超时报告未完成;回收空闲桌面时保留含独立 git 仓库的桌面(修复组长在桌面内克隆的 omp 被回收删除的问题);起因:本仓库真实派工记录显示一个小任务被拆给 4 个 worker、跑 3 轮 40+ 分钟。`/usage` 全屏面板(分支 `usage-panel` `f9f346ac4c`,未合并)**不在本包内**;`tsgo` 通过,office/rpc 定向测试 42 项通过;353704280 字节;SHA-256 `98be7cc611810976132bcfcf7c35883f06454b70999a9d02d74da02fee1f038b`;镜像校验、挂载后深度签名校验通过,包内内核 `--version` 为 `npi/2.0.10` 且含新代码(提示词在二进制中为压缩存放,无法直接检索);未在真实任务中试运行,未替换已安装应用 |
-| 3.1.0.72 Office report | 已构建、已提交(Desktop `d3a8a3d`、内核 `661a8540eb`,均未推送)、未安装(2026-11-10) | `3.1.0.72/NPi Desktop_3.1.0.72_officereport_aarch64.dmg` | **稳定证书** | 取代 Office fast 包的调度方案;重编内核 `npi/2.0.10`(`kernel.2.0.10-universal` `661a8540eb`,含其间他处提交的 `/usage` 面板打磨 `34397c094f`–`22ec65b4be`):Office 改为只调查、出报告——总经理把问题交给 Office、自己动手改代码;成员在主 checkout 用只读工具(read/grep/glob/find/ast_grep/web_search + 本座位 `office`,无 bash/写/编辑/子代理),组长小问题自查、大问题拆给 worker 并行再汇总;报告存 `.git/npi-office/reports/<run>.md`(最近 120 份),`office report`、`/office report`、TUI Reports 页、RPC `get_office_report` 可读;去掉 PR/审核/合并/桌面 worktree/分支/依赖链接/`/office merge\|reject\|clean`;成员座位改为按派工登记的 agent id 识别;Office 窗口改为“调查中/报告数”与报告弹窗。OAuth 账号自定义名称(`a0219e7d2e`):`/login` 后可命名、`/session rename`、`/session pin <名字>`、`/usage` 与状态栏显示名字、`auth.accountPolicies` 支持 `label`,刷新与重新登录保留名字。旧 `office/*` 分支、旧桌面目录与 `npi-office/pulls.json` 未删除,可手动清理;`tsgo` 通过,定向测试通过(coding-agent 86、tui office-panel 7、ai 认证 820 中 819,另 1 项全量运行时超时、单独运行通过),桌面 `test-office-model` 19 项;353679668 字节;SHA-256 `36b1b72a0f178211107f1e195b4dd1fda43fff2657ab8fac493c4e0e68f93e88`;镜像校验、挂载后深度签名校验通过,包内内核 `--version` 为 `npi/2.0.10` 且含新代码;未用真实模型试运行 Office 调查,未替换已安装应用 |
-| 3.1.0.72 Live spend | 已构建、已提交(Desktop `1e669ab`、内核 `a3b31c0c6e`,均未推送)、未安装(2026-11-11) | `3.1.0.72/NPi Desktop_3.1.0.72_livespend_aarch64.dmg` | **稳定证书** | 含 Office report 全部内容;重编内核 `npi/2.0.10`(`kernel.2.0.10-universal` `a3b31c0c6e`):`/login <provider> <名字>` 登录时命名,命名提示列出已用名字、重名重问,登录列表显示各厂商已有账号(`1a5922391b`);`/usage` 概览改为卡片式,同行等高、告警/耗尽边框变色(`de3db9ce9b`);CLI 侧栏在 Context 后新增 Spend:本会话 USD(不足 $1 显示 4 位小数)与 token,回复流式输出时按已收文本估算输出 token、按模型输出单价计价并以“~”标示,记账后换成实际值。Desktop:修复粘贴图片后每次输入都多出一条图片条且 × 删不掉(图片条与长粘贴条共用同一 React key);侧栏 Usage 上方新增独立 Spend 卡片(USD + token,流式时同样估算并以“~”与灰色标示),Usage 卡片只留订阅额度。计费全部在本地:omp 按本地模型目录单价 × 厂商返回的 token 用量计算,不请求计费服务器。`tsgo` 通过;tui 侧栏/状态栏测试通过,`/usage` 账号测试按卡片换行调整后 17 项通过;coding-agent `test/modes` 另有 23 项失败为本次改动前既有(思考渲染、浮层、Warp 事件);桌面 `test-usage-view` 等 5 个回归脚本通过,浏览器演示模式复现并验证了粘贴修复;353692054 字节;SHA-256 `7ddab236f388751d9c16b39b805979a0cd257a440185d1c69e39d9690f0b0bf9`;镜像校验、挂载后深度签名校验通过,包内内核 `--version` 为 `npi/2.0.10` 且含新代码;未在打包后的应用中运行,未替换已安装应用 |
-| 3.1.0.101 | 已构建、已提交(Desktop 分支 `3.1.0.101` `e1618f2`,从 `3.1.0.72` 的 `1e669ab` 拉出;内核 `a3b31c0c6e`;均未推送)、未安装(2026-11-11) | `3.1.0.101/NPi Desktop_3.1.0.101_aarch64.dmg` | **稳定证书** | 内容与 3.1.0.72 Live spend 包相同(内核未重编,沿用随包 `npi/2.0.10`);Desktop 版本号 3.1.0-72 → 3.1.0-101(`package.json`、`Cargo.toml`、`Cargo.lock`、`tauri.conf.json`);353691655 字节;SHA-256 `2df3c340cac1fa9ceeb26963107fcd35cdadfa91b29f75ae8fdc25f1db8d1d73`;镜像校验、挂载后深度签名校验通过,包内版本 3.1.0-101、内核 `--version` 为 `npi/2.0.10`;未在打包后的应用中运行,未替换已安装应用 |
-
-打包流程(每次都这样,别改顺序):
-
-1. `node scripts/build-frontend.mjs`
-2. `devstore run rust/current -- /usr/bin/env PATH="<nvm node>:$PATH" node node_modules/.bin/tauri build --config src-tauri/tauri.dist.conf.json --bundles app`(不要带 `tauri.localsign.conf.json`:`devstore run` 改了 `HOME`,看不到登录钥匙串,会报 "The specified item could not be found in the keychain");`$PATH` 要在 devstore 里展开,外层 shell 先展开会盖掉 devstore 的 cargo 路径(报 `cargo metadata` No such file),可写成 `devstore run rust/current -- /bin/sh -c 'PATH="<nvm node>:$PATH" node node_modules/.bin/tauri build ...'`
-3. 在 devstore 之外:`codesign --force --deep --options runtime --sign "NPi Desktop Local" "<.app>"`
-4. `bundle_dmg.sh --skip-jenkins --volname "NPi Desktop" --app-drop-link 480 170 <输出> <含 .app 的目录>`(Tauri 自带的 dmg 步骤会被 Finder 拒绝)
-5. `hdiutil verify`、挂载后 `codesign --verify --deep --strict`、`shasum -a 256`
-6. 把 dmg 放进 `dist/<版本>/`,校验通过后删除 `target/release/bundle/` 下的源 dmg、`.app` 和 `rw.*.dmg`,只保留 `dist/` 里的那一份(增量编译缓存不动;`bundle/dmg/bundle_dmg.sh` 与 `icon.icns` 保留,只打 app 时 Tauri 不会重新生成它们,第 4 步要用)
-
-内核：`omp/packages/coding-agent` 里 `bun run build`（本机 `.tools/node_modules/.bin/bun`），产物 `dist/npi` 复制到 `desktop/src-tauri/binaries/npi-aarch64-apple-darwin`。最近一次编译于 2026-11-11（3.1.0.72 Live spend，内核提交 `a3b31c0c6e`，版本仍为 `npi/2.0.10`）；对应 app 使用 DevStore `rust/current` 构建，只生成 app、dmg。
-
-CLI 主题更新(2026-11-08，已重编译并打包至上表 `cli-themes` dmg)：启动 Logo、字标与流光改为读取当前主题的 `text` / `accent` / `borderAccent`，静止画面切换主题时同步刷新；新增内置 `dark-tokyo-neon`、`dark-tokyo-rain`、`dark-tokyo-chrome` 三款赛博朋克配色。17 项 welcome/tip/startup-splash 定向测试及 TUI 类型检查通过；终端渲染冒烟覆盖三款新主题与 light、动画/静止画面、全尺寸/紧凑 splash 和 256 色转换。三款配色同时导入本机 iTerm2 Color Presets，24 个颜色字段逐一与导出值一致，原有预设及全部 Profile 配置保持不变；导出文件保存在 `dist/3.0.0.138/iterm2/*.itermcolors`。未修改用户主题选择或已安装应用。
-
-第 2 步的 `devstore run` 要保留环境注入的 PATH:`devstore run rust/current -- sh -c 'PATH="<nvm node>:$PATH" exec node node_modules/.bin/tauri build …'`。DevStore 若因卷意外断开留下过期租约(`mount` 报 `no lease on the image`,`unmount` 也失败),把映像目录里的 `lease.json` 改名后再挂载(2026-11-06 遇到过,是 DevStore 的 bug)。
-
-稳定签名证书 `NPi Desktop Local`(自签名,有效期到 2036 年,在登录钥匙串)用于保住通知授权;换电脑、重置钥匙串或重装系统后要重跑 `scripts/macos-local-signing.sh`。建议把它连私钥导出成 `.p12` 备份。
+完整版本表、打包流程、内核构建与签名证书说明已搬到 [`RELEASES.md`](RELEASES.md)。当前最新:Desktop `3.1.0.103`(Remote 包 `dist/3.1.0.103/NPi Desktop_3.1.0.103_remote_aarch64.dmg`,未提交、未安装),内核 `kernel.2.1.0-universal` 工作区。
 
 ## 2. 已做的工作(按领域)
 
@@ -185,6 +167,14 @@ CLI 主题更新(2026-11-08，已重编译并打包至上表 `cli-themes` dmg)�
 粗算:Research MVP(`PLAN_3.0`)代码约 90%,剩下是真机验证;`PLAN.md` 的 1.1.0 全量约三成。
 
 ## 4. 下一步(按顺序)
+
+### 当前下一步（2026-11-14 用户指定，优先于下面各步，按顺序）
+
+0. ~~整理汇总根目录 `docs/`~~（2026-11-14 已做，见 `docs/README.md`、`docs/RELEASES.md`）：合并重复、已完成的归入 `archive/`，保证本文仍是唯一进度入口；不动 `omp/` 与 `desktop/docs/` 的文档。
+1. ~~部分 session 打开失败的修复~~（2026-11-14 已撤销）：原因是用户当时没选好权限，改正后会话正常打开，不是代码问题，无需修复。
+2. **性能优化**（单列，排在修复之后）：
+   - 先量后改：对长会话加载、切换标签、流式渲染、启动耗时取基线数字，再选瓶颈下手。
+   - 不做没有数据支撑的优化；每项记录前后对比。
 
 ### 第一步:收口 —— 验证、修问题、提交(约 1~2 个工作段)
 

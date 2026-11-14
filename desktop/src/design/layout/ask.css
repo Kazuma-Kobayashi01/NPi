@@ -40,6 +40,19 @@
   margin-bottom: 10px;
 }
 
+.ask-approval-hunks {
+  max-height: 360px; overflow: auto; margin-bottom: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-2);
+}
+.ask-approval-hunk { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.ask-approval-hunk:last-child { border-bottom: 0; }
+.ask-approval-hunk-choice { display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+.ask-approval-hunk-choice input { accent-color: var(--accent); flex: none; }
+.ask-approval-hunk summary { cursor: pointer; color: var(--fg-3); font-size: var(--d-text-xs); margin-top: 5px; }
+.ask-approval-hunk pre { margin: 6px 0 0; font-size: var(--d-text-xs); line-height: var(--d-leading); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-hunk-add { color: var(--lime); }
+.ask-hunk-remove { color: var(--red); }
+
 /* A tool call an approval rule let through (chat/approval-row.jsx, #42):
    the tool, what the call does, and the prompt's details on demand. */
 .approval-row-card { border-color: color-mix(in oklab, var(--lime) 28%, var(--line)); }

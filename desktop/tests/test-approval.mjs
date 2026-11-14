@@ -100,4 +100,33 @@ check("no details: an empty summary and no toggle", () => {
   assert.deepEqual(A.rowView({ details: "" }), { summary: "", expandable: false });
 });
 
+// ── Partial file approvals ───────────────────────────────────────────────
+const hunkPrompt = {
+  ...prompt("Allow tool: edit\nFile: a.txt"),
+  hunks: [
+    { index: 0, path: "a.txt", header: "@@ -1,1 +1,1 @@", lines: ["-before", "+after"] },
+    { index: 1, path: "a.txt", header: "@@ -9,1 +9,1 @@", lines: ["-old", "+new"] },
+    { index: 2, path: "b.txt", header: "@@ -2,1 +2,1 @@", lines: ["-x", "+y"] },
+  ],
+};
+check("structured approval hunks retain their stable cross-file indices", () => {
+  assert.deepEqual(A.approvalHunks(hunkPrompt), hunkPrompt.hunks);
+  assert.deepEqual(A.approvalHunks(prompt("Allow tool: write")), []);
+  assert.deepEqual(A.approvalHunks({ ...hunkPrompt, title: "Choose a file" }), []);
+});
+check("malformed or duplicate hunk indices never become selection controls", () => {
+  assert.deepEqual(A.approvalHunks({ ...hunkPrompt, hunks: [hunkPrompt.hunks[0], hunkPrompt.hunks[0]] }), []);
+  assert.deepEqual(A.approvalHunks({ ...hunkPrompt, hunks: [{ ...hunkPrompt.hunks[0], index: -1 }] }), []);
+  assert.deepEqual(A.approvalHunks({ ...hunkPrompt, hunks: [{ ...hunkPrompt.hunks[0], lines: [null] }] }), []);
+});
+check("a proper subset sends only selected indices in original proposal order", () => {
+  assert.deepEqual(A.hunkAnswer(hunkPrompt.hunks, [2, 0]), { value: "Approve", selectedHunks: [0, 2] });
+  assert.deepEqual(A.hunkAnswer(hunkPrompt.hunks, [1, 1, 99]), { value: "Approve", selectedHunks: [1] });
+});
+check("all and none retain the original full-approve and deny payloads", () => {
+  assert.deepEqual(A.hunkAnswer(hunkPrompt.hunks, [0, 1, 2]), { value: "Approve" });
+  assert.deepEqual(A.hunkAnswer(hunkPrompt.hunks, []), { value: "Deny" });
+  assert.deepEqual(A.hunkAnswer(hunkPrompt.hunks, [99]), { value: "Deny" });
+});
+
 console.log(`approval: ${passed} checks passed`);

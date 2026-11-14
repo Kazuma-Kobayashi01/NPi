@@ -150,9 +150,27 @@ function QuickWindow({ bridge }) {
   };
   const newConversation = () => { setText(""); start(mode).catch(console.error); focus(); };
   const continueInWindow = () => { bridge.quickContinue(sessionMode ?? mode).catch(console.error); };
+  // The reply toolbar (chat/selection-toolbar.jsx) and 👍/👎 (chat/reply-feedback.jsx), as
+  // app-live.jsx `handleReplyAction` routes them: Quote goes into this panel's input, never
+  // sent; Ask and feedback are a prompt when idle and a follow-up while a turn runs; Steer
+  // steers the running turn. They stay in the conversation on screen, whatever the mode.
+  const streamingRef = React.useRef(streaming);
+  streamingRef.current = streaming;
+  const onReplyAction = React.useCallback((kind, value) => {
+    if (kind === "quote") {
+      setText(prev => window.OMP_REPLY_QUOTE.appendBlock(prev, value));
+      inputRef.current?.focus();
+      return;
+    }
+    const running = streamingRef.current;
+    if (kind === "steer" && running) bridge.steer(value);
+    else if (running) bridge.followUp(value);
+    else bridge.send(value);
+  }, [bridge]);
 
   React.useEffect(() => {
     const onKey = e => {
+      if (e.defaultPrevented) return; // Escape a popover (the reply toolbar) took
       if (e.key === "Escape") { e.preventDefault(); hide(); return; }
       if (e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3"].includes(e.key)) {
         e.preventDefault();
@@ -186,7 +204,10 @@ function QuickWindow({ bridge }) {
               onCancelAsk={id => bridge.cancelAsk(id)}
               onGrantApproval={(prompt, scope) => bridge.approveAndRemember(prompt, scope)}
               onStopRetry={() => bridge.stopRetry()}
-              onUiSubmit={bridge.submitUi} onUiCancel={bridge.cancelUi} onUiRendered={bridge.renderedUi} />
+              onUiSubmit={bridge.submitUi} onUiCancel={bridge.cancelUi} onUiRendered={bridge.renderedUi}
+              onUiSuggestion={bridge.sendUiSuggestion} uiListFiles={bridge.listFiles} uiDisabled={!bridge.isConnected}
+              conversation={window.OMP_REPLY_FEEDBACK.conversationKey(current?.sessionFile)}
+              onReplyAction={onReplyAction} />
           </div>
           <div className="quick-foot">
             <span>{mode !== sessionMode ? T("The next message starts a new conversation in this mode.") : T("↩ send · esc close · ⌘1–3 switch mode")}</span>

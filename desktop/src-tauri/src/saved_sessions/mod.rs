@@ -89,6 +89,18 @@ pub fn sessions_root_dir(app: &AppHandle, profile: Option<&str>) -> Option<PathB
         .map(|home| sessions_root_for(&home, profile, env_dir.as_deref()))
 }
 
+/// A session title as the app shows it: without Private Use Area characters.
+/// omp heads a generated title with a Nerd Font glyph in a Nerd Font
+/// terminal (`title.icons` "nf+emoji", e.g. `󰄡 RC: …`); the app's fonts have
+/// no such glyphs and drew a wide blank before the name. Emoji icons stay.
+pub fn display_title(title: &str) -> String {
+    let kept: String = title
+        .chars()
+        .filter(|c| !matches!(*c as u32, 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD))
+        .collect();
+    kept.trim().to_string()
+}
+
 /// Extract text content from a message content block array.
 pub fn extract_text_from_content(content: &serde_json::Value) -> Option<String> {
     if let Some(arr) = content.as_array() {
@@ -214,9 +226,9 @@ pub fn parse_session_file(path: &Path) -> Option<SavedSession> {
         match event_type {
             "title" => {
                 if let Some(t) = val.get("title").and_then(|s| s.as_str()) {
-                    let trimmed = t.trim();
-                    if !trimmed.is_empty() {
-                        explicit_title = trimmed.to_string();
+                    let shown = display_title(t);
+                    if !shown.is_empty() {
+                        explicit_title = shown;
                     }
                 }
                 if let Some(ts) = val.get("updatedAt").and_then(|s| s.as_str()) {

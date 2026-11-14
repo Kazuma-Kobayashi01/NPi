@@ -116,3 +116,17 @@
 .gui-divider { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
 .gui-divider::before, .gui-divider::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
 .gui-divider-label { color: var(--fg-4); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.gui-table-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gui-copy-csv { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; color: var(--fg-3); font-size: var(--d-text-xs); white-space: nowrap; }
+.gui-table-filter { padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--bg-input); color: var(--fg); font: inherit; }
+.gui-table th button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; text-align: inherit; }
+.gui-suggestions { display: flex; flex-direction: column; gap: 9px; }
+.gui-suggestion-items { display: flex; flex-wrap: wrap; gap: 8px; }
+.gui-suggestion { padding: 8px 13px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--gui-raise); color: var(--fg-2); font: inherit; text-align: left; cursor: pointer; }
+.gui-suggestion:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.gui-suggestion:disabled { cursor: default; opacity: 0.5; }
+.gui-suggestion.is-chosen { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); opacity: 1; }
+.gui-suggestions-cards .gui-suggestion-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.gui-suggestions-cards .gui-suggestion { display: flex; flex-direction: column; gap: 6px; padding: 13px 15px; border-radius: var(--r-2); }
+.gui-suggestion small { color: var(--fg-3); line-height: 1.5; }

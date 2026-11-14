@@ -11,7 +11,7 @@
   // Maps omp tool names → design TOOL_META keys (ui.jsx)
   const TOOL_NAME_MAP = {
     read: "read", search: "search", edit: "edit", bash: "bash",
-    write: "write", todo_write: "todo", find: "search",
+    write: "write", todo: "todo", find: "search",
     web_search: "search", lsp: "search",
     eval: "eval", task: "task", quick_task: "task", debug: "debug", ask: "ask",
   };
@@ -75,6 +75,45 @@
           file: null,
         })),
       };
+    });
+  }
+
+  // ── TodoPhase[] → inline plan block of an assistant reply ─────────────────
+  // The chat shows each `todo` tool result as a plan block on the assistant
+  // entry of the turn that called it (live.js `_injectInlinePlan` live,
+  // `adaptAgentMessages` from history). `live` is set by `markLatestPlanLive`.
+  function buildInlinePlan(todoPhases) {
+    return {
+      type: "plan", title: "Plan", live: false,
+      phases: todoPhases.map(ph => ({
+        id: ph.name, label: ph.name,
+        tasks: ph.tasks.map((t, i) => ({
+          id: `${ph.name}-${i}`, text: t.content,
+          status: (t.status === "completed" || t.status === "abandoned") ? "done" : t.status,
+        })),
+      })),
+    };
+  }
+
+  /** `messages` with `block` as the plan of entry `idx` (replacing its plan). */
+  function withInlinePlan(messages, idx, block) {
+    const m = messages[idx];
+    const hasPlan = m.blocks?.some(b => b.type === "plan");
+    const out = [...messages];
+    out[idx] = { ...m, blocks: hasPlan ? m.blocks.map(b => (b.type === "plan" ? block : b)) : [...(m.blocks ?? []), block] };
+    return out;
+  }
+
+  /** Only the newest plan block of the transcript is `live` (the one the user
+   *  may edit, app/plan-edit.js); earlier ones are read-only snapshots. */
+  function markLatestPlanLive(messages) {
+    const last = messages.findLastIndex(m => m.blocks?.some(b => b.type === "plan"));
+    return messages.map((m, i) => {
+      if (!m.blocks?.some(b => b.type === "plan")) return m;
+      const live = i === last;
+      return m.blocks.some(b => b.type === "plan" && b.live !== live)
+        ? { ...m, blocks: m.blocks.map(b => (b.type === "plan" ? { ...b, live } : b)) }
+        : m;
     });
   }
 
@@ -519,6 +558,9 @@
     let result = [];
     const messages = Array.isArray(apiMessages) ? apiMessages : [];
     const failures = window.OMP_TURN_STATUS.finalFailures(messages);
+    // toolCallId → `ts` of the assistant message that made the call: a `todo`
+    // result's plan goes on that turn's entry, as live.js puts it there.
+    const callerTs = new Map();
     for (const [index, msg] of messages.entries()) {
       if (!msg || typeof msg !== "object") continue;
       const { role, content } = msg;
@@ -526,9 +568,20 @@
       const ts     = window.OMP_TRANSCRIPT.tsOf(msg);
       const blocks = Array.isArray(content) ? content : [{ type: "text", text: String(content ?? "") }];
 
-      if (role === "custom" && ["ui.present", "ui.submit", "ui.state"].includes(msg.customType)) {
+      if (role === "custom" && ["ui.present", "ui.update", "ui.submit", "ui.state"].includes(msg.customType)) {
         const ui = window.OMP_GENERATIVE_UI.messageToUi(msg);
         result = window.OMP_GENERATIVE_UI.upsertMessage(result, { ...ui, time });
+        continue;
+      }
+
+      if (role === "toolResult") {
+        const phases = msg.toolName === "todo" && !msg.isError ? msg.details?.phases : null;
+        if (phases?.length) {
+          const ownTs = callerTs.get(msg.toolCallId);
+          let host = ownTs == null ? -1 : result.findLastIndex(m => m.kind === "assistant" && m.ts === ownTs);
+          if (host === -1) host = result.findLastIndex(m => m.kind === "assistant");
+          if (host !== -1) result = withInlinePlan(result, host, buildInlinePlan(phases));
+        }
         continue;
       }
 
@@ -548,6 +601,8 @@
             designBlocks.push({ type: "text", text: block.text });
           } else if (_isImageBlock(block)) {
             designBlocks.push({ ...block, type: "image", data: block.data, mimeType: block.mimeType });
+          } else if (block.type === "toolCall" && typeof block.id === "string") {
+            callerTs.set(block.id, ts);
           }
           // tool_use blocks already rendered as separate tool cards; skip here
         }
@@ -555,25 +610,34 @@
         // (app/turn-status.js). Only a failure that ended its run counts —
         // omp keeps some failed attempts it then continued from.
         const failure = failures.get(index) ?? null;
-        if (designBlocks.length > 0 || thought || failure) {
-          // omp's persisted AgentMessage may carry usage in either RPC shape
-          // ({input, output}) or raw Anthropic shape ({input_tokens, output_tokens}).
-          const u = msg.usage;
-          const tokensIn  = u?.input  ?? u?.input_tokens  ?? null;
-          const tokensOut = u?.output ?? u?.output_tokens ?? null;
-          const tokens = (tokensIn != null || tokensOut != null) ? (tokensIn ?? 0) + (tokensOut ?? 0) : null;
-          result.push({
-            kind: "assistant", time, ts, thought,
-            lead: thought ? "thinking" : null,
-            blocks: designBlocks,
-            streaming: false,
-            tokens, tokensIn, tokensOut,
-            ...(failure ? { failure } : {}),
-          });
-        }
+        // A turn of tool calls only has no entry of its own unless a `todo`
+        // result puts its plan there (`_toolOnly`, dropped below otherwise),
+        // matching the live transcript's bubble for that turn.
+        const toolOnly = !(designBlocks.length > 0 || thought || failure);
+        // omp's persisted AgentMessage may carry usage in either RPC shape
+        // ({input, output}) or raw Anthropic shape ({input_tokens, output_tokens}).
+        const u = msg.usage;
+        const tokensIn  = u?.input  ?? u?.input_tokens  ?? null;
+        const tokensOut = u?.output ?? u?.output_tokens ?? null;
+        const tokens = (tokensIn != null || tokensOut != null) ? (tokensIn ?? 0) + (tokensOut ?? 0) : null;
+        result.push({
+          kind: "assistant", time, ts, thought,
+          lead: thought ? "thinking" : null,
+          blocks: designBlocks,
+          streaming: false,
+          tokens, tokensIn, tokensOut,
+          ...(failure ? { failure } : {}),
+          ...(toolOnly ? { _toolOnly: true } : {}),
+        });
       }
     }
-    return result;
+    result = result.flatMap(m => {
+      if (!m._toolOnly) return [m];
+      if (!m.blocks.length) return [];
+      const { _toolOnly, ...rest } = m;
+      return [rest];
+    });
+    return markLatestPlanLive(result);
   }
 
 
@@ -658,6 +722,9 @@
     finalizeToolCard,
     updateToolCard,
     adaptAgentMessages,
+    buildInlinePlan,
+    withInlinePlan,
+    markLatestPlanLive,
     adaptUserContent,
     pickRecentModels,
     modelKey,

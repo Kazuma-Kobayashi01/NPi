@@ -1,6 +1,6 @@
 # NPi Desktop Agent 入口
 
-- 开始项目工作前，必须读取 [.agent/README.md](.agent/README.md) 中的项目级注意事项；当前总进度、打包流程与下一步以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准。
+- 开始项目工作前，必须读取 [.agent/README.md](.agent/README.md) 中的项目级注意事项；当前总进度与下一步以 [docs/PROGRESS.md](docs/PROGRESS.md) 为准，版本表与打包流程见 [docs/RELEASES.md](docs/RELEASES.md)。
 - 修改桌面端时，同时遵守 [desktop/AGENTS.md](desktop/AGENTS.md)，并按其索引读取对应架构文档。
 - 修改 Agent 内核时，同时遵守 [omp/AGENTS.md](omp/AGENTS.md)；`omp/` 是独立 Git 仓库。
 - 用户指定：所有 Rust 操作必须使用 DevStore 管理的 `rust/current` 环境，不绕过 DevStore 另装或使用其他 Rust 环境。

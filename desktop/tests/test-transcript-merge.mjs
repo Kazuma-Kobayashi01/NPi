@@ -326,4 +326,26 @@ check("mergeTranscript cleanly aligns and retains assistant image turns across t
   ]);
 });
 
+check("todo results come back as plan blocks on their turn, with only the newest live", () => {
+  const phases = (done) => [{ name: "Build", tasks: [{ content: "Write the parser", status: done ? "completed" : "in_progress" }, { content: "Test it", status: "pending" }] }];
+  const todoCall = (ts, id) => ({ role: "assistant", stopReason: "toolUse", timestamp: ts, content: [{ type: "toolCall", id, name: "todo", arguments: {} }] });
+  const todoResult = (ts, id, done, isError = false) => ({ role: "toolResult", toolCallId: id, toolName: "todo", isError, content: [{ type: "text", text: "ok" }], details: { op: "replace", phases: phases(done) }, timestamp: ts });
+  const persisted = adapt([
+    userMsg("go", 1), todoCall(2, "t1"), todoResult(3, "t1", false), replyMsg("working", 4),
+    toolCallMsg(5), toolResultMsg(6),
+    todoCall(7, "t2"), todoResult(8, "t2", true), todoCall(9, "t3"), todoResult(10, "t3", false, true), replyMsg("done", 11),
+  ]);
+  // Tool-only turns get an entry only when they carry a plan; the bash turn does not.
+  assert.deepEqual(Array.from(persisted, m => `${m.kind}:${m.ts}`), ["user:1", "assistant:2", "assistant:4", "assistant:7", "assistant:11"]);
+  const plans = persisted.flatMap(m => (m.blocks ?? []).filter(b => b.type === "plan").map(b => ({ ts: m.ts, live: b.live, status: b.phases[0].tasks[0].status })));
+  // The failed todo call (t3) adds nothing; only the newest block is editable.
+  assert.deepEqual(JSON.parse(JSON.stringify(plans)), [{ ts: 2, live: false, status: "in_progress" }, { ts: 7, live: true, status: "done" }]);
+  // After a tab switch the live bubbles of those turns take the copies, plan included.
+  const live = [liveUser("go", 1), liveBubble("", 2, { _id: "b2" }), liveBubble("working", 4), liveBubble("", 5), liveBubble("", 7, { _id: "b7" }), liveBubble("done", 11)];
+  const merged = ctx.markLatestPlanLive(mergeTranscript(live, persisted));
+  const b7 = merged.find(m => m._id === "b7");
+  assert.equal(b7.blocks.find(b => b.type === "plan").live, true);
+  assert.equal(merged.find(m => m._id === "b2").blocks.find(b => b.type === "plan").live, false);
+});
+
 console.log(`test-transcript-merge: ${passed} checks passed`);

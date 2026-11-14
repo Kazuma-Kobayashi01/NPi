@@ -56,6 +56,7 @@ Load `design/ui/chart-view.jsx`, `mermaid-view.jsx` and `markdown-image.jsx` bef
 `markdown.jsx`; their runtime context/lightbox lookups are late-bound.
 `design/chat/assistant-image.jsx` follows `image-lightbox.jsx` and precedes
 `assistant-bubble.jsx`. `app-live.jsx` provides the conversation-bound media context.
+`app/plan-edit.js` (plain IIFE, `window.OMP_PLAN_EDIT`) loads after `app/drag-reorder.js`; `design/chat/inline-plan.jsx` (`InlinePlan`, destructures `Icon` and `OMP_PLAN_EDIT` at top level, reads `useDragReorder` at render time) loads after `eval-cell.jsx` and before `assistant-bubble.jsx`, which renders `window.InlinePlan`.
 `scripts/vendor-mermaid.mjs` vendors Mermaid 10.9.8 from the official npm package,
 checks its SHA-512 integrity and copies the license from the matching upstream tag.
 Keep the patched version pinned; do not replace it with an older UMD build merely
@@ -70,3 +71,9 @@ protocol or rich-content rendering.
 `app/sidechat.js` follows `app/stream-delta.js` and precedes
 `design/side-chat.jsx`. It owns the independent worker's RPC lifecycle;
 `app-live.jsx` keeps the component mounted when its column is hidden.
+
+`app/reply-quote.js` and `app/reply-feedback.js` (plain IIFEs) load after
+`app/chat-collapse.js`; `design/chat/reply-feedback.jsx` loads before
+`assistant-bubble.jsx` (which destructures `window.ReplyFeedback`) and
+`design/chat/selection-toolbar.jsx` before `chat-view.jsx` (which destructures
+`window.SelectionToolbar`). See `reply-interactions.md`.

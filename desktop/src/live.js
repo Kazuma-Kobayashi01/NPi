@@ -2144,7 +2144,7 @@
       // `retries` chip of omp's automatic retries).
       // activeToolCards indices are rebuilt so in-flight
       // tool_execution_update events keep landing on the right array slot.
-      const merged = mergeTranscript(state.messages, completed);
+      const merged = window.markLatestPlanLive(mergeTranscript(state.messages, completed));
       // Rebuild activeToolCards — merged entries may have moved
       activeToolCards = new Map();
       for (let i = 0; i < merged.length; i++) {
@@ -2265,7 +2265,7 @@
 
     if ((type === "message_start" || type === "message_end") &&
         ev.message?.role === "custom" &&
-        ["ui.present", "ui.submit", "ui.state"].includes(ev.message.customType)) {
+        ["ui.present", "ui.update", "ui.submit", "ui.state"].includes(ev.message.customType)) {
       if (type === "message_end") {
         state.messages = window.OMP_GENERATIVE_UI.upsertMessage(state.messages, ev.message);
         notify();
@@ -2459,7 +2459,7 @@
       // like /review's. The ask tool uses the `ask` dialog below instead.
       // Buffered rather than pushed immediately; see _queueAskBubble.
       if (ev.method === "select") {
-        _queueAskBubble(_askMessage("select", ev, { options: ev.options ?? [] }));
+        _queueAskBubble(_askMessage("select", ev, { options: ev.options ?? [], hunks: ev.hunks }));
         return;
       }
       // omp's ask dialog (enabled per process in _initFetch): every question
@@ -2811,7 +2811,7 @@
           msgs[idx]     = updated;
           state.messages = msgs;
           activeToolCards.delete(ev.toolCallId);
-          if (ev.toolName === "todo_write") {
+          if (ev.toolName === "todo" && !ev.isError) {
             const phases = ev.result?.details?.phases ?? ev.result?.phases ?? [];
             if (phases.length > 0) {
               state.kanban   = window.buildKanban(phases);
@@ -2904,25 +2904,16 @@
     }
   }
 
+  // The newest `todo` result as an inline plan block on the latest
+  // assistant message: appended there, or replacing the block that message
+  // already has, so the block follows the agent's list. Only that block is
+  // `live` (the one the user may edit, app/plan-edit.js); an earlier
+  // message's block stays in the transcript as the snapshot it was. History
+  // rebuilds the same blocks (adapter.js `adaptAgentMessages`).
   function _injectInlinePlan(phases) {
-    const idx = [...state.messages].reverse().findIndex(m => m.kind === "assistant");
-    if (idx === -1) return;
-    const realIdx = state.messages.length - 1 - idx;
-    const msg     = state.messages[realIdx];
-    if (msg.blocks?.some(b => b.type === "plan")) return;
-    const planBlock = {
-      type: "plan", title: "Plan",
-      phases: phases.map(ph => ({
-        id: ph.name, label: ph.name,
-        tasks: ph.tasks.map((t, i) => ({
-          id: `${ph.name}-${i}`, text: t.content,
-          status: (t.status === "completed" || t.status === "abandoned") ? "done" : t.status,
-        })),
-      })),
-    };
-    const msgs    = [...state.messages];
-    msgs[realIdx] = { ...msg, blocks: [...(msg.blocks ?? []), planBlock] };
-    state.messages = msgs;
+    const realIdx = state.messages.findLastIndex(m => m.kind === "assistant");
+    if (realIdx === -1) return;
+    state.messages = window.markLatestPlanLive(window.withInlinePlan(state.messages, realIdx, window.buildInlinePlan(phases)));
   }
 
   // The effective thinking level as get_state and `thinking_level_changed`
@@ -2979,9 +2970,10 @@
     // Only update the tab name if omp provides an explicit human-readable
     // sessionName. The sessionFile is a timestamp ID — leave the folder-based
     // name set at tab-open time intact when sessionName is absent.
-    if (rpcState.sessionName && activeSessionId && sessionRegistry.has(activeSessionId)) {
+    const sessionName = STITLE.displayTitle(rpcState.sessionName);
+    if (sessionName && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
-      sessionRegistry.set(activeSessionId, { ...entry, name: rpcState.sessionName });
+      sessionRegistry.set(activeSessionId, { ...entry, name: sessionName });
     }
     // Remember which conversation this tab runs, for `resumeSession`'s
     // focus-existing lookup. Re-read: the `sessionName` write above may have
@@ -3699,6 +3691,14 @@
       const isCmd = isCommandInvocation(state.commands, text);
       return _sendQueued("steering", text, imgs, () => _sendWithResponse(queuedFrame("steer", text, imgs, isCmd)));
     },
+    /** The staged edits of the inline plan (app/plan-edit.js `buildMessage`),
+     *  as the ordinary user message they are: a steer while a turn runs,
+     *  else a prompt, as a typed message goes (`routeSubmit`). omp has no
+     *  todo-edit RPC; the agent answers with its own `todo` call. Resolves
+     *  to whether the message left. */
+    sendPlanEdit(text) {
+      return state.isStreaming ? this.steer(text) : this.send(text);
+    },
     /** ✕ / ✎ on a queue-strip row (`queue`: "steering" | "followUp"):
      *  `true` once omp removed the message, `false` when it was no longer
      *  pending — already delivered, or a steer the model already took,
@@ -3973,6 +3973,14 @@
       const rest = STITLE.dropPendingNote(cur?.renameNotes, rename.note);
       if (rest) sessionRegistry.set(id, { ...cur, renameNotes: rest });
     },
+    sendUiSuggestion(message, text) {
+      if (!activeSessionId || state.isCompacting || message.session_id !== state.rpcState?.sessionId) return Promise.resolve(false);
+      const current = state.messages.find(m => m.kind === "ui" && m.ui_id === message.ui_id);
+      if (!current || current.error || current.schema?.mode !== "display") return Promise.resolve(false);
+      if (!state.isStreaming) return _sendPrompt(text, []);
+      const isCmd = isCommandInvocation(state.commands, text);
+      return _sendQueued("followUp", text, [], () => _sendWithResponse(queuedFrame("followUp", text, [], isCmd)));
+    },
     submitUi(message, values) {
       return _uiAction(message, () => _sendWithResponse({
         type: "submit_ui", ui_id: message.ui_id, session_id: message.session_id, values,
@@ -4180,7 +4188,11 @@
      *                        input/editor prompt.
      */
     answerAsk(id, value) {
-      return _resolveAsk(id, { answered: true, answer: value }, { value });
+      const payload = typeof value === "string" ? { value } : value;
+      return _resolveAsk(id, {
+        answered: true, answer: payload.value,
+        ...(payload.selectedHunks ? { selectedHunks: payload.selectedHunks } : {}),
+      }, payload);
     },
 
     /**

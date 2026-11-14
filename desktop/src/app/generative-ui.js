@@ -37,6 +37,7 @@
     "pie-chart": ["type", "id", "title", "unit", "data", "visibleWhen"],
     divider: ["type", "id", "label", "visibleWhen"],
     image: ["type", "id", "src", "thumbnail", "alt", "title", "sourceUrl", "attribution", "description", "visibleWhen"],
+    suggestions: ["type", "id", "label", "style", "items", "visibleWhen"],
     // Interactive components
     button: ["type", "id", "label"],
     input: ["type", "id", "label", "default", "required", "minLength", "maxLength", "placeholder", "visibleWhen"],
@@ -56,13 +57,15 @@
     "segmented-control": ["type", "id", "label", "options", "default", "required", "visibleWhen"],
     "searchable-select": ["type", "id", "label", "options", "default", "required", "visibleWhen"],
     "option-cards": ["type", "id", "label", "cards", "default", "required", "visibleWhen"],
+    ranking: ["type", "id", "label", "options", "default", "visibleWhen"],
+    "path-picker": ["type", "id", "label", "kind", "multiple", "default", "required", "maxItems", "placeholder", "visibleWhen"],
   };
 
   const interactiveTypes = new Set([
     "button", "input", "textarea", "date", "date-picker", "time-picker",
     "number", "number-input", "slider", "checkbox", "switch",
     "multiselect", "checkbox-group", "select", "radio",
-    "segmented-control", "searchable-select", "option-cards",
+    "segmented-control", "searchable-select", "option-cards", "ranking", "path-picker",
   ]);
 
   function isInteractive(c) {
@@ -122,9 +125,28 @@
     const n = (value - c.min) / c.step;
     return Number.isFinite(n) && Math.abs(n - Math.round(n)) <= 1e-8;
   }
+  function projectPath(value, max = 1024, name = "project path") {
+    const path = string(value, max, name);
+    if (!path || /^[\\/~]/.test(path) || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(path) || path.includes("\0")) throw new Error("Invalid project-relative path");
+    const segments = path.split(/[\\/]/);
+    if (segments.some(segment => !segment || segment === "." || segment === "..")) throw new Error("Invalid project-relative path");
+    return segments.join("/");
+  }
+
+  function validRanking(value, c) {
+    return Array.isArray(value) && value.length === c.options.length && new Set(value).size === value.length && value.every(v => c.options.some(o => o.value === v));
+  }
+
+  function normalizePaths(value, c, required = false) {
+    if (!Array.isArray(value) || value.length > c.maxItems || (!c.multiple && value.length > 1) || (required && value.length === 0)) throw new Error("Invalid path selection");
+    const paths = value.map(path => projectPath(path));
+    if (new Set(paths).size !== paths.length) throw new Error("Duplicate project path");
+    return paths;
+  }
+
 
   function normalizeSchema(schema) {
-    object(schema, ["version", "mode", "title", "layout", "components"]);
+    object(schema, ["version", "mode", "title", "layout", "components", "steps"]);
     if (schema.version !== 1) throw new Error("Unsupported UI version");
     const layout = schema.layout === undefined ? "stack" : schema.layout;
     if (layout !== "stack" && layout !== "row" && layout !== "grid" && layout !== "column") throw new Error("Unsupported UI layout");
@@ -142,8 +164,21 @@
       ids.add(c.id);
       if (c.type !== "button" && c.visibleWhen !== undefined) c.visibleWhen = parseVisibleWhen(c.visibleWhen);
 
-      // Display components
-      if (c.type === "text") {
+      if (c.type === "suggestions") {
+        if (c.label !== undefined) c.label = text(c.label, 120, "suggestions label");
+        if (c.style === undefined) c.style = "chips";
+        if (!["chips", "cards"].includes(c.style)) throw new Error("Invalid suggestions style");
+        if (!Array.isArray(c.items) || c.items.length < 1 || c.items.length > 6) throw new Error("Invalid suggestions items");
+        const itemIds = new Set();
+        c.items = c.items.map(item => {
+          object(item, ["id", "label", "prompt", "description"]);
+          if (typeof item.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(item.id) || blocked.has(item.id) || itemIds.has(item.id)) throw new Error("Invalid suggestion id");
+          itemIds.add(item.id);
+          return { id: item.id, label: text(item.label, 80, "suggestion label"),
+            ...(item.prompt === undefined ? {} : { prompt: text(item.prompt, 500, "suggestion prompt") }),
+            ...(item.description === undefined ? {} : { description: text(item.description, 200, "suggestion description") }) };
+        });
+      } else if (c.type === "text") {
         if (c.label !== undefined) c.label = text(c.label, 120, "label");
         c.text = text(c.text, 4096, "text");
       } else if (c.type === "card") {
@@ -262,16 +297,7 @@
           if (canonical.length > MAX_IMAGE_REF) throw new Error(`Invalid ${name} (canonical URL exceeds ${MAX_IMAGE_REF} characters)`);
           return canonical;
         };
-        const normalizeProjectPath = (s, name) => {
-          if (s.startsWith("/") || s.startsWith("\\") || s.startsWith("~")) {
-            throw new Error(`${name} must be project-relative`);
-          }
-          const segments = s.split(/[\\/]/);
-          if (segments.some(segment => segment === "" || segment === "." || segment === "..")) {
-            throw new Error(`${name} must be a normalized project-relative path`);
-          }
-          return segments.join("/");
-        };
+        const normalizeProjectPath = (s, name) => projectPath(s, MAX_IMAGE_REF, name);
         c.src = imageRef(c.src, "image.src", (s, name) =>
           /^[A-Za-z][A-Za-z0-9+.-]*:/.test(s) ? normalizeHttps(s, name) : normalizeProjectPath(s, name));
         if (c.thumbnail !== undefined) c.thumbnail = imageRef(c.thumbnail, "image.thumbnail", normalizeHttps);
@@ -321,23 +347,38 @@
           if (c.minLength !== undefined && c.default !== "" && c.default.length < c.minLength) throw new Error("Invalid input default");
           if (c.placeholder !== undefined) c.placeholder = text(c.placeholder, 120, "placeholder");
         }
+        if (c.type === "path-picker") {
+          if (c.kind === undefined) c.kind = "file";
+          if (c.multiple === undefined) c.multiple = false;
+          if (c.required === undefined) c.required = false;
+          if (!["file", "directory", "any"].includes(c.kind) || typeof c.multiple !== "boolean") throw new Error("Invalid path picker");
+          if (c.maxItems === undefined) c.maxItems = c.multiple ? 20 : 1;
+          if (!Number.isInteger(c.maxItems) || c.maxItems < 1 || c.maxItems > 50) throw new Error("Invalid path picker limit");
+          c.default = normalizePaths(c.default === undefined ? [] : c.default, c);
+          for (const path of c.default) total += path.length;
+          if (c.placeholder !== undefined) c.placeholder = text(c.placeholder, 120, "placeholder");
+        }
         if (c.type === "slider" || c.type === "number" || c.type === "number-input") {
           if (c.step === undefined) c.step = 1;
           [c.min, c.max, c.step, c.default].forEach(number);
           if (c.min >= c.max || c.step <= 0 || !Number.isFinite((c.max - c.min) / c.step) || c.default < c.min || c.default > c.max || !onStep(c.default, c)) throw new Error("Invalid numeric range or default");
           if (c.unit !== undefined) c.unit = text(c.unit, 30, "unit");
         }
-        if (c.type === "select" || c.type === "radio" || c.type === "segmented-control" || c.type === "searchable-select" || c.type === "multiselect" || c.type === "checkbox-group") {
-          if (!Array.isArray(c.options) || c.options.length < 1 || c.options.length > 32) throw new Error("Invalid UI options");
+        if (["select", "radio", "segmented-control", "searchable-select", "multiselect", "checkbox-group", "ranking"].includes(c.type)) {
+          if (!Array.isArray(c.options) || c.options.length < (c.type === "ranking" ? 2 : 1) || c.options.length > (c.type === "ranking" ? 12 : 32)) throw new Error("Invalid UI options");
           const seen = new Set();
           c.options = c.options.map(o => {
             object(o, ["label", "value", "description"]);
             const label = text(o.label, 120, "option label"), value = text(o.value, 128, "option value");
             if (!value || seen.has(value)) throw new Error("Empty or duplicate option value");
             seen.add(value);
-            return { label, value, ...(o.description ? { description: text(o.description, 200, "description") } : {}) };
+            return { label, value, ...((c.type === "ranking" ? o.description !== undefined : !!o.description) ? { description: text(o.description, 200, "description") } : {}) };
           });
-          if (c.type === "multiselect" || c.type === "checkbox-group") {
+          if (c.type === "ranking") {
+            if (c.default === undefined) c.default = c.options.map(o => o.value);
+            if (!validRanking(c.default, c)) throw new Error("Invalid ranking default");
+            c.default = [...c.default];
+          } else if (c.type === "multiselect" || c.type === "checkbox-group") {
             if (c.minItems === undefined) c.minItems = 0;
             if (c.maxItems === undefined) c.maxItems = c.options.length;
             if (!Number.isInteger(c.minItems) || !Number.isInteger(c.maxItems) || c.minItems < 0 || c.maxItems > c.options.length || c.minItems > c.maxItems) throw new Error("Invalid multiselect limits");
@@ -389,14 +430,33 @@
       if (interactiveControls.length > 0) throw new Error("Display UI must not contain interactive inputs");
     } else {
       if (buttons !== 1) throw new Error("Interactive UI requires exactly one submit button");
+      if (components.some(c => c.type === "suggestions")) throw new Error("Suggestions require display mode");
     }
 
     const controlIds = new Set(components.filter(c => isInteractive(c) && c.type !== "button").map(c => c.id));
     for (const c of components) {
       if (c.visibleWhen && (c.visibleWhen.id === c.id || !controlIds.has(c.visibleWhen.id))) throw new Error("Invalid visibleWhen target");
     }
+    let steps;
+    if (schema.steps !== undefined) {
+      if (mode !== "interactive" || !Array.isArray(schema.steps) || schema.steps.length < 2 || schema.steps.length > 6) throw new Error("Invalid UI steps");
+      const stepIds = new Set(), assigned = new Set();
+      const componentIds = new Set(components.filter(c => c.type !== "button").map(c => c.id));
+      steps = schema.steps.map(step => {
+        object(step, ["id", "title", "components"]);
+        if (typeof step.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(step.id) || blocked.has(step.id) || stepIds.has(step.id)) throw new Error("Invalid step id");
+        stepIds.add(step.id);
+        if (!Array.isArray(step.components)) throw new Error("Invalid step components");
+        for (const id of step.components) {
+          if (!componentIds.has(id) || assigned.has(id)) throw new Error("Invalid or duplicate step component");
+          assigned.add(id);
+        }
+        return { id: step.id, title: text(step.title, 80, "step title"), components: [...step.components] };
+      });
+      if (assigned.size !== componentIds.size) throw new Error("Every component must belong to a step");
+    }
     if (total > 32768) throw new Error("UI text exceeds limit");
-    return { version: 1, mode, ...(title === undefined ? {} : { title }), layout, components };
+    return { version: 1, mode, ...(title === undefined ? {} : { title }), layout, components, ...(steps ? { steps } : {}) };
   }
 
   function validSelections(value, c, min = c.minItems) {
@@ -422,6 +482,10 @@
         if (!Number.isFinite(v) || Math.abs(v) > 1e6 || v < c.min || v > c.max || !onStep(v, c)) errors[c.id] = "Choose a value within the range and step.";
       } else if (c.type === "checkbox" || c.type === "switch") {
         if (typeof v !== "boolean") errors[c.id] = "Choose on or off.";
+      } else if (c.type === "ranking") {
+        if (!validRanking(v, c)) errors[c.id] = "Rank every option exactly once.";
+      } else if (c.type === "path-picker") {
+        try { normalizePaths(v, c, c.required); } catch { errors[c.id] = "Choose valid project-relative paths within the selection limit."; }
       } else if (c.type === "multiselect" || c.type === "checkbox-group") {
         if (!validSelections(v, c)) errors[c.id] = `Choose ${c.minItems}–${c.maxItems} distinct options.`;
       } else if (c.type === "date" || c.type === "date-picker") {
@@ -453,7 +517,7 @@
   const isTerminal = status => ["submitted", "cancelled", "expired", "rendered"].includes(status);
 
   function messageToUi(message) {
-    if (message?.role !== "custom" || !["ui.present", "ui.submit", "ui.state"].includes(message.customType)) return null;
+    if (message?.role !== "custom" || !["ui.present", "ui.update", "ui.submit", "ui.state"].includes(message.customType)) return null;
     const d = message.details;
     if (!d || typeof d.ui_id !== "string" || !d.ui_id || typeof d.session_id !== "string" || !d.session_id) {
       return { kind: "ui", ui_id: `malformed:${message.customType}:${Number.isFinite(message.timestamp) ? message.timestamp : "unknown"}`, session_id: "", status: "expired", error: "Invalid UI message identity" };
@@ -465,7 +529,10 @@
       return { kind: "ui.state", ...identity, status: d.status, rendered: d.rendered === true, reason: d.reason, continuation: d.continuation };
     }
     let schema, error;
-    try { schema = normalizeSchema(d.schema); } catch (e) { error = e.message; }
+    try {
+      schema = normalizeSchema(d.schema);
+      if (message.customType === "ui.update" && schema.mode !== "display") throw new Error("Only display UI can be updated");
+    } catch (e) { error = e.message; }
     const status = schema?.mode === "display"
       ? "rendered"
       : (isTerminal(d.status) ? d.status : (d.task_id && d.message_id ? "waiting_input" : "expired"));
@@ -474,6 +541,7 @@
       rendered: schema?.mode === "display" || d.rendered === true,
       projected_expired: status === "expired" && !isTerminal(d.status),
       continuation: d.continuation,
+      ...(message.customType === "ui.update" ? { update: true, revision: d.revision } : {}),
       ...(error ? { error } : {}),
     };
   }
@@ -484,8 +552,17 @@
     const index = messages.findIndex(m => m.kind === "ui" && m.ui_id === ui.ui_id);
     if (index === -1) return ui.kind === "ui" ? [...messages, ui] : messages;
     const prior = messages[index];
-    if (prior.session_id !== ui.session_id || (prior.task_id && ui.task_id && prior.task_id !== ui.task_id) || (prior.message_id && ui.message_id && prior.message_id !== ui.message_id)) {
+    if (prior.session_id !== ui.session_id || (!ui.update && !prior.update && ui.revision === undefined && prior.revision === undefined && ((prior.task_id && ui.task_id && prior.task_id !== ui.task_id) || (prior.message_id && ui.message_id && prior.message_id !== ui.message_id)))) {
       return upsertMessage(messages, { kind: "ui", ui_id: `malformed:${ui.kind}:${ui.ui_id}:${ui.session_id}`, session_id: "", status: "expired", error: "UI lifecycle session mismatch" });
+    }
+    if (ui.update || prior.update || ui.revision !== undefined || prior.revision !== undefined) {
+      if (prior.schema?.mode !== "display" || ui.schema?.mode !== "display" || ui.error) {
+        return upsertMessage(messages, { kind: "ui", ui_id: `malformed:ui.update:${ui.ui_id}`, session_id: "", status: "expired", error: ui.error ?? "Only display UI can be updated" });
+      }
+      if ((ui.revision ?? 0) <= (prior.revision ?? 0)) return messages;
+      const next = messages.slice();
+      next[index] = { ...prior, schema: ui.schema, revision: ui.revision, status: "rendered", rendered: true };
+      return next;
     }
     if ((prior.status === "expired" && !prior.projected_expired) || prior.status === "cancelled") return messages;
     if (ui.kind === "ui.submit") {

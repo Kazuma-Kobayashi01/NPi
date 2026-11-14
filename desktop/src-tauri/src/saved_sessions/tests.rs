@@ -86,6 +86,29 @@ fn parses_session_file_with_explicit_title() {
 }
 
 #[test]
+fn parse_session_file_drops_a_nerd_font_card_icon_from_the_title() {
+    let dir = make_test_dir("nerd_font_title");
+    let file_path = dir.join("test_nerd_font.jsonl");
+    write_jsonl(
+        &file_path,
+        &[
+            r#"{"type":"title","v":1,"title":"\udb80\udd21 RC: Test NPi Remote Connect","source":"auto","updatedAt":"2026-11-14T16:33:32.505Z"}"#,
+            r#"{"type":"session","version":3,"id":"sess-nf","timestamp":"2026-11-14T16:00:00.000Z","cwd":"/test/project"}"#,
+        ],
+    );
+
+    let session = parse_session_file(&file_path).expect("parsed session");
+    assert_eq!(session.title, "RC: Test NPi Remote Connect");
+    // emoji icons render, so they stay
+    assert_eq!(
+        display_title("🧪 FLAKY: Fix flaky tests"),
+        "🧪 FLAKY: Fix flaky tests"
+    );
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn parse_session_file_last_activity_tracks_latest_message_not_creation() {
     // No `title` event at all — before the fix, `updated_at` stayed `None`
     // for a session like this and callers fell back to the creation

@@ -12,3 +12,4 @@
 | [HANDOFF_CLI.md](HANDOFF_CLI.md) | CLI 改版与工具输出预算交接（3.0.0.52） | 已接手完成；工具输出默认预算表仍可查此处 |
 | [HANDOFF_3.0.0.136.md](HANDOFF_3.0.0.136.md) | 3.0.0.136 交接清单 | 已收口并由用户真机验收 |
 | [TODO_TOMORROW.md](TODO_TOMORROW.md) | 2026-11-05 当日清单 | 已并入 PROGRESS 并完成 |
+| [PLAN_OFFICE_GUI.md](PLAN_OFFICE_GUI.md) | Virtual Office 独立窗口方案 | 已实施；现状见 `desktop/docs/architecture/office-window.md` |

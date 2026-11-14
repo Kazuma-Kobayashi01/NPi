@@ -97,7 +97,7 @@
   const INTENT_FRAMING = (intent) =>
     `Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Do not start implementing yet — draft only for my review.\n\n---\n\n${intent.trim()}`;
 
-  const APPROVAL_PROMPT = "Plan approved. Please proceed to execute it. Use your todo_write tool to track tasks as you go.";
+  const APPROVAL_PROMPT = "Plan approved. Please proceed to execute it. Use your todo tool to track tasks as you go.";
 
   // `true` when a keydown is an Enter that should submit — i.e. not the
   // Enter that confirms an in-progress IME composition (typing Chinese/

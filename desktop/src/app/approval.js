@@ -86,5 +86,27 @@
     return { summary, expandable: lines.length > 1 || summary.length > SUMMARY_MAX };
   }
 
-  window.OMP_APPROVAL = { approvalInfo, autoApprovalRow, rowView };
+  /** Optional structured proposal. Invalid/legacy frames keep the ordinary approval UI. */
+  function approvalHunks(msg) {
+    if (!approvalInfo(msg) || !Array.isArray(msg.hunks) || !msg.hunks.length) return [];
+    const indices = new Set();
+    for (const hunk of msg.hunks) {
+      if (!hunk || !Number.isInteger(hunk.index) || hunk.index < 0 || indices.has(hunk.index)
+          || typeof hunk.path !== "string" || typeof hunk.header !== "string"
+          || !Array.isArray(hunk.lines) || hunk.lines.some(line => typeof line !== "string")) return [];
+      indices.add(hunk.index);
+    }
+    return msg.hunks;
+  }
+
+  /** All/none deliberately retain the old wire; only a proper subset carries indices. */
+  function hunkAnswer(hunks, selected) {
+    const chosen = new Set(selected);
+    const selectedHunks = hunks.filter(hunk => chosen.has(hunk.index)).map(hunk => hunk.index);
+    if (!selectedHunks.length) return { value: "Deny" };
+    if (selectedHunks.length === hunks.length) return { value: "Approve" };
+    return { value: "Approve", selectedHunks };
+  }
+
+  window.OMP_APPROVAL = { approvalInfo, autoApprovalRow, rowView, approvalHunks, hunkAnswer };
 })();

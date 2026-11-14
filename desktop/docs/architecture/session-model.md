@@ -81,9 +81,14 @@ These measurements are diagnostic samples, not a guaranteed network SLA.
 ## Plan usage refresh
 
 `app/use-quotas.jsx` reads subscription limits for the active profile on entry.
-Live `session_settled` events from each tab, including background tabs, force
-an invalidation and read for that tab's profile; replay does not repeat it.
-There is no periodic poll. Manual refresh uses the same invalidation path.
+Live `session_settled` events from each tab, including background tabs, re-read
+that tab's profile at most once a minute (`QUOTA_SETTLE_READ_MS`) **without**
+invalidating: the kernel's report cache (about five minutes) decides when the
+providers are asked. Replay does not repeat it. There is no periodic poll. Only
+the manual refresh invalidates first. (A settle used to invalidate and re-probe
+every signed-in provider after nearly every turn, subagents and Office members
+included; with the Antigravity login that meant Google's internal quota
+endpoint after nearly every turn.)
 The kernel's provider failure cooldown still applies. A provider failure can
 leave no report, and the CLI does not expose enough information here to
 distinguish every such case from an account without subscription limits.
@@ -147,6 +152,10 @@ dsh-context (Apache-2.0); no code shared.
 ## Todo and plan rail card
 
 The ambient rail's bottom `TodoPlanCard` (`design/side-panel.jsx`, wired through `AmbientRail` in `design/chrome.jsx`) receives the active session's `kanban` and counts from `app-live.jsx`. Its header uses the same local disclosure interaction as other `SideCard` cards: initially folded, click/Enter/Space toggles tasks in place rather than opening `PlanKanban`. Expanded content shows phase headings, task statuses and notes, updates with the active session data, and scrolls within a bounded height. Empty plans display an idle state. The separate **Todo and plan** More-menu action still opens the full plan view.
+
+### Editing the plan from the chat
+
+The newest inline plan block of the transcript (`plan.live`) is editable: `design/chat/inline-plan.jsx`. Plan blocks come from the agent's `todo` tool results (`adapter.js` `buildInlinePlan`): live, `live.js` `_injectInlinePlan` puts each result on the latest assistant entry, replacing a block it already has; from history, `adaptAgentMessages` puts each result on the entry of the assistant turn that made the call (matched by `toolCallId`; a tool-only turn gets an entry just for its plan), so the `get_messages` merge and a reopened tab keep them. `markLatestPlanLive` then leaves `live` on the newest block only, after injection, history adaption and the merge. A click on a task's mark toggles done / not done, the row's arrow buttons or Alt+↑/↓ on a focused row move it inside its phase, a drag does the same through `useDragReorder` (list = phase, so a task never lands in another phase), and the ✕ drops it (struck through, with a button to keep it). Nothing is sent while the user edits: the draft (`app/plan-edit.js`, `startDraft` of the block) is component state, the block shows a *modified* chip and a footer with the change counts, **Discard** and **Apply**. The agent owns the todo list through its `todo` tool. omp's RPC does have a `set_todos` command (it replaces the list and records a `user_todo_edit` entry, without telling the agent), but `ALLOWED_COMMAND_TYPES` in `agent/mod.rs` does not list it and the desktop does not use it. Apply therefore asks the agent in words: `OMP_BRIDGE.sendPlanEdit(buildMessage(plan, draft))` sends an ordinary user message, a steer while a turn runs and a prompt otherwise (as `routeSubmit` routes a typed message), never an approval. The message names every change with the phase label and the task's exact text (JSON-quoted), gives the whole new order of a reordered phase, and asks for a matching `todo` update and to continue. The plan itself does not change until the agent's `todo` result returns: that updates `state.kanban` (the rail card and the Todo and plan window, `PlanKanban`, which stays read-only) and the block together. A draft is tied to the plan's `planSignature`; when the plan changes under it, or a newer block takes over, the draft is discarded with a note. A failed send keeps the draft staged. Tests: `test-plan-edit.mjs` (draft operations, diff, message text), `test-transcript-merge.mjs` (plan blocks from history).
 
 
 ## SideChat

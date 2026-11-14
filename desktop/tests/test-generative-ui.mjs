@@ -101,7 +101,7 @@ test("malformed external identities and cross-session submissions cannot break l
 
 // Exercise the real JSX event handlers with a tiny hook host. Browser fixture
 // below tests actual React/DOM separately, without introducing a test runtime.
-function formHarness() {
+function formHarness(component = "GenerativeUiForm") {
   const babelContext = vm.createContext({});
   vm.runInContext(readFileSync(new URL("../src/babel.min.js", import.meta.url), "utf8"), babelContext);
   const hooks = [];
@@ -122,10 +122,13 @@ function formHarness() {
       return hooks[slot];
     },
   };
-  const scope = vm.createContext({ React, window: { OMP_GENERATIVE_UI: H, SettingsSeg: "SettingsSeg", SettingsSlider: "SettingsSlider", SettingsButton: "SettingsButton", SettingsToggle: "SettingsToggle" } });
+  const scope = vm.createContext({ React, CopyButton: "CopyButton", setTimeout: fn => { fn(); return 0; }, clearTimeout() {}, window: { OMP_GENERATIVE_UI: H, SettingsSeg: "SettingsSeg", SettingsSlider: "SettingsSlider", SettingsButton: "SettingsButton", SettingsToggle: "SettingsToggle",
+    useDragReorder: () => ({ onPointerDown() {}, itemProps: () => ({}), dropClass: () => "" }),
+  } });
+  for (const file of ["app/i18n.js", "app/i18n/ui.js"]) vm.runInContext(readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8"), vm.createContext({ window: scope.window }), { filename: file });
   const source = readFileSync(new URL("../src/design/chat/generative-ui.jsx", import.meta.url), "utf8");
   vm.runInContext(babelContext.Babel.transform(source, { presets: ["react"], filename: "generative-ui.jsx" }).code, scope);
-  return Object.assign(props => { index = 0; return scope.GenerativeUiForm(props); }, { remount() { hooks.length = 0; } });
+  return Object.assign(props => { index = 0; return scope[component](props); }, { remount() { hooks.length = 0; } });
 }
 function nodes(tree) {
   if (Array.isArray(tree)) return tree.flatMap(nodes);
@@ -516,10 +519,11 @@ test("image components mirror kernel references and render through a component b
   const render = formHarness();
   const msg = H.messageToUi(present(componentSchema));
   const tree = render({ msg, disabled: false });
-  const text = nodes(tree).find(node => node.type === "div" && node.props.className === "gui-text");
+  const text = nodes(tree).find(node => typeof node.type === "function" && node.props.component?.type === "text");
   assert.ok(text, "text renders independently of the pending image");
-  const image = nodes(tree).find(node => typeof node.type === "function" && node.type.name === "GenerativeUiImage");
-  assert.ok(image, "registry entry must create a component element, not call the loader hook directly");
+  const imageBoundary = nodes(tree).find(node => typeof node.type === "function" && node.props.component?.type === "image");
+  const image = imageBoundary.type(imageBoundary.props);
+  assert.equal(image.type.name, "GenerativeUiImage", "registry entry must create a component element, not call the loader hook directly");
   assert.equal(image.props.component.src, fixtureImage.src);
 
   const reject = (patch) => assert.throws(() => H.normalizeSchema({ version: 1, mode: "display", components: [{ ...fixtureImage, ...patch }] }));
@@ -540,4 +544,262 @@ test("image components mirror kernel references and render through a component b
   reject({ alt: "x".repeat(301) });
   reject({ title: "x".repeat(161) });
   reject({ attribution: "x".repeat(201) });
+});
+
+const ranking = () => ({ type: "ranking", id: "rank", label: "Priority", options: [{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }] });
+const picker = () => ({ type: "path-picker", id: "paths", label: "Files" });
+const interactive = components => ({ version: 1, mode: "interactive", components: [...components, { type: "button", id: "send", label: "Submit" }] });
+const suggestionSchema = () => ({ version: 1, mode: "display", components: [{ type: "suggestions", id: "next", items: [{ id: "a", label: "Explain", prompt: "Explain the result" }, { id: "b", label: "Continue" }] }] });
+const displayPresent = (text = "Original") => present({ version: 1, mode: "display", components: [{ type: "text", id: "text", text }] });
+const updateDisplay = (revision = 1, text = "Updated") => ({ ...displayPresent(text), customType: "ui.update", details: { ...displayPresent(text).details, task_id: `update-tool-${revision}`, message_id: `update-message-${revision}`, revision } });
+
+test("suggestions mirror display-only item bounds and safe identities", () => {
+  const normalized = H.normalizeSchema(suggestionSchema());
+  assert.equal(normalized.components[0].style, "chips");
+  for (const mutate of [
+    s => s.mode = "interactive", s => s.components[0].items = [],
+    s => s.components[0].items = Array.from({ length: 7 }, (_, i) => ({ id: `x${i}`, label: "x" })),
+    s => s.components[0].items[1].id = "a", s => s.components[0].items[0].id = "__proto__",
+    s => s.components[0].items[0].label = "x".repeat(81),
+    s => s.components[0].items[0].prompt = "x".repeat(501),
+    s => s.components[0].items[0].description = "x".repeat(201),
+    s => s.components[0].label = "x".repeat(121), s => s.components[0].style = "buttons",
+    s => s.components[0].items[0].action = "approve", s => s.other = true,
+  ]) {
+    const s = suggestionSchema(); mutate(s); assert.throws(() => H.normalizeSchema(s));
+  }
+  const s = suggestionSchema(); s.components[0].style = "cards";
+  assert.equal(H.normalizeSchema(s).components[0].style, "cards");
+});
+
+test("ranking defaults and submitted values must be complete unique permutations", () => {
+  const s = H.normalizeSchema(interactive([ranking()]));
+  assert.deepEqual(own(H.initialValues(s)), { rank: ["a", "b"] });
+  assert.deepEqual(own(H.validateValues(s, { rank: ["b", "a"] })), {});
+  for (const value of [[], ["a"], ["a", "a"], ["a", "c"], "a"]) assert.ok(H.validateValues(s, { rank: value }).rank);
+  for (const options of [[{ value: "a", label: "A" }], Array.from({ length: 13 }, (_, i) => ({ value: String(i), label: "x" })), [{ value: "a", label: "A" }, { value: "a", label: "Again" }]]) {
+    assert.throws(() => H.normalizeSchema(interactive([{ ...ranking(), options }])));
+  }
+  assert.throws(() => H.normalizeSchema(interactive([{ ...ranking(), default: ["a"] }])));
+  assert.throws(() => H.normalizeSchema({ version: 1, mode: "display", components: [ranking()] }));
+});
+
+test("path picker normalizes defaults and rejects traversal, duplicates and over-limit selections", () => {
+  const s = H.normalizeSchema(interactive([{ ...picker(), required: true }]));
+  assert.deepEqual(own(s.components[0]), { ...picker(), kind: "file", multiple: false, required: true, maxItems: 1, default: [] });
+  assert.ok(H.validateValues(s, { paths: [] }).paths);
+  assert.deepEqual(own(H.validateValues(s, { paths: ["src/main.js"] })), {});
+  const multi = H.normalizeSchema(interactive([{ ...picker(), multiple: true, kind: "any", default: ["src\\main.js"] }]));
+  assert.equal(multi.components[0].maxItems, 20);
+  assert.deepEqual(own(multi.components[0].default), ["src/main.js"]);
+  for (const path of ["", "/root", "\\root", "~root", "../x", "a/../x", "a/./x", "a//x", "C:\\x", "https://example.com/a", "a\0b", "x".repeat(1025)]) {
+    assert.ok(H.validateValues(s, { paths: [path] }).paths, path);
+    assert.throws(() => H.normalizeSchema(interactive([{ ...picker(), default: [path] }])));
+  }
+  assert.ok(H.validateValues(s, { paths: ["a", "b"] }).paths);
+  assert.ok(H.validateValues(multi, { paths: ["src/main.js", "src\\main.js"] }).paths);
+  for (const patch of [{ maxItems: 0 }, { maxItems: 51 }, { multiple: "yes" }, { kind: "socket" }, { default: ["a", "b"] }]) assert.throws(() => H.normalizeSchema(interactive([{ ...picker(), ...patch }])));
+  assert.equal(H.normalizeSchema(interactive([{ ...picker(), multiple: false, maxItems: 50 }])).components[0].maxItems, 50);
+});
+
+test("wizard steps are interactive-only exact partitions of non-button components", () => {
+  const s = interactive([ranking(), picker()]);
+  s.steps = [{ id: "first", title: "Priority", components: ["rank"] }, { id: "second", title: "Paths", components: ["paths"] }];
+  assert.deepEqual(own(H.normalizeSchema(s).steps), s.steps);
+  for (const mutate of [
+    x => x.steps.pop(), x => x.steps[1].id = "first", x => x.steps[0].id = "__proto__",
+    x => x.steps[0].title = "x".repeat(81), x => x.steps[1].components = [],
+    x => x.steps[1].components.push("rank"), x => x.steps[1].components.push("send"),
+    x => x.steps[1].components.push("missing"), x => x.steps[0].extra = true,
+    x => x.steps = Array.from({ length: 7 }, (_, i) => ({ id: `s${i}`, title: "S", components: [] })),
+  ]) { const copy = own(s); mutate(copy); assert.throws(() => H.normalizeSchema(copy)); }
+  const display = suggestionSchema(); display.steps = s.steps;
+  assert.throws(() => H.normalizeSchema(display));
+});
+
+test("updates replace display schema in place with stable identity and monotonic revisions", () => {
+  const original = H.messageToUi(displayPresent()); original._id = "stable-card";
+  const before = { kind: "user", text: "before" }, after = { kind: "assistant", text: "after" };
+  let cards = H.upsertMessage([before, original, after], updateDisplay());
+  assert.equal(cards.length, 3); assert.equal(cards[0], before); assert.equal(cards[2], after);
+  assert.equal(cards[1].schema.components[0].text, "Updated");
+  assert.equal(cards[1]._id, "stable-card"); assert.equal(cards[1].task_id, original.task_id);
+  assert.equal(cards[1].message_id, original.message_id); assert.equal(cards[1].revision, 1);
+  cards = H.upsertMessage(cards, displayPresent());
+  assert.equal(cards[1].schema.components[0].text, "Updated");
+  cards = H.upsertMessage(cards, updateDisplay(2, "Latest"));
+  cards = H.upsertMessage(cards, updateDisplay(1, "Stale"));
+  assert.equal(cards[1].schema.components[0].text, "Latest");
+  const history = ctx.adaptAgentMessages([displayPresent(), { role: "user", content: "middle" }, updateDisplay(1), updateDisplay(2, "Latest")]);
+  assert.equal(history.length, 2); assert.equal(history[0].revision, 2); assert.equal(history[1].kind, "user");
+  const orphan = H.upsertMessage([before], updateDisplay());
+  assert.equal(orphan.length, 2); assert.equal(orphan[1].schema.components[0].text, "Updated");
+  assert.equal(H.upsertMessage(orphan, displayPresent())[1].schema.components[0].text, "Updated");
+  assert.match(H.upsertMessage(H.upsertMessage([], present()), updateDisplay())[1].error, /display/i);
+});
+
+test("suggestion selection sends the prompt once, survives update identities, and stays local", async () => {
+  const render = formHarness();
+  const msg = H.messageToUi(present(suggestionSchema()));
+  const sent = [];
+  const props = { msg, onSuggestion: async (_msg, text) => { sent.push(text); } };
+  let tree = render(props);
+  let suggestions = nodes(tree).find(n => n.props.component?.type === "suggestions");
+  await suggestions.props.onChoose("next", msg.schema.components[0].items[0]);
+  await suggestions.props.onChoose("next", msg.schema.components[0].items[1]);
+  assert.deepEqual(sent, ["Explain the result"]);
+  tree = render({ ...props, msg: { ...msg, revision: 1, task_id: "update-tool", message_id: "update-message" } });
+  suggestions = nodes(tree).find(n => n.props.component?.type === "suggestions");
+  assert.equal(suggestions.props.chosen, "a");
+  render.remount();
+  assert.equal(nodes(render(props)).find(n => n.props.component?.type === "suggestions").props.chosen, "a");
+  const disabled = formHarness();
+  const other = { ...msg, ui_id: "disabled-suggestions" };
+  const item = nodes(disabled({ ...props, msg: other, disabled: true })).find(n => n.props.component?.type === "suggestions");
+  assert.equal(item.props.disabled, true);
+  await item.props.onChoose("next", msg.schema.components[0].items[0]);
+  assert.equal(sent.length, 1);
+});
+
+test("wizard Next validates only its current step and terminal view includes every step", async () => {
+  const s = interactive([{ type: "input", id: "one", label: "One", required: true }, { type: "input", id: "two", label: "Two", required: true }]);
+  s.steps = [{ id: "a", title: "First", components: ["one"] }, { id: "b", title: "Second", components: ["two"] }];
+  const render = formHarness(), msg = H.messageToUi(present(s));
+  let sent = 0;
+  const props = { msg, onSubmit: async () => { sent++; return { ui_id: msg.ui_id, status: "submitted" }; } };
+  let tree = render(props);
+  const next = tree => nodes(tree).find(n => n.type === "SettingsButton" && n.props.children[0] === "Next");
+  next(tree).props.onClick();
+  tree = render(props);
+  assert.ok(nodes(tree).some(n => n.props.role === "alert"));
+  nodes(tree).find(n => n.type === "input").props.onChange({ target: { value: "ready" } });
+  next(render(props)).props.onClick();
+  tree = render(props);
+  assert.equal(nodes(tree).find(n => n.type === "input").props.id, "gui-form-1-two");
+  assert.equal(sent, 0);
+  nodes(tree).find(n => n.type === "input").props.onChange({ target: { value: "also ready" } });
+  tree = render(props);
+  await nodes(tree).find(n => n.type === "SettingsButton" && n.props.children[0] === "Submit").props.onClick();
+  assert.equal(sent, 1);
+  assert.equal(nodes(render(props)).filter(n => n.type === "output").length, 2);
+});
+
+test("table headers sort numeric-aware and toggle, filter, and export quoted CSV", () => {
+  const render = formHarness("GenerativeUiTable");
+  const c = { columns: [{ key: "v", label: "Value" }], rows: Array.from({ length: 9 }, (_, i) => ({ v: i === 0 ? 'item 10, "quoted"' : `item ${i}` })) };
+  let tree = render({ component: c });
+  const sort = nodes(tree).find(n => n.type === "th").props.children[0];
+  sort.props.onClick(); tree = render({ component: c });
+  assert.equal(nodes(tree).find(n => n.type === "th").props["aria-sort"], "ascending");
+  assert.equal(nodes(tree).find(n => n.type === "td").props.children[0], "item 1");
+  nodes(tree).find(n => n.type === "th").props.children[0].props.onClick();
+  tree = render({ component: c });
+  assert.equal(nodes(tree).find(n => n.type === "th").props["aria-sort"], "descending");
+  nodes(tree).find(n => n.type === "input").props.onChange({ target: { value: "quoted" } });
+  tree = render({ component: c });
+  assert.equal(nodes(tree).filter(n => n.type === "td").length, 1);
+  assert.equal(nodes(tree).find(n => n.type === "CopyButton").props.text, '"Value"\r\n"item 10, ""quoted"""');
+});
+
+test("ranking keyboard moves are local permutations and disabled controls cannot move", () => {
+  const render = formHarness("GenerativeUiRanking"), c = ranking();
+  let changed;
+  const props = { component: c, value: ["a", "b"], update: (_id, value) => { changed = value; } };
+  const tree = render(props);
+  nodes(tree).find(n => n.type === "li").props.onKeyDown({ altKey: true, key: "ArrowDown", preventDefault() {} });
+  assert.deepEqual(own(changed), ["b", "a"]);
+  changed = undefined;
+  nodes(render({ ...props, disabled: true })).find(n => n.type === "li").props.onKeyDown({ altKey: true, key: "ArrowDown", preventDefault() {} });
+  assert.equal(changed, undefined);
+});
+
+test("new defaults reject null and references share the schema text budget", () => {
+  for (const patch of [{ kind: null }, { multiple: null }, { required: null }, { maxItems: null }, { default: null }, { placeholder: null }]) {
+    assert.throws(() => H.normalizeSchema(interactive([{ ...picker(), ...patch }])));
+  }
+  assert.throws(() => H.normalizeSchema(interactive([{ ...ranking(), default: null }])));
+  const nullDescription = ranking(); nullDescription.options[0].description = null;
+  assert.throws(() => H.normalizeSchema(interactive([nullDescription])));
+  const nullStyle = suggestionSchema(); nullStyle.components[0].style = null;
+  assert.throws(() => H.normalizeSchema(nullStyle));
+  const longPaths = Array.from({ length: 33 }, (_, i) => `${i}`.padEnd(1024, "x"));
+  assert.throws(() => H.normalizeSchema(interactive([{ ...picker(), multiple: true, maxItems: 50, default: longPaths }])), /text exceeds limit/);
+  const longText = Array.from({ length: 8 }, (_, i) => ({ type: "text", id: `t${i}`, text: "x".repeat(i === 7 ? 4090 : 4096) }));
+  const s = { version: 1, components: [...longText, { type: "button", id: "send", label: "S" }] };
+  H.normalizeSchema(s);
+  s.steps = [{ id: "a", title: "First", components: ["t0", "t1", "t2", "t3"] }, { id: "b", title: "Second", components: ["t4", "t5", "t6", "t7"] }];
+  assert.throws(() => H.normalizeSchema(s), /text exceeds limit/);
+});
+
+test("suggestions without a prompt send the label and refusal unlocks the choice", async () => {
+  const render = formHarness();
+  const msg = { ...H.messageToUi(present(suggestionSchema())), ui_id: "label-suggestion" };
+  let text, admitted = false;
+  const props = { msg, onSuggestion: async (_msg, value) => { text = value; return admitted; } };
+  const component = () => nodes(render(props)).find(n => n.props.component?.type === "suggestions");
+  await component().props.onChoose("next", msg.schema.components[0].items[1]);
+  assert.equal(text, "Continue"); assert.equal(component().props.chosen, undefined);
+  admitted = true;
+  await component().props.onChoose("next", msg.schema.components[0].items[1]);
+  assert.equal(component().props.chosen, "b");
+});
+
+test("path picker searches the existing listing source, filters kinds and selects/removes paths", async () => {
+  const render = formHarness("GenerativeUiPathPicker");
+  const c = H.normalizeSchema(interactive([{ ...picker(), kind: "any", multiple: true, maxItems: 2 }])).components[0];
+  const calls = [], hits = [{ path: "src", isDir: true }, { path: "src/main.js", isDir: false }];
+  let selected = [];
+  const props = { component: c, value: [], id: "picker", update: (_id, value) => { selected = own(value); }, listFiles: async (query, limit) => { calls.push({ query, limit }); return hits; } };
+  render(props);
+  await new Promise(resolve => setImmediate(resolve));
+  let tree = render(props);
+  assert.deepEqual(calls[0], { query: "", limit: 100 });
+  nodes(tree).find(n => n.type === "input").props.onChange({ target: { value: "src" } });
+  tree = render(props);
+  assert.equal(calls.at(-1).query, "src");
+  nodes(tree).find(n => n.type === "select").props.onChange({ target: { value: "directory" } });
+  tree = render(props);
+  const candidates = nodes(tree).filter(n => n.type === "button" && n.props["aria-pressed"] !== undefined);
+  assert.equal(candidates.length, 1);
+  candidates[0].props.onClick();
+  assert.deepEqual(selected, ["src"]);
+  tree = render({ ...props, value: selected });
+  nodes(tree).find(n => n.type === "button" && n.props["aria-label"] === "Remove src").props.onClick();
+  assert.deepEqual(selected, []);
+  tree = render({ ...props, disabled: true });
+  assert.equal(nodes(tree).find(n => n.type === "input").props.disabled, true);
+});
+
+test("display identities ignore update calls while interactive drafts remain task-bound", () => {
+  const identity = formHarness("generativeUiIdentity");
+  const display = H.messageToUi(displayPresent());
+  assert.equal(identity(display), identity({ ...display, task_id: "update", message_id: "new" }));
+  const form = H.messageToUi(present());
+  assert.notEqual(identity(form), identity({ ...form, task_id: "other" }));
+});
+
+test("suggestion bridge sends idle prompts and running follow-ups through the existing queue path", async () => {
+  const source = readFileSync(new URL("../src/live.js", import.meta.url), "utf8");
+  const start = source.indexOf("    sendUiSuggestion("), end = source.indexOf("    submitUi(", start);
+  assert.ok(start >= 0 && end > start);
+  const msg = H.messageToUi(displayPresent()), sent = [];
+  const state = { isCompacting: false, isStreaming: false, rpcState: { sessionId: msg.session_id }, messages: [msg], commands: [] };
+  const bridge = vm.runInNewContext(`({${source.slice(start, end)}})`, {
+    activeSessionId: "tab", state, isCommandInvocation: () => false,
+    _sendPrompt: (text, images) => { sent.push({ via: "prompt", text, images }); return Promise.resolve(true); },
+    _sendQueued: (kind, text, images, send) => { sent.push({ via: kind, text, images }); return send(); },
+    queuedFrame: (kind, text) => ({ type: kind, text }),
+    _sendWithResponse: frame => { sent.push({ frame }); return Promise.resolve(true); },
+  });
+  assert.equal(await bridge.sendUiSuggestion(msg, "Explain"), true);
+  assert.deepEqual(own(sent), [{ via: "prompt", text: "Explain", images: [] }]);
+  sent.length = 0; state.isStreaming = true;
+  await bridge.sendUiSuggestion(msg, "Continue");
+  assert.deepEqual(own(sent), [{ via: "followUp", text: "Continue", images: [] }, { frame: { type: "followUp", text: "Continue" } }]);
+  sent.length = 0; state.isCompacting = true;
+  assert.equal(await bridge.sendUiSuggestion(msg, "Unavailable"), false);
+  assert.equal(sent.length, 0);
+  state.isCompacting = false;
+  assert.equal(await bridge.sendUiSuggestion({ ...msg, session_id: "another" }, "Wrong conversation"), false);
+  assert.equal(sent.length, 0);
 });

@@ -338,7 +338,10 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
       });
       return;
     }
-    replaceDraft(promptInsert.append ? window.OMP_WIDGETS.appendToDraft(text, promptInsert.text) : promptInsert.text);
+    // `quote`: a reply's selection (design/chat/selection-toolbar.jsx) goes after the draft as a
+    // paragraph of its own, never sent (OMP_REPLY_QUOTE.appendBlock).
+    replaceDraft(promptInsert.quote ? window.OMP_REPLY_QUOTE.appendBlock(text, promptInsert.text)
+      : promptInsert.append ? window.OMP_WIDGETS.appendToDraft(text, promptInsert.text) : promptInsert.text);
     const images = promptInsert.images ?? [];
     if (images.length === 0) return;
     const back = images.map(image => ({ id: nextAttachmentId(), name: "", image, src: toDataUrl(image) }));

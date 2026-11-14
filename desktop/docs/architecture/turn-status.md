@@ -27,13 +27,13 @@ position when new output arrives while they are reading history.
 ### Generative UI
 
 `ui.present` custom messages become independent `kind: "ui"` cards, never
-collapsible tool output. `app/generative-ui.js` validates the bounded,
-data-only version-1 schema across 11 controls (`text`, `input`, `textarea`,
-`number`, `slider`, `checkbox`, `switch`, `select`, `radio`, `multiselect`,
-`button`); `design/chat/generative-ui.jsx` renders text and native controls
-with the existing Settings primitives. No HTML, script, URL or action is
-interpreted. Invalid schemas or render failures show a local text error
-without taking down the transcript.
+collapsible tool output. `app/generative-ui.js` mirrors the kernel's bounded,
+data-only version-1 schema; `design/chat/generative-ui.jsx` renders React text,
+native controls and the existing Settings primitives. Display mode supports
+information components and non-blocking suggestions, with no submit button.
+Interactive mode requires exactly one submit button and can include ranking,
+project-relative path pickers, and a 2–6-step wizard. Invalid schemas or render
+failures show a local text error without taking down the transcript.
 
 Draft changes stay local (bounded per-identity cache across tab remounts).
 Lifecycle status is `waiting_input` (with an orthogonal `rendered: boolean`
@@ -46,10 +46,33 @@ if continuation admission was interrupted after durable submission, the
 read-only card exposes **Resume task** to retry continuation without
 re-submitting new values.
 
+Display updates arrive as `ui.update` and replace only the original card's schema
+at its existing transcript position. Revision numbers prevent stale replay from
+overwriting newer content; an update without a loaded original remains visible
+where it arrived. Display identity is `[session_id, ui_id]`, so update tool-call
+identities do not reset tabs, collapsibles or locally chosen suggestions.
+Interactive drafts remain bound to the full session/UI/task/message identity.
+Display renderers have independent React component boundaries.
+
+Suggestion chips/cards send `prompt ?? label` through `sendUiSuggestion`: an idle
+tab uses the normal user-prompt path; a running tab uses the existing follow-up
+queue and queue strip. Selection is kept only in the bounded local drafts cache,
+disables the other choices, and never grants permission or answers an approval.
+Unavailable tabs cannot send suggestions. Project path pickers reuse `listFiles`
+and `list_project_files` (the composer's `@` completion source); the UI validates
+normalized path format/cardinality, while the kernel also checks existence,
+project containment and file/directory kind at submission.
+
+Wizard Next validates only the current step's visible controls; final submission
+validates the complete values object, and terminal cards show every step read-only.
+Ranking supports up/down buttons, Alt+ArrowUp/ArrowDown and the shared pointer
+reorder hook. Tables have numeric-aware ascending/descending headers, a filter
+for more than eight rows, and CSV export through the shared `CopyButton`.
+
 The Desktop sends `set_generative_ui {enabled:true}` and
 `set_interaction_policy {policy}` (`standard` | `aggressive` | `minimal`) to
 each newly spawned process before sending prompts. OMP registers `ui.present`
-alongside other host tools (`ui_present` on the wire). When `ui.present`
+alongside other host tools (`ui_present` on the wire). When interactive `ui.present`
 succeeds, `AgentSession` aborts the remaining tool batch with
 `TERMINAL_TOOL_RESULT_ABORT_REASON` and gates subsequent model calls until
 `submit_ui` or `cancel_ui` settles the interaction, or a new user prompt /

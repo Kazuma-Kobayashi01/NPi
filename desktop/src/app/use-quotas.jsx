@@ -1,5 +1,11 @@
 /* app/use-quotas.jsx — subscription limits scoped to each profile.
-   Read the cache on entry and invalidate after a session settles or manual refresh. */
+   Read the kernel's cache on entry and after a session settles (at most once a minute); only the manual
+   refresh invalidates it. A settle used to force a fresh probe of every signed-in provider, so busy tabs,
+   subagents and Office members asked the providers' quota endpoints after nearly every turn. */
+
+/** A settle re-reads a profile's limits at most this often; the kernel's own cache decides when to ask
+ *  the providers (about every five minutes). */
+const QUOTA_SETTLE_READ_MS = 60_000;
 
 function useQuotas({ bridge, profileId, enabled }) {
   const [, render] = React.useState(0);
@@ -12,7 +18,7 @@ function useQuotas({ bridge, profileId, enabled }) {
     if (!bridge?.usageLimits) return;
     let entry = entries.current.get(profile);
     if (!entry) {
-      entry = { rows: null, loading: false, error: "", running: false, queuedForce: false, generation: 0 };
+      entry = { rows: null, loading: false, error: "", running: false, queuedForce: false, generation: 0, readAt: 0 };
       entries.current.set(profile, entry);
     }
     const update = () => {
@@ -27,6 +33,7 @@ function useQuotas({ bridge, profileId, enabled }) {
     }
     entry.running = true;
     entry.loading = true;
+    entry.readAt = Date.now();
     const generation = ++entry.generation;
     update();
     Promise.resolve().then(() => bridge.usageLimits(profile, force)).then(r => {
@@ -53,7 +60,11 @@ function useQuotas({ bridge, profileId, enabled }) {
 
   React.useEffect(() => {
     mounted.current = true;
-    const unsubscribe = bridge?.onSessionSettled?.(profile => request(profile, true));
+    const unsubscribe = bridge?.onSessionSettled?.(profile => {
+      const entry = entries.current.get(profile);
+      if (entry && Date.now() - entry.readAt < QUOTA_SETTLE_READ_MS) return;
+      request(profile, false);
+    });
     return () => { mounted.current = false; unsubscribe?.(); };
   }, [bridge, request]);
 

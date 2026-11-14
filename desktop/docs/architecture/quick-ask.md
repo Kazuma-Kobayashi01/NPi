@@ -17,6 +17,7 @@ The page is `index.html?panel=quick`. Unlike other panels, `live.js` runs here (
 - ⌘1–3 or the capsule picks the mode. The conversation on screen stays until the next message, which opens a new one.
 - It is an ordinary session, saved under the mode's folder. **Continue in window** closes the panel's process first, so the file has one writer, then `quickask_continue` brings the app forward and emits `quickask://continue`, on which the main window switches mode and resumes the file. It waits for the first reply, since omp writes the file then, and for a turn to end.
 - A message cannot be sent during a turn; the text stays in the input.
+- The replies have the main window's reply interactions (`reply-interactions.md`): the selection toolbar puts a **Quote** into the panel's input (not sent), **Ask** and 👎 *Tell assistant* go out as a prompt when idle and a follow-up during a turn, **Steer** steers the running turn; ratings are keyed by the panel conversation's session file. Generative UI cards get the suggestion and path-picker callbacks too (the panel has no project, so the path picker lists nothing). Escape a popover took (the reply toolbar) does not hide the panel.
 
 ## Window size and glass
 

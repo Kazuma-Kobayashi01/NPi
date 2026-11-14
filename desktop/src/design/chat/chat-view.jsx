@@ -9,6 +9,7 @@
 const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, RetryRow: _CV_RetryRow, GoalRow: _CV_GoalRow, ApprovalRow: _CV_ApprovalRow, Icon: _CV_Icon, TOOL_META: _CV_TOOL_META, ToolGroup: _CV_ToolGroup, WorkBox: _CV_WorkBox, WorkflowPipeline: _CV_WorkflowPipeline } = window;
 const { nextPinned: _CV_nextPinned, shouldRepin: _CV_shouldRepin, afterOutput: _CV_afterOutput } = window.OMP_SCROLL_PIN;
 const { collapseStates: _CV_collapseStates, PREVIEW_LINES: _CV_PREVIEW_LINES } = window.OMP_COLLAPSE;
+const { SelectionToolbar: _CV_SelectionToolbar } = window;
 // Lines a collapsed block keeps in view, for chat.css; one object, so a
 // streaming frame does not diff a fresh style.
 const _CV_PAD_STYLE = { "--collapse-lines": _CV_PREVIEW_LINES };
@@ -134,7 +135,7 @@ const JobRow = React.memo(function JobRow({ msg, idx, highlighted }) {
 // (app/chat-collapse.js). `followOutput` and `submitKey` are tweaks too: the
 // first lets new output move a view at the bottom, the second is the ask
 // editor's send chord.
-function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onAskDialogAnswer, onConfirmAsk, onCancelAsk, onGrantApproval, onStopRetry, onUiSubmit, onUiCancel, onUiRendered, uiDisabled = false, hasProjectPath, onInspectSubagent, onOpenFile, onPreviewFile, projectRoot, foldModes, collapseAfter, collapseOverrides, onToggleCollapse, followOutput = true, submitKey = "enter", wallpaper = null, onRewind = null, streaming = false, kanban = [], subagents = [], showWorkflowPipeline = true }) {
+function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onAskDialogAnswer, onConfirmAsk, onCancelAsk, onGrantApproval, onStopRetry, onUiSubmit, onUiCancel, onUiRendered, onUiSuggestion, uiListFiles, uiDisabled = false, hasProjectPath, onInspectSubagent, onOpenFile, onPreviewFile, projectRoot, foldModes, collapseAfter, collapseOverrides, onToggleCollapse, followOutput = true, submitKey = "enter", wallpaper = null, onRewind = null, streaming = false, kanban = [], subagents = [], showWorkflowPipeline = true, conversation = null, onReplyAction = null, onOpenPlan = null }) {
   const scrollRef   = React.useRef(null);
   const pinnedRef   = React.useRef(true);   // assume start pinned to bottom
   const prevTopRef  = React.useRef(0);
@@ -272,6 +273,11 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
       if (messages[i].kind === "assistant" && !messages[i].streaming && !messages[i].superseded) { lastAsstIdx = i; break; }
     }
   }
+  // The newest finished reply: what "your previous reply" means in a 👎 message.
+  let latestReplyIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].kind === "assistant" && !messages[i].streaming) { latestReplyIdx = i; break; }
+  }
 
   const collapsed = React.useMemo(() => _CV_collapseStates(messages, {
     ...foldModes, after: collapseAfter, overrides: collapseOverrides,
@@ -339,7 +345,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
             const { msg: m, idx: i } = row;
             const hl = hoveredMsgIdx === i;
             if (window.OMP_TURN_STATUS.isHidden(m)) return null;
-            if (m.kind === "ui") return <window.GenerativeUiCard key={`ui:${m.ui_id}`} msg={m} onSubmit={onUiSubmit} onCancel={onUiCancel} onRendered={onUiRendered} disabled={uiDisabled} />;
+            if (m.kind === "ui") return <window.GenerativeUiCard key={`ui:${m.ui_id}`} msg={m} onSubmit={onUiSubmit} onCancel={onUiCancel} onRendered={onUiRendered} onSuggestion={onUiSuggestion} listFiles={uiListFiles} disabled={uiDisabled} />;
             if (m.kind === "user")    return <_CV_UserBubble_M    key={m._id ?? i} idx={i} highlighted={hl} msg={m} onRewind={onRewind} dup={messages.slice(0, i).filter(x => x.kind === "user" && x.text === m.text).length} />;
             if (m.kind === "compact") return <CompactRow          key={m._id ?? i} msg={m} />;
             if (m.kind === "job")     return <JobRow              key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
@@ -353,7 +359,8 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
               annotable={i === lastAsstIdx} hideThought={!!row.thoughtInBox}
               annotations={annotations}
               onAnnotate={onAnnotate}
-              thoughtCollapsed={collapsed[m._id]} onToggleCollapse={handleToggleCollapse} />;
+              thoughtCollapsed={collapsed[m._id]} onToggleCollapse={handleToggleCollapse}
+              conversation={conversation} latestReply={i === latestReplyIdx} onReplyAction={onReplyAction} onOpenPlan={onOpenPlan} />;
           })}
           {(() => {
             const p = window.OMP_RUN_PHASE.phase(messages, streaming);
@@ -375,6 +382,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
           Jump to latest
         </button>
       )}
+      {onReplyAction && <_CV_SelectionToolbar streaming={streaming} onAction={onReplyAction} />}
     </div>
   );
 }

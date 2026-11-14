@@ -50,4 +50,30 @@ const ApprovalRow = React.memo(function ApprovalRow({ msg, idx, highlighted }) {
   );
 });
 
-Object.assign(window, { ApprovalRow });
+/** The same approval surface as the rule row, but with a checkbox for each frozen hunk. */
+function ApprovalHunks({ hunks, selected, disabled, onToggle }) {
+  const long = hunks.reduce((count, hunk) => count + hunk.lines.length, 0) > 24;
+  return (
+    <div className="ask-approval-hunks" aria-label="Proposed file changes">
+      {hunks.map(hunk => (
+        <div className="ask-approval-hunk" key={hunk.index}>
+          <label className="ask-approval-hunk-choice">
+            <input type="checkbox" checked={selected.includes(hunk.index)} disabled={disabled}
+              onChange={() => onToggle(hunk.index)} />
+            <span>Hunk {hunk.index} · {hunk.path}</span>
+          </label>
+          <details open={long ? undefined : true}>
+            <summary className="mono">{hunk.header}</summary>
+            <pre className="mono selectable">{hunk.lines.map((line, index) => (
+              <span className={line.startsWith("+") ? "ask-hunk-add" : line.startsWith("-") ? "ask-hunk-remove" : ""} key={index}>
+                {line}{"\n"}
+              </span>
+            ))}</pre>
+          </details>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+Object.assign(window, { ApprovalRow, ApprovalHunks });

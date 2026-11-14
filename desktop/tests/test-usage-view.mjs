@@ -190,7 +190,9 @@ console.log("test-usage-view: 11 checks passed");
     },
   };
   const window = {};
-  vm.runInNewContext(fs.readFileSync(new URL("../src/app/use-quotas.jsx", import.meta.url), "utf8"), { window, React });
+  let clock = 1_800_000_000_000;
+  const FakeDate = { now: () => clock };
+  vm.runInNewContext(fs.readFileSync(new URL("../src/app/use-quotas.jsx", import.meta.url), "utf8"), { window, React, Date: FakeDate });
   const calls = [];
   const bridge = {
     usageLimits(profile, force) {
@@ -219,10 +221,15 @@ console.log("test-usage-view: 11 checks passed");
   calls[1].resolve({ ok: true, value: [{ provider: "fresh" }] });
   await flush();
   assert.equal(render().rows[0].provider, "fresh");
+  // A settle reads the kernel's cache (never invalidates it), and at most once a minute per profile:
+  // invalidating on every turn made the kernel ask every provider's quota endpoint after nearly every turn.
   settled("a");
   await flush();
-  assert.equal(calls[2].force, true, "completion invalidates the originating profile");
+  assert.equal(calls.length, 2, "a settle right after a read does not read again");
+  clock += 61_000;
   settled("a");
+  await flush();
+  assert.equal(calls[2].force, false, "a settle reads the cache, it does not invalidate");
   profileId = "b";
   assert.equal(render().rows, null, "profile switch clears previous rows immediately");
   await flush();
@@ -230,14 +237,12 @@ console.log("test-usage-view: 11 checks passed");
   calls[2].resolve({ ok: true, value: [{ provider: "late" }] });
   calls[3].resolve({ ok: true, value: [{ provider: "b" }] });
   await flush();
-  assert.equal(calls[4].profile, "a");
-  assert.equal(calls[4].force, true, "later completion is not dropped while a refresh runs");
-  calls[4].resolve({ ok: true, value: [{ provider: "a2" }] });
-  await flush();
   assert.equal(render().rows[0].provider, "b", "background completion cannot replace active profile");
+  clock += 61_000;
   settled("b");
   await flush();
-  calls[5].reject(new Error("offline"));
+  assert.equal(calls[4].force, false);
+  calls[4].reject(new Error("offline"));
   await flush();
   assert.equal(render().rows[0].provider, "b");
   assert.equal(render().error, "offline");

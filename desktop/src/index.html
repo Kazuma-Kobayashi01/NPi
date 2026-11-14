@@ -116,6 +116,13 @@
   <script src="app/work-box.js"></script>
   <script src="app/compaction.js"></script>
   <script src="app/chat-collapse.js"></script>
+  <!-- Reply bubble interactions: selection quote text helpers and the local
+       👍/👎 store (localStorage `npi.replyFeedback`, mirrored by ui-store.js).
+       Dependency-free IIFEs; chat/reply-feedback.jsx and
+       chat/selection-toolbar.jsx read them at call time, the composer and
+       app-live.jsx read OMP_REPLY_QUOTE late-bound. -->
+  <script src="app/reply-quote.js"></script>
+  <script src="app/reply-feedback.js"></script>
   <script src="app/generative-ui.js"></script>
 
   <!-- Prompt history (issue #16): pure list/navigation helpers, in-memory
@@ -158,6 +165,10 @@
        Dependency-free IIFE; design/ui/use-drag-reorder.js destructures
        window.OMP_DRAG_REORDER at load, so it must load before it. -->
   <script src="app/drag-reorder.js"></script>
+  <!-- Inline plan edits (staged tick / reorder / drop, and the message that
+       sends them): dependency-free IIFE; design/chat/inline-plan.jsx
+       destructures window.OMP_PLAN_EDIT at top level, so it must load before it. -->
+  <script src="app/plan-edit.js"></script>
 
 
   <!-- Per-tab composer draft + plan-mode state (issue #28): pure map and
@@ -358,6 +369,13 @@
   <script type="text/babel" src="design/chat/file-preview.jsx"></script>
   <script type="text/babel" src="design/chat/user-bubble.jsx"></script>
   <script type="text/babel" src="design/chat/eval-cell.jsx"></script>
+  <!-- The plan block of a reply; destructures window.Icon and
+       window.OMP_PLAN_EDIT at top level, reads window.useDragReorder at render
+       time. assistant-bubble.jsx renders window.InlinePlan. -->
+  <script type="text/babel" src="design/chat/inline-plan.jsx"></script>
+  <!-- The 👍/👎 footer of a reply; assistant-bubble.jsx destructures
+       window.ReplyFeedback at top level, so this must load before it. -->
+  <script type="text/babel" src="design/chat/reply-feedback.jsx"></script>
   <script type="text/babel" src="design/chat/assistant-bubble.jsx"></script>
   <script type="text/babel" src="design/chat/tool-card.jsx"></script>
   <script type="text/babel" src="design/chat/tool-group.jsx"></script>
@@ -373,6 +391,9 @@
   <script type="text/babel" src="design/chat/approval-row.jsx"></script>
   <script type="text/babel" src="design/workflow-pipeline.jsx"></script>
   <script type="text/babel" src="design/chat/generative-ui.jsx"></script>
+  <!-- Floating Quote / Ask / Steer bar over selected reply text; chat-view.jsx
+       destructures window.SelectionToolbar at top level. -->
+  <script type="text/babel" src="design/chat/selection-toolbar.jsx"></script>
   <script type="text/babel" src="design/chat/chat-view.jsx"></script>
   <!-- Subagent manager UI. bits → controls → inspector (destructures the
        controls) → pane (destructures the inspector) → rail card; all before

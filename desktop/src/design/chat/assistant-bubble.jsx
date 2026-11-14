@@ -1,43 +1,9 @@
 /* chat/assistant-bubble.jsx — assistant block (text + plan + thoughts +
-   a failed request's failure) + InlinePlan (mini-plan rendered inline in the
-   first plan reply). */
+   a failed request's failure). The plan block is chat/inline-plan.jsx
+   (`InlinePlan`, which loads first). */
 
 const _AB_substantial = text => (window.OMP_WORK_BOX ? window.OMP_WORK_BOX.hasSubstance(text) : !!text?.trim());
-const { Icon: _ChatIcon, MarkdownContent: _ChatMd, AnnotablePlan: _ChatAP, CopyButton: _ChatCopy } = window;
-
-function InlinePlan({ plan }) {
-  return (
-    <div className="inline-plan slide-in">
-      <div className="inline-plan-head">
-        <_ChatIcon name="plan" size={12} color="var(--accent)" />
-        <span style={{ color: "var(--fg-2)", fontWeight: 600 }}>{plan.title}</span>
-        <span className="chip muted">{plan.phases.reduce((n, p) => n + p.tasks.length, 0)} tasks</span>
-        <div style={{ flex: 1 }} />
-        <button className="btn ghost" style={{ height: 22 }}>open kanban →</button>
-      </div>
-      <div className="inline-plan-body">
-        {plan.phases.map((ph) => (
-          <div key={ph.id} className="inline-phase">
-            <div className="inline-phase-head">
-              <span className="mono" style={{ color: "var(--fg-3)" }}>{ph.label.toUpperCase()}</span>
-              <span className="hr" />
-            </div>
-            {ph.tasks.map((t) => (
-              <div key={t.id} className={`inline-task status-${t.status}`}>
-                <span className="task-mark">
-                  {t.status === "done" && <_ChatIcon name="check" size={10} />}
-                  {t.status === "in_progress" && <span className="pulse-dot" />}
-                  {t.status === "pending" && <span className="mono" style={{ color: "var(--fg-4)" }}>○</span>}
-                </span>
-                <span className="task-text selectable">{t.text}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const { Icon: _ChatIcon, MarkdownContent: _ChatMd, AnnotablePlan: _ChatAP, CopyButton: _ChatCopy, ReplyFeedback: _ChatFeedback } = window;
 
 // The message's raw markdown, one text block after another — what the
 // model wrote, code fences and line breaks included. A live message can
@@ -131,7 +97,9 @@ function ThoughtDisclosure({ msg, collapsed, onToggleCollapse }) {
 
 // ChatView owns collapse defaults and persistent per-tab manual overrides.
 // `hideThought`: the thinking sits in the turn's work box above (chat/work-box.jsx).
-function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, thoughtCollapsed, onToggleCollapse, hideThought = false }) {
+// `conversation` (app/reply-feedback.js `conversationKey`), `latestReply` and
+// `onReplyAction` (app-live.jsx `handleReplyAction`) drive the 👍/👎 footer.
+function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, thoughtCollapsed, onToggleCollapse, hideThought = false, conversation = null, latestReply = false, onReplyAction = null, onOpenPlan = null }) {
   // A failed request has no text of its own; its copy is the provider's error.
   const copyText = msg.streaming ? "" : (_messageText(msg) || msg.failure?.raw || "");
   return (
@@ -173,7 +141,7 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
             );
           }
           if (b.type === "plan") {
-            return <InlinePlan key={i} plan={b} />;
+            return <InlinePlan key={i} plan={b} onOpenPlan={onOpenPlan} />;
           }
           if (b.type === "image") return <window.AssistantImage key={i} image={b} />;
           return null;
@@ -182,6 +150,10 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
         {copyText && (
           <div className="ass-actions">
             <_ChatCopy className="ass-copy" label="Copy message" text={copyText} />
+            {conversation && onReplyAction && !msg.streaming && !msg.failure && Number.isFinite(msg.ts) && (
+              <_ChatFeedback conversation={conversation} ts={msg.ts}
+                excerpt={latestReply ? "" : copyText.slice(0, 600)} onSend={onReplyAction} />
+            )}
           </div>
         )}
       </div>
@@ -189,4 +161,4 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
   );
 }
 
-Object.assign(window, { AssistantBubble, InlinePlan, ThoughtDisclosure, ThoughtBody });
+Object.assign(window, { AssistantBubble, ThoughtDisclosure, ThoughtBody });

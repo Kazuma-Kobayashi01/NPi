@@ -87,8 +87,20 @@
   /** `session_info_update`'s title as a usable tab name, or null when the
    *  frame carries nothing to rename to (missing/empty/non-string). */
   function sessionTitleFromEvent(ev) {
-    const raw = ev && typeof ev.title === "string" ? ev.title.trim() : "";
+    const raw = ev && typeof ev.title === "string" ? displayTitle(ev.title) : "";
     return raw || null;
+  }
+
+  /** Private Use Area characters: the Nerd Font glyphs omp heads a card
+   *  title with (`title.icons` "nf+emoji" in a Nerd Font terminal). */
+  const PRIVATE_USE = /[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu;
+
+  /** A session title as the app shows it. The app's fonts have no Nerd Font
+   *  glyphs, so a card icon like `󰄡 RC: …` drew as a wide blank before the
+   *  name: drop such glyphs and keep the rest (`RC: …`). Emoji icons stay. */
+  function displayTitle(title) {
+    if (typeof title !== "string") return "";
+    return title.replace(PRIVATE_USE, "").trim();
   }
 
   /** After omp's `abort` response, whether the one-shot should be armed
@@ -170,7 +182,7 @@
   window.OMP_SESSION_TITLE = {
     shouldAutoRename, shouldRefineTitle, isAutoRenameNote, sessionTitleFromEvent,
     isManualRename, isRenameStateStale, shouldRearmAfterAbort, countsAsRefineTurn,
-    manualRename, dropPendingNote,
+    manualRename, dropPendingNote, displayTitle,
     REFINE_EVERY_TURNS, REFINE_MAX,
   };
 })();

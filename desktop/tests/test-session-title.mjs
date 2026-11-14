@@ -310,4 +310,12 @@ check("a note nobody is waiting for is not swallowed", () => {
   assert.equal(T.dropPendingNote(undefined, "Session renamed to A."), null);
 });
 
+// A Nerd Font card icon (Private Use Area) has no glyph in the app's fonts and drew as a wide blank.
+check("displayTitle drops Nerd Font card icons and keeps emoji ones", () => {
+  assert.equal(T.displayTitle("\u{F0121} RC: Test NPi Remote Connect"), "RC: Test NPi Remote Connect");
+  assert.equal(T.displayTitle("🧪 FLAKY: Fix flaky tests"), "🧪 FLAKY: Fix flaky tests");
+  assert.equal(T.sessionTitleFromEvent({ title: "\uE7A8 RS: Rust build" }), "RS: Rust build");
+  assert.equal(T.sessionTitleFromEvent({ title: "\u{F0121}" }), null);
+});
+
 console.log(`ok — test-session-title.mjs (${passed} checks)`);

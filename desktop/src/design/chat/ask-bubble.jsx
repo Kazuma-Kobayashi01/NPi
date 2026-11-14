@@ -9,6 +9,7 @@ const { Icon: _AskIcon, AskDialog: _AskDialog, OMP_ASK_DIALOG: _AskDialogRules }
 // Tool-approval prompts ("Allow tool: <name>" + detail lines): the
 // head/details split and the grant-eligible tool name. See app/approval.js.
 const { approvalInfo: _AskApprovalInfo } = window.OMP_APPROVAL;
+const _AskHunkDrafts = new Map();
 
 // `submitKey` ("enter" | "ctrl+enter", the tweak) is the editor textarea's
 // send chord (constants.js isSubmitKey); the single-line input keeps Enter.
@@ -18,13 +19,31 @@ function AskBubble({ msg, idx, highlighted, onAnswer, onAnswerDialog, onConfirm,
   const method = msg.method ?? "select";
   const approval = method === "select" ? _AskApprovalInfo(msg) : null;
   const tool = approval?.tool ?? null;
+  const hunks = window.OMP_APPROVAL.approvalHunks(msg);
+  const hunkKey = `${msg.sessionId}:${msg.id}`;
+  const [selectedHunks, setSelectedHunks] = React.useState(() =>
+    msg.selectedHunks ?? _AskHunkDrafts.get(hunkKey) ?? hunks.map(hunk => hunk.index));
+  const allHunks = selectedHunks.length === hunks.length;
+  const HunkPicker = window.ApprovalHunks;
+  const toggleHunk = (index) => {
+    if (done) return;
+    setSelectedHunks(previous => {
+      const next = previous.includes(index) ? previous.filter(value => value !== index) : [...previous, index];
+      _AskHunkDrafts.set(hunkKey, next);
+      while (_AskHunkDrafts.size > 128) _AskHunkDrafts.delete(_AskHunkDrafts.keys().next().value);
+      return next;
+    });
+  };
   // omp's ask dialog while it waits: question count and omp's timeout.
   const dialogOpen = method === "ask" && !done;
   const timeoutNote = dialogOpen ? _AskDialogRules.timeoutNote(msg.questions, msg.timeout) : null;
 
   const submit = (value) => {
     if (done) return;
-    onAnswer(msg.id, value);
+    if (hunks.length && value === "Approve") {
+      onAnswer(msg.id, window.OMP_APPROVAL.hunkAnswer(hunks, selectedHunks));
+    } else onAnswer(msg.id, value);
+    _AskHunkDrafts.delete(hunkKey);
   };
 
   // Approve this prompt and remember the tool for next time — that
@@ -36,7 +55,7 @@ function AskBubble({ msg, idx, highlighted, onAnswer, onAnswerDialog, onConfirm,
   // saves the rule only once the answer was written, and a refusal (nothing
   // sent) reopens the bubble.
   const grant = (scope) => {
-    if (done || !tool) return;
+    if (done || !tool || !allHunks) return;
     onGrant?.(msg, scope);
   };
 
@@ -144,6 +163,7 @@ function AskBubble({ msg, idx, highlighted, onAnswer, onAnswerDialog, onConfirm,
         {approval?.details && (
           <div className="ask-approval-details mono selectable">{approval.details}</div>
         )}
+        {hunks.length > 0 && <HunkPicker hunks={hunks} selected={selectedHunks} disabled={done} onToggle={toggleHunk} />}
 
         {msg.options.length > 0 && (
           <div className="ask-options">
@@ -158,14 +178,16 @@ function AskBubble({ msg, idx, highlighted, onAnswer, onAnswerDialog, onConfirm,
                   onClick={() => submit(opt)}
                 >
                   {isSelected && <_AskIcon name="check" size={10} color="var(--accent)" />}
-                  {opt}
+                  {hunks.length && opt === "Approve" && !allHunks
+                    ? selectedHunks.length ? `Approve ${selectedHunks.length} of ${hunks.length} hunks` : "Deny (no hunks selected)"
+                    : opt}
                 </button>
               );
             })}
           </div>
         )}
 
-        {tool && !done && (
+        {tool && !done && allHunks && (
           <div className="ask-approval-rules">
             <button className="ask-opt ask-remember" onClick={() => grant("session")}>
               <_AskIcon name="clock" size={10} />
