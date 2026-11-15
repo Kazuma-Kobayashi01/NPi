@@ -6,7 +6,9 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
-## SideAgent：ACP 侧载外部 Agent（2026-11-15，进行中，内核未提交）
+## SideAgent：ACP 侧载外部 Agent（2026-11-15，已打包 3.1.0.105，未安装）
+
+- 版本：Desktop 分支 `3.1.0.105`（`332b453` 功能、`2dba65a` 版本号），内核 `kernel.2.1.3-universal`（`959b820662`，含 SideAgent `a97a91af7d`）；产物 `dist/3.1.0.105/NPi Desktop_3.1.0.105_aarch64.dmg`（见 RELEASES）。均未推送。
 
 - 目标：Desktop 新建标签页时可选外部 Agent（首批 Antigravity `agy acp`、Claude、任意 ACP Registry Agent），用 NPi 界面对话；外部 Agent 用它自己的登录，NPi 不碰凭据。对 Antigravity 这是不冒充官方客户端的合规路线（内核原 Antigravity 提供方仍暂停），只用于用户亲自发起的对话，不用于后台任务。审批接入 NPi 现有弹窗（含 `/rc` 手机与 FCM）。
 - 第 1 层已做（omp `kernel.2.1.2-universal` 工作区）：`packages/coding-agent/src/side-agent/`——`connection.ts`（NPi 作 ACP 客户端：启动、握手、登录、会话新建/恢复/列出、提示、取消、模式与配置；审批交宿主；读写文件与终端代办，路径先解析符号链接再限制在会话根目录内）、`terminals.ts`、`registry.ts`（读官方 Registry、缓存 1 小时；二进制必须有 sha256 才下载安装，否则退回 npx/uvx）；`utils` 新增 `getSideAgentsDir()`。
