@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Side agent tabs (Code): a project's right-click menu opens a conversation with Claude, Codex, Gemini CLI or Antigravity through the Agent Client Protocol (`omp --side-agent`). The agent signs in with its own account; its replies and tool calls stream like omp's, its permission requests use the approval prompt, and the tab reopens with the same agent after a relaunch.
 - File approvals can accept only selected write/edit hunks, with checkbox diff previews and folded long diffs. Full selection keeps ordinary approval; empty selection denies. Partial answers never create standing grants, reject stale file contents and tell the assistant exactly which changes were rejected.
 - Generative UI: display cards update in place without resetting their local state; suggested follow-up chips and non-blocking choice cards send ordinary prompts or queued follow-ups, never approvals. Forms add keyboard/pointer ranking, project-file/directory pickers and multi-step navigation; tables add numeric-aware sorting, filtering and Copy CSV.
 - Bundled kernel: Gemini 4 Hydrogen supports Google API keys and Antigravity subscriptions, with low/medium/high/xhigh effort, high by default, and subscription SKU selection behind one logical model.

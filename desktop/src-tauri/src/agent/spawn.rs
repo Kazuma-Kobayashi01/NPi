@@ -443,6 +443,7 @@ pub(crate) fn spawn_omp(
         prompt,
         append_prompt,
         sidechat,
+        side_agent,
     } = launch;
     let omp = Omp::locate()?;
     // Refused here rather than left to fail later: an omp too old for the
@@ -458,7 +459,14 @@ pub(crate) fn spawn_omp(
         let at = args.len() - usize::from(config.is_some());
         args.splice(at..at, SIDECHAT_FLAGS.iter().map(|flag| (*flag).to_string()));
     }
-    if app_mode == "chat" && !sidechat {
+    if let Some(id) = side_agent {
+        // One argv token, never a flag or a path: the id comes from the frontend.
+        super::validate_side_agent(id)?;
+        // omp branches off before its own startup: Chat tools and the prompts below would be ignored.
+        let at = args.len() - usize::from(config.is_some());
+        args.insert(at, format!("--side-agent={id}"));
+    }
+    if app_mode == "chat" && !sidechat && side_agent.is_none() {
         // Chat changes nothing: only the web and read tools (plus generate_image
         // when enabled for this session), and the host and UI tools omp always
         // keeps. The coding tools, MCP servers and skills' tool schemas stay out
@@ -467,12 +475,12 @@ pub(crate) fn spawn_omp(
         let at = args.len() - usize::from(config.is_some());
         args.splice(at..at, chat_flags(resume, image_gen));
     }
-    if let Some(text) = prompt {
+    if let Some(text) = prompt.filter(|_| side_agent.is_none()) {
         // Replaces omp's default prompt (omp still adds the skills list). Before the `--config` token, which stays last.
         let at = args.len() - usize::from(config.is_some());
         args.insert(at, format!("--system-prompt={text}"));
     }
-    if let Some(text) = append_prompt {
+    if let Some(text) = append_prompt.filter(|_| side_agent.is_none()) {
         // Appends to the system prompt (both Chat and Code modes). Before the `--config` token, which stays last.
         let at = args.len() - usize::from(config.is_some());
         args.insert(at, format!("--append-system-prompt={text}"));

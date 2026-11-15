@@ -9,6 +9,14 @@
 
 // The UI language (app/i18n.js).
 const _PSB_T = (key, vars) => window.OMP_I18N.t(key, vars);
+
+/** External ACP agents a project can open a tab with (`omp --side-agent`, ACP registry ids). */
+const _PSB_SIDE_AGENTS = [
+  { id: "claude-acp", name: "Claude" },
+  { id: "codex-acp", name: "Codex" },
+  { id: "gemini", name: "Gemini CLI" },
+  { id: "antigravity-acp", name: "Antigravity" },
+];
 const { Icon, TabRunDot, RenameField } = window;
 const { groupTabs, groupRunState, groupTarget, membersNewestFirst, basename, parentName } = window.OMP_PROJECT_NAV;
 
@@ -19,7 +27,7 @@ function sidebarHint(actionId, fallback) {
 
 function ProjectSidebar({
   tabs, activeId, recents, profileLabel, saved = [], historyProfile, onResume,
-  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode, office, onOffice, onTabOffice, onToggleOffice,
+  onSelectTab, onCloseTab, onCloseProject, onRenameTab, onNewInProject, onNewWorktree, onNewSideAgent, onOpenRecent, onForgetRecent, onOpenFolder, onHide, onReorder, onHistory, footer, unread, onReveal, onMarkUnread, onArchiveTab, onDeleteTab, mode, onMode, office, onOffice, onTabOffice, onToggleOffice,
 }) {
   const ctx = window.useContextMenu();
   const tabMenu = t => [
@@ -122,6 +130,13 @@ function ProjectSidebar({
                 onContextMenu={e => ctx.open(e, [
                   ...(group.path ? [{ label: _PSB_T("Open in Finder"), onClick: () => onReveal(group.path) }, "-"] : []),
                   ...(group.path && onNewWorktree ? [{ label: _PSB_T("New task in a worktree"), onClick: () => onNewWorktree(group.path, group.profile) }, "-"] : []),
+                  ...(group.path && onNewSideAgent ? [
+                    ..._PSB_SIDE_AGENTS.map(agent => ({
+                      label: _PSB_T("New conversation with {name}", { name: agent.name }),
+                      onClick: () => onNewSideAgent(group.path, agent),
+                    })),
+                    "-",
+                  ] : []),
                   { label: _PSB_T("Close"), onClick: () => onCloseProject(group.tabs) },
                 ])}>
                   <button className={`psb-chev ${expanded ? "open" : ""}`}

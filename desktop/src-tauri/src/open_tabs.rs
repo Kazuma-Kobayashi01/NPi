@@ -53,6 +53,10 @@ pub struct OpenTab {
     /// Virtual Office is on for this tab: its chat is the general manager.
     #[serde(default)]
     pub office: bool,
+    /// External ACP agent serving the tab (`omp --side-agent`, a registry id). Left out of the
+    /// file for omp's own tabs; an id that fails `agent::validate_side_agent` reads back as absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_agent: Option<String>,
 }
 
 /// The persisted layout: tabs in order plus the active tab's index.
@@ -116,6 +120,13 @@ fn sanitize(mut layout: Layout) -> Layout {
             if field.as_deref().is_some_and(str::is_empty) {
                 *field = None;
             }
+        }
+        if tab
+            .side_agent
+            .as_deref()
+            .is_some_and(|id| crate::agent::validate_side_agent(id).is_err())
+        {
+            tab.side_agent = None;
         }
     }
     layout.active = layout.active.filter(|&i| i < layout.tabs.len());
@@ -230,6 +241,7 @@ mod tests {
             session_file: session_file.map(str::to_owned),
             name: Some("label".to_owned()),
             office: false,
+            side_agent: None,
         }
     }
 
@@ -359,6 +371,22 @@ mod tests {
     }
 
     #[test]
+    fn side_agent_survives_a_save_and_a_flag_shaped_one_does_not() {
+        let mut keep = tab("/p", None);
+        keep.side_agent = Some("claude-acp".to_owned());
+        let mut forged = tab("/q", None);
+        forged.side_agent = Some("--resume=/etc/passwd".to_owned());
+        let json = serde_json::to_string(&Layout {
+            tabs: vec![keep, forged],
+            active: None,
+        })
+        .unwrap();
+        let got = sanitize(serde_json::from_str(&json).unwrap());
+        assert_eq!(got.tabs[0].side_agent.as_deref(), Some("claude-acp"));
+        assert_eq!(got.tabs[1].side_agent, None);
+    }
+
+    #[test]
     fn empty_optional_strings_read_back_as_absent() {
         let got = sanitize(Layout {
             tabs: vec![OpenTab {
@@ -367,6 +395,7 @@ mod tests {
                 session_file: Some(String::new()),
                 name: Some(String::new()),
                 office: false,
+                side_agent: None,
             }],
             active: Some(0),
         });

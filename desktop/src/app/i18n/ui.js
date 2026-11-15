@@ -674,6 +674,7 @@
     ["Model", "模型", "模型", "モデル"],
     ["Thinking", "思考", "思考", "思考"],
     ["New task in a worktree", "在 worktree 中新建任务", "在 worktree 中新增任務", "worktree で新しいタスク"],
+    ["New conversation with {name}", "用 {name} 新建会话", "用 {name} 新增對話", "{name} で新しい会話"],
     ["Remove {branch}? {dirty} uncommitted files and {ahead} unmerged commits are lost.", "删除 {branch}？{dirty} 个未提交文件和 {ahead} 个未合并提交将会丢失。", "刪除 {branch}？{dirty} 個未提交檔案和 {ahead} 個未合併提交將會遺失。", "{branch} を削除しますか？未コミットの {dirty} ファイルと未マージの {ahead} コミットが失われます。"],
     ["{n} comments", "{n} 条评论", "{n} 則評論", "{n} 件のコメント"],
     ["Clear", "清空", "清空", "クリア"],

@@ -228,6 +228,8 @@
         sessionFile: t.sessionFile || null,
         name: t.name || null,
         office: !!t.office,
+        // Only side agent tabs carry it, so omp's own tabs save exactly as before.
+        ...(t.sideAgent ? { sideAgent: t.sideAgent } : {}),
       })),
       active: active < 0 ? null : active,
     };
@@ -243,11 +245,13 @@
     return {
       cwd: tab.path || "",
       resume,
-      name: (resume && tab.name) || null,
+      // A side agent tab keeps its "Claude · project" label: the agent's name is not saved separately.
+      name: ((resume || tab.sideAgent) && tab.name) || null,
       // No saved profile is the built-in one: the tab must record the
       // profile its process actually runs under.
       profile: tab.profile || DEFAULT_PROFILE_ID,
       office: !!tab.office,
+      ...(tab.sideAgent ? { sideAgent: tab.sideAgent } : {}),
     };
   }
 

@@ -933,6 +933,15 @@ function App() {
     else setTabOffice(officeTab, true);
   };
   const handleNewWorktree = (path, profile) => { bridge?.newWorktreeTask(path, profile).catch(err => console.error("[app] worktree task failed:", err)); };
+  // A tab in `path` served by an external ACP agent (`{ id, name }`), signed in with its own account.
+  const handleNewSideAgent = async (path, agent) => {
+    if (!bridge) return;
+    try {
+      await bridge.openSideAgent(path, agent.id, agent.name);
+    } catch (err) {
+      console.error("[app] failed to open side agent:", err);
+    }
+  };
   const handleNewInProject = async (path, profile) => {
     if (!bridge) return;
     try {
@@ -1318,6 +1327,7 @@ function App() {
                 onRenameTab={handleRenameTab}
                 onNewInProject={handleNewInProject}
                 onNewWorktree={appModeName === "code" ? handleNewWorktree : null}
+                onNewSideAgent={appModeName === "code" ? handleNewSideAgent : null}
                 onOpenRecent={handleOpenRecent}
                 onForgetRecent={handleForgetRecent}
                 onOpenFolder={handleNewProject}

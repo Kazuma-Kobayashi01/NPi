@@ -1238,7 +1238,11 @@
     settledListeners.set(id, settled);
     await settled.ready;
     const approvalMode = await window.__TAURI__.core.invoke("start_session", {
-      args: { sessionId: id, cwd: cwd ?? "", resume, profile, appMode: sessionRegistry.get(id)?.appMode ?? null },
+      args: {
+        sessionId: id, cwd: cwd ?? "", resume, profile,
+        appMode: sessionRegistry.get(id)?.appMode ?? null,
+        sideAgent: sessionRegistry.get(id)?.sideAgent ?? null,
+      },
     });
     // Queue preferences before any prompt can be sent to this new process.
     await window.__TAURI__.core.invoke("send_command", {
@@ -1721,10 +1725,13 @@
    *  derivation) now lives in, and is proven by, `_tabNameFor`. */
   async function _startProjectSession(cwd, {
     resume = null, name = null, profile, activate = true, remember = true, appMode = null, office = false,
+    sideAgent = null, sideAgentName = null,
   }) {
     _lastSessionMs = Math.max(Date.now(), _lastSessionMs + 1);
     const id = `session-${_lastSessionMs}`;
-    const tabName = name || _tabNameFor(cwd, resume ? "resumed" : "new session");
+    const folderName = _tabNameFor(cwd, resume ? "resumed" : "new session");
+    // A side agent tab says whose it is: "Claude · project".
+    const tabName = name || (sideAgent ? `${sideAgentName || sideAgent} · ${folderName}` : folderName);
     const color = resume ? "var(--cyan)" : "var(--lilac)";
     // Register in tab list before starting omp so the tab shows immediately.
     // Register with null branch — chip hidden until git resolves.
@@ -1732,6 +1739,9 @@
       id, name: tabName, path: cwd ?? "", color, branch: null, profile, appMode,
       // Virtual Office is on for this tab: its chat is the general manager.
       office: !!office,
+      // An external ACP agent serves this tab (`omp --side-agent`, registry id) instead of
+      // omp's own; `sideAgentName` is its display name. Fixed for the tab's life.
+      sideAgent, sideAgentName,
       // The approval mode `start_session` spawned this tab's current omp
       // with (set by `_spawnSession`); null while no process runs it.
       approvalMode: null,
@@ -1754,7 +1764,8 @@
       // state to the omp session it was granted for (set by the first
       // `get_state` that finds it armed or budgeted, see `_applyRpcState`
       // and `STITLE.isRenameStateStale`).
-      autoRenameArmed: !resume,
+      // A side agent cannot be asked for a title (it has no `/rename`): its tab keeps the agent's name.
+      autoRenameArmed: !resume && !sideAgent,
       autoRenameInFlight: false,
       autoRenameTurns: 0,
       autoRenameLeft: 0,
@@ -4682,6 +4693,13 @@
      *  active tab's. Always spawns: `+`/`Ctrl+T` mean a *new* tab. */
     async openSession(cwd, profile = _activeProfileId()) {
       return _openReported(cwd, { profile });
+    },
+
+    /** Open a tab in `cwd` served by external ACP agent `agentId` (a registry id such as
+     *  `claude-acp`; `agentName` labels the tab). It signs in with its own account; omp's
+     *  models, profile credentials and tools are not used. Resolves/rejects like `openSession`. */
+    async openSideAgent(cwd, agentId, agentName) {
+      return _openReported(cwd, { profile: _activeProfileId(), sideAgent: agentId, sideAgentName: agentName });
     },
 
     /** Open project folder `path` (a recent-projects row) under the active

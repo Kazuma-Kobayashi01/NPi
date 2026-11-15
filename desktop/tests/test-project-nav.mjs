@@ -326,6 +326,17 @@ check("restoreSpec resumes a conversation under its saved label", () => {
   assert.deepEqual(spec, { cwd: "/a", resume: "/s/a.jsonl", name: "Fix login", profile: "work", office: true });
 });
 
+check("a side agent tab reopens served by the same agent, under its label, with no conversation to resume", () => {
+  const side = tab("s", "/a", { name: "Claude · a", sideAgent: "claude-acp" });
+  const saved = N.tabLayout([side], "s").tabs[0];
+  assert.equal(saved.sideAgent, "claude-acp");
+  assert.deepEqual(N.restoreSpec(saved), {
+    cwd: "/a", resume: null, name: "Claude · a", profile: "default", office: false, sideAgent: "claude-acp",
+  });
+  // omp's own tabs save no sideAgent key at all
+  assert.equal("sideAgent" in N.tabLayout([tab("o", "/a")], "o").tabs[0], false);
+});
+
 check("restoreSpec leaves an unlabeled conversation's name to the spawn's fallback", () => {
   assert.equal(N.restoreSpec({ path: "/a", sessionFile: "/s/a.jsonl", name: null }).name, null);
 });

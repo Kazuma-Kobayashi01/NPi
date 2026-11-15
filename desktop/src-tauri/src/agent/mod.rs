@@ -170,6 +170,25 @@ pub struct Launch<'a> {
     pub append_prompt: Option<&'a str>,
     /// Disable persistence, tools and discovered capabilities for SideChat.
     pub sidechat: bool,
+    /// Serve this external ACP agent (`--side-agent=<id>`) instead of omp's own; `spawn_omp` refuses an
+    /// id [`validate_side_agent`] rejects. omp then skips its own startup, so the Chat tools and prompts are not passed.
+    pub side_agent: Option<&'a str>,
+}
+
+/// An ACP registry id (`claude-acp`, `antigravity-acp`): lowercase letters, digits, `.`, `_`, `-`,
+/// starting with a letter or digit, so it can only ever be one `--side-agent=` value.
+pub fn validate_side_agent(id: &str) -> Result<(), String> {
+    let mut chars = id.chars();
+    let first_ok = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let rest_ok =
+        chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
+    if first_ok && rest_ok && id.len() <= 64 {
+        Ok(())
+    } else {
+        Err(format!("invalid side agent id: {id:?}"))
+    }
 }
 
 /// Manages one omp process per tab session.
@@ -646,6 +665,16 @@ fn write_command<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn side_agent_ids_are_registry_ids_and_nothing_flag_or_path_shaped() {
+        for ok in ["claude-acp", "antigravity-acp", "kimi", "opencode-v2", "a.b_c"] {
+            assert!(validate_side_agent(ok).is_ok(), "{ok}");
+        }
+        for bad in ["", "--resume=x", "-x", "../x", "a/b", "Claude", "a b", ".hidden", "a=b"] {
+            assert!(validate_side_agent(bad).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn validate_command_type_accepts_every_allowed_type() {

@@ -211,6 +211,7 @@ pub fn run_on(root: &Path, profile: Option<&str>, pick: Option<&Pick>, prompt: &
         prompt: Some(prompt),
         append_prompt: None,
         sidechat: true,
+        side_agent: None,
     })?;
     let stdin = Arc::new(Mutex::new(child.stdin.take().ok_or("no stdin")?));
     let stdout = child.stdout.take().ok_or("no stdout")?;

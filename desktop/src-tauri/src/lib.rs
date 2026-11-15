@@ -151,6 +151,9 @@ struct StartSessionArgs {
     profile: Option<String>,
     /// The mode of this session when it is not the app's (the quick-ask panel).
     app_mode: Option<String>,
+    /// An external ACP agent this tab serves instead of omp's own (an ACP registry id such as
+    /// `claude-acp`; `omp --side-agent`). `spawn_omp` checks it with `agent::validate_side_agent` before argv.
+    side_agent: Option<String>,
 }
 
 /// The browser section of a tab's overlay without the Desktop's session policy (from
@@ -351,6 +354,7 @@ fn start_session(
             prompt: prompt.as_deref(),
             append_prompt: Some(&append_prompt),
             sidechat: false,
+            side_agent: args.side_agent.as_deref(),
         },
         app,
         Arc::clone(rule_book.inner()),
@@ -412,6 +416,7 @@ fn sidechat_start(
             ),
             append_prompt: Some("Keep this conversation independent and tool-free."),
             sidechat: true,
+            side_agent: None,
         },
         app,
         Arc::clone(rule_book.inner()),
@@ -455,6 +460,7 @@ fn academic_copilot_start(
             prompt: Some(&prompt),
             append_prompt: None,
             sidechat: true,
+            side_agent: None,
         },
         app,
         Arc::clone(rule_book.inner()),
