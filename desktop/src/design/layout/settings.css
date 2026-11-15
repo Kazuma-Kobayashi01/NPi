@@ -80,16 +80,6 @@
 .st-head {
   padding-bottom: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--line-soft);
 }
-.st-head-row { display: flex; align-items: flex-start; gap: 16px; }
-.st-head-icon {
-  flex: none; width: 44px; height: 44px; border-radius: var(--r-2);
-  display: flex; align-items: center; justify-content: center;
-  background: color-mix(in oklab, var(--accent) 12%, var(--bg-surface));
-  color: var(--accent);
-  border: 1px solid color-mix(in oklab, var(--accent) 24%, var(--line-soft));
-  box-shadow: 0 2px 8px color-mix(in oklab, var(--accent) 15%, transparent);
-}
-.st-head-text { flex: 1; min-width: 0; }
 .st-kicker {
   font-family: var(--font-mono); font-size: var(--d-text-xs);
   color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 2px;

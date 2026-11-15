@@ -47,6 +47,10 @@ html.panel-mode .st-modal {
 }
 html.panel-mode .wc-lights { display: none; }
 html.panel-mode [data-wc-head] { padding-left: 84px; min-height: 44px; }
+/* History: the head as tall as the other windows' (the lights sit on its
+   centre line), the list takes the rest so the footer stays at the bottom. */
+html.panel-mode .hist-head { padding-top: 6px; padding-bottom: 6px; }
+html.panel-mode .hist-body { flex: 1; min-height: 0; max-height: none; }
 /* The head's title text is not a drag target for Tauri's drag region; let the click reach the head. */
 html.panel-mode [data-wc-head] > .st-modal-title,
 html.panel-mode [data-wc-head] > .mono { pointer-events: none; }

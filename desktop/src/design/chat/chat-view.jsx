@@ -377,9 +377,9 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
         </div>
       </div>
       {showJump && (
-        <button type="button" className="chat-jump-latest" onClick={jumpToLatest}>
-          <_CV_Icon name="chev" size={12} />
-          Jump to latest
+        <button type="button" className="chat-jump-latest" onClick={jumpToLatest}
+          title={window.OMP_I18N.t("Jump to latest")} aria-label={window.OMP_I18N.t("Jump to latest")}>
+          <_CV_Icon name="arrowUp" size={14} style={{ transform: "rotate(180deg)" }} />
         </button>
       )}
       {onReplyAction && <_CV_SelectionToolbar streaming={streaming} onAction={onReplyAction} />}

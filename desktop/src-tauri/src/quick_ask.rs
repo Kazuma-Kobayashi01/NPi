@@ -7,10 +7,10 @@
 //! `live.js` for one ordinary conversation of its own. That conversation is saved
 //! like any other, and [`quickask_continue`] hands it to the main window.
 //!
-//! The tray icon is how the app is reached once its window is closed with
-//! Cmd+W or the red button (`lib.rs` `hides_on_close`): on macOS the Dock icon
-//! goes while the window is hidden, and a click on the tray icon (or its menu)
-//! brings the window back.
+//! Cmd+W or the red button only hides the main window on macOS (`lib.rs`
+//! `hides_on_close`). The app stays an ordinary Dock app while it is hidden, so
+//! its Dock icon keeps the running dot: a click on the Dock icon
+//! (`RunEvent::Reopen`) or on the tray icon (or its menu) brings the window back.
 
 use serde_json::json;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -54,23 +54,13 @@ fn shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::ALT), Code::Space)
 }
 
-/// Brings the main window forward (and the Dock icon back on macOS).
+/// Brings the main window forward.
 pub fn show_main(app: &AppHandle) {
-    #[cfg(target_os = "macos")]
-    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
-}
-
-/// The main window was closed to the background: only the tray icon is left (macOS).
-pub fn main_hidden(app: &AppHandle) {
-    #[cfg(target_os = "macos")]
-    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-    #[cfg(not(target_os = "macos"))]
-    let _ = app;
 }
 
 fn build_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {

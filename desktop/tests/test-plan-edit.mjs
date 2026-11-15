@@ -187,4 +187,12 @@ check("operations leave the draft they were given untouched", () => {
   assert.equal(JSON.stringify(d), snapshot);
 });
 
+check("progress: tasks done out of all, and the one in progress", () => {
+  assert.equal(JSON.stringify(P.progress(plan())), JSON.stringify({ total: 5, done: 1, current: 'Find "legacy" callers' }));
+  const finished = plan();
+  for (const ph of finished.phases) for (const t of ph.tasks) t.status = "done";
+  assert.equal(JSON.stringify(P.progress(finished)), JSON.stringify({ total: 5, done: 5, current: null }));
+  assert.equal(JSON.stringify(P.progress(null)), JSON.stringify({ total: 0, done: 0, current: null }));
+});
+
 console.log(`plan-edit: ${passed} checks passed`);

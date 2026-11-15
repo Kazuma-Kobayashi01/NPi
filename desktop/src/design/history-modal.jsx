@@ -91,7 +91,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd, bridge = window.OMP_
       <div className="bridge slide-in" onClick={e => e.stopPropagation()} style={{ width: "min(740px, calc(100vw - 32px))", maxHeight: "80vh" }}>
         
         {/* Header */}
-        <div className="bridge-input-row" style={{ padding: "12px 16px", gap: 10 }} {...(window.OMP_PANEL ? { "data-wc-head": "", "data-tauri-drag-region": "" } : {})}>
+        <div className="bridge-input-row hist-head" {...(window.OMP_PANEL ? { "data-wc-head": "", "data-tauri-drag-region": "" } : {})}>
           <Icon name="clock" size={16} color="var(--accent)" />
           <input
             ref={inputRef}
@@ -139,7 +139,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd, bridge = window.OMP_
         </div>
 
         {/* List Body */}
-        <div ref={listRef} className="bridge-body" style={{ maxHeight: "56vh", padding: "6px 8px" }}>
+        <div ref={listRef} className="bridge-body hist-body">
           {loading && sessions.length === 0 && (
             <div className="bridge-empty">Scanning disk for saved sessions…</div>
           )}

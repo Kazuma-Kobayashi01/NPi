@@ -4,6 +4,9 @@
 .st-conversations-section {
   width: 100%;
 }
+/* On its own page the title above already says what the row's label and
+   description say; a search result (a group name in between) keeps them. */
+.st-head + .st-grp > .st-conversations-section > .st-rhead { display: none; }
 
 .st-conv-wrap {
   display: flex;

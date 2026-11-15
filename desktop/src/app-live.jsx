@@ -778,7 +778,7 @@ function App() {
     else if (c.name === "login")     { openBridge("login"); }
     else if (c.name === "new")       { bridge?.newSession(); }
     else if (c.name === "history")   { openHistory(); }
-    else if (c.name === "shortcuts") { openSettings("general"); }
+    else if (c.name === "shortcuts") { openSettings("shortcuts"); }
     else if (c.name === "collapse-all")  { handleCollapseAll(true); }
     else if (c.name === "expand-all")    { handleCollapseAll(false); }
     else if (c.name === "settings")  { openSettings(); }
@@ -1008,7 +1008,7 @@ function App() {
     "app.session.resume":      () => setHistoryOpen(v => !v),
     "desktop.commands.open":   () => { setBridgeView("commands"); setBridgeOpen(v => !v); },
     "desktop.history.open":    () => setHistoryOpen(v => !v),
-    "desktop.shortcuts.open":  () => openSettings("general"),
+    "desktop.shortcuts.open":  () => openSettings("shortcuts"),
     "desktop.settings.open":   () => (stab.open ? closeSettings() : openSettings()),
     "desktop.sidebar.toggle":  toggleSidebar,
     "desktop.tab.new":         handleNewProject,

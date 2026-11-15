@@ -34,12 +34,13 @@ function check(label, fn) {
   passed++;
 }
 
-check("every section is complete and only the last is separated", () => {
+check("every section is complete; separators start the menu's groups", () => {
   const ids = S.SECTIONS.map(s => s.id);
   assert.equal(new Set(ids).size, ids.length, "section ids are unique");
   for (const s of S.SECTIONS) assert.ok(s.icon && s.title && s.blurb && s.groups.length, s.id);
   const separated = S.SECTIONS.filter(s => s.sep).map(s => s.id);
-  assert.deepEqual(separated, [ids[ids.length - 1]], "only the last section is separated");
+  assert.deepEqual(separated, ["general", "models", "code"], "you | the app | the agent | the Code workspace");
+  assert.ok(!S.SECTIONS[0].sep, "no separator above the first section");
   assert.ok(S.SECTIONS.some(s => s.id === "computerUse"), "Computer Use has its own destination");
 });
 
@@ -135,7 +136,8 @@ check("custom rows count their owned tweak keys", () => {
 
 check("modifiedCount per section and overall, hidden rows excluded", () => {
   const v = vals({ fontSize: 110, showSubagents: false, railWidth: 300 });
-  assert.equal(S.modifiedCount("general", v), 1);
+  assert.equal(S.modifiedCount("appearance", v), 1);
+  assert.equal(S.modifiedCount("general", v), 0);
   assert.equal(S.modifiedCount("code", v), 2); // the rail card and the rail width (Layout sits under Code now)
   assert.equal(S.SECTIONS.some(s => s.id === "advanced"), false);
   assert.equal(S.modifiedCount("all", v), 3);
@@ -146,7 +148,7 @@ check("modifiedCount per section and overall, hidden rows excluded", () => {
 
 check("resetEdits resets only changed rows; theme brings its accent", () => {
   const v = vals({ theme: "ivory", accent: "#FF7AC6", fontSize: 120, showSubagents: false });
-  assert.deepEqual(S.resetEdits("general", v), { theme: D.theme, accent: S.themeAccent(D.theme), fontSize: D.fontSize });
+  assert.deepEqual(S.resetEdits("appearance", v), { theme: D.theme, accent: S.themeAccent(D.theme), fontSize: D.fontSize });
   assert.deepEqual(S.resetEdits("code", vals({ "widget:plugin:git": false })), { "widget:plugin:git": true });
   assert.deepEqual(S.resetEdits("code", vals({ railWidth: 400, sidebar: false })), { sidebar: true, railWidth: 0 });
   assert.deepEqual(S.resetEdits("general", vals()), {});
@@ -174,9 +176,9 @@ check("search matches label, desc text and keywords, grouped in page order", () 
   const r = S.search("font", vals());
   assert.deepEqual(r.groups.flatMap(g => g.rows.map(x => x.id)), ["fontSize", "uiFont", "monoChat"]);
   assert.equal(r.total, 3);
-  assert.equal(r.bySection.general, 3);
+  assert.equal(r.bySection.appearance, 3);
   assert.equal(r.bySection.chat, 0);
-  assert.deepEqual(r.groups.map(g => [g.sectionId, g.sectionTitle, g.groupName]), [["general", "General", "Text"]]);
+  assert.deepEqual(r.groups.map(g => [g.sectionId, g.sectionTitle, g.groupName]), [["appearance", "Appearance", "Text"]]);
   assert.equal(S.search("POWERSHELL", vals()).groups[0].src, "terminal.json", "keywords, case-insensitive");
   assert.equal(S.search("/compact", vals()).total, 1, "desc text with backticks stripped");
   assert.deepEqual(S.search("   ", vals()), { total: 0, bySection: Object.fromEntries(S.SECTIONS.map(s => [s.id, 0])), groups: [] });

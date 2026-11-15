@@ -2000,15 +2000,14 @@ fn hides_on_close(label: &str) -> bool {
     cfg!(target_os = "macos") && label == "main"
 }
 
-/// Put the main window away (red button, Cmd+W): leave fullscreen first, hide it,
-/// and leave only the menu-bar icon.
+/// Put the main window away (red button, Cmd+W): leave fullscreen first, then hide
+/// it. The app stays in the Dock with its running dot (`quick_ask.rs`).
 #[tauri::command]
 fn hide_main_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_fullscreen(false);
         let _ = window.hide();
     }
-    quick_ask::main_hidden(&app);
 }
 
 /// Bring the hidden or minimised main window back in front.

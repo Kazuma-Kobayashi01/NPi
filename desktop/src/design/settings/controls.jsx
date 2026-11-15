@@ -157,13 +157,13 @@ function AccentSwatches({ value, themeAccent, colors, onChange }) {
   );
 }
 
-/** Icon strip of the sections. `counts[id]`: changed rows, or matches while
- *  `searching` (sections without a match dim). */
+/** The menu of sections; `sep` starts a group. `counts[id]`: matches while
+ *  `searching` (sections without a match dim); no badge otherwise. */
 function SettingsStrip({ sections, active, counts, searching, onSelect }) {
   return (
     <div className="st-tabs" role="tablist" aria-label={_ST_T("Settings sections")}>
       {sections.map(s => {
-        const n = counts[s.id] ?? 0;
+        const n = searching ? counts[s.id] ?? 0 : 0;
         const selected = !searching && active === s.id;
         return (
           <React.Fragment key={s.id}>
@@ -172,10 +172,7 @@ function SettingsStrip({ sections, active, counts, searching, onSelect }) {
               className={`st-tab${searching && !n ? " dim" : ""}`} title={_ST_T(s.title)} onClick={() => onSelect(s.id)}>
               <_ST_Icon name={s.icon} size={16} />
               <span className="st-tab-lbl">{_ST_T(s.title)}</span>
-              {n > 0 && (
-                <span className={`st-badge${searching ? "" : " mod"}`}
-                  title={searching ? _ST_T("{n} matching", { n }) : _ST_T("{n} changed from default", { n })}>{n}</span>
-              )}
+              {n > 0 && <span className="st-badge" title={_ST_T("{n} matching", { n })}>{n}</span>}
             </button>
           </React.Fragment>
         );

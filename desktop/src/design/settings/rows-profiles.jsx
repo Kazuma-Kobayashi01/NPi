@@ -48,7 +48,7 @@ function _SRP_ProfileList({ row, ctx, query }) {
   };
 
   return (
-    <Row label={row.label} desc={row.desc} query={query}>
+    <Row stack label={row.label} desc={row.desc} query={query}>
       <div className="st-profiles">
         {ctx.profiles.map(p => {
           const startup = p.id === ctx.startupProfileId;

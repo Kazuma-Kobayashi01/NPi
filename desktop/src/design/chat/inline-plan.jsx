@@ -13,7 +13,8 @@
    which the Todo and plan panel and the rail card show); staged edits do not
    survive that rewrite, they were made against the old list. Only the newest
    block is live (adapter.js `markLatestPlanLive`); earlier plan blocks stay as
-   the read-only snapshots they were. */
+   the read-only snapshots they were, folded to one line (how far the plan had
+   got, and the task then in progress) whose head opens the tasks. */
 
 const { Icon: _IP_Icon } = window;
 const _IP = window.OMP_PLAN_EDIT;
@@ -38,8 +39,12 @@ function InlinePlan({ plan, onOpenPlan = null }) {
   const [sentFor, setSentFor] = React.useState(null);  // signature of the plan the sent edits were made on
   const [note, setNote] = React.useState(null);  // a `plan.note*` dictionary key, translated at render
   const [busy, setBusy] = React.useState(false);
+  const [open, setOpen] = React.useState(false);  // an earlier plan's tasks shown
   const bodyRef = React.useRef(null);
   const focusId = React.useRef(null);
+  const folded = !editable && !open;
+  const prog = editable ? null : _IP.progress(plan);
+  const toggleOpen = () => setOpen(v => !v);
 
   // The agent rewrote the list (or a newer plan took over) under the staged edits.
   React.useEffect(() => {
@@ -91,16 +96,23 @@ function InlinePlan({ plan, onOpenPlan = null }) {
   const reorderedPhases = new Set(changes ? changes.reordered.map(r => r.phase) : []);
 
   return (
-    <div className={`inline-plan slide-in${editable ? " is-live" : ""}`}>
-      <div className="inline-plan-head">
-        <_IP_Icon name="plan" size={12} color="var(--accent)" />
+    <div className={`inline-plan slide-in${editable ? " is-live" : ""}${folded ? " is-folded" : ""}`}>
+      <div className="inline-plan-head" {...(editable ? {} : {
+        role: "button", tabIndex: 0, "aria-expanded": open, title: _IP_T(open ? "plan.hideTasks" : "plan.showTasks"),
+        onClick: toggleOpen,
+        onKeyDown: e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleOpen(); } },
+      })}>
+        <_IP_Icon name="plan" size={12} color={editable ? "var(--accent)" : "var(--fg-3)"} />
         <span style={{ color: "var(--fg-2)", fontWeight: 600 }}>{_IP_T("plan.title")}</span>
-        <span className="chip muted">{_IP_T("plan.tasks", { n: plan.phases.reduce((n, p) => n + p.tasks.length, 0) })}</span>
+        {editable
+          ? <span className="chip muted">{_IP_T("plan.tasks", { n: plan.phases.reduce((n, p) => n + p.tasks.length, 0) })}</span>
+          : <span className="inline-plan-progress">{_IP_T("plan.progress", { done: prog.done, n: prog.total })}</span>}
         {dirty && <span className="chip inline-plan-modified">{_IP_T("plan.modified")}</span>}
-        <div style={{ flex: 1 }} />
-        {onOpenPlan && <button type="button" className="btn ghost" style={{ height: 22 }} onClick={onOpenPlan}>{_IP_T("plan.openKanban")}</button>}
+        {folded && prog.current ? <span className="inline-plan-now">{prog.current}</span> : <div style={{ flex: 1 }} />}
+        {!folded && onOpenPlan && <button type="button" className="btn ghost" style={{ height: 22 }} onClick={e => { e.stopPropagation(); onOpenPlan(); }}>{_IP_T("plan.openKanban")}</button>}
+        {!editable && <_IP_Icon name={open ? "chev" : "chevR"} size={12} color="var(--fg-4)" />}
       </div>
-      <div className="inline-plan-body" ref={bodyRef} onPointerDown={editable ? reorder.onPointerDown : undefined}>
+      {!folded && <div className="inline-plan-body" ref={bodyRef} onPointerDown={editable ? reorder.onPointerDown : undefined}>
         {plan.phases.map((ph) => {
           const tasks = phaseTasks(ph);
           return (
@@ -168,7 +180,7 @@ function InlinePlan({ plan, onOpenPlan = null }) {
             </div>
           );
         })}
-      </div>
+      </div>}
       {(dirty || note || sentFor === sig) && (
         <div className="inline-plan-foot" role="status">
           <span className="inline-plan-foot-text">

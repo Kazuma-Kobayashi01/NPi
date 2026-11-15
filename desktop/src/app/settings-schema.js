@@ -50,11 +50,13 @@
           { keys: ["accountName", "accountCall", "accountAvatar"] }),
       ] },
     ] },
-    { id: "appearance", icon: "sparkle", title: "Appearance", blurb: "Colour theme, accent, density and text size of the whole window.", groups: [
+    { id: "language", icon: "cog", title: "Language", blurb: "The language of this interface.", groups: [
       { name: "Language", rows: [
         tweak("language", "seg", "Language", "The language of this interface. It does not change the language the model replies in or any system prompt: tell the model in your instructions or message.", "language locale i18n translation chinese japanese english 语言 中文 繁體 日本語",
           { stack: true, get options() { const I = window.OMP_I18N; return opts(["auto", ...(I?.LOCALES ?? [])], { auto: "Auto", ...(I?.NAMES ?? {}) }); } }),
       ] },
+    ] },
+    { id: "appearance", icon: "sparkle", title: "Appearance", blurb: "Colour theme, accent, density and text size of the whole window.", groups: [
       { name: "Detail", rows: [
         custom("uiDetail", "Interface detail", "Five steps from the barest window to the fullest. A step sets the side panel, folding and the prompt box's extras at once; each can still be changed on its own.", "detail minimal simple full complexity density panel",
           { keys: ["uiDetail"] }),
@@ -217,6 +219,8 @@
         custom("subagentModel", "Subagent default model", "Choose a model policy for delegated tasks: Ask before spawning, sync with the conversation, or use a Custom model and thinking level.", "subagent model thinking auto sync custom worker delegate", { keys: ["subagentModelMode", "subagentCustomModel", "subagentCustomThinking"] }),
         custom("subagentDelegation", "Subagent appetite", "Higher levels make the agent more inclined to delegate. These are concurrent upper limits, not target agent counts. Off disables delegation.", "delegation appetite subagent task parallel unlimited aggressive moderate conservative off", { keys: ["subagentDelegation"] }),
       ] },
+    ] },
+    { id: "mcpSkills", icon: "build", title: "MCP and skills", blurb: "MCP servers and skills.", groups: [
       { name: "Model Context Protocol", src: "mcp.json", rows: [
         custom("mcpServers", "MCP Servers", "External tools and servers (stdio, HTTP/SSE) configured in mcp.json.", "mcp servers tools github model context protocol stdio http"),
       ] },
@@ -235,10 +239,14 @@
         tweak("confirmBusyClose", "toggle", "Ask before closing a working tab", "Closing a tab whose agent is mid-turn stops it. Ask first, also when quitting.", "confirm quit close"),
         tweak("autoName", "toggle", "Name tabs automatically", "omp titles a new conversation from its first turns (one small model call). `/rename` always wins.", "rename title"),
       ] },
+    ] },
+    { id: "notifications", icon: "info", title: "Notifications", blurb: "System banners while the window is not in front.", groups: [
       { name: "Notifications", rows: [
         custom("notifications", "System notifications", "A banner from the system when the window is not in front: a long run finished, a question or approval is waiting, or a request failed. It names the project and says nothing of the conversation.", "notification notify banner alert toast permission sound",
           { keys: ["notifications", "notifyDone", "notifyAsk", "notifyFailed"] }),
       ] },
+    ] },
+    { id: "plugins", icon: "build", title: "Plugins", blurb: "Plugin packages of this tab's profile.", groups: [
       { name: "Plugins", src: "omp plugin", rows: [
         custom("npixInstall", "Plugins", "The plugins of this tab's profile, who made them, and uninstalling them. A .npix package shows what it adds and who made it before it is installed. Tabs opened afterwards load the change.", "plugin npix extension install uninstall remove developer package addon"),
       ] },
@@ -263,18 +271,25 @@
   ];
 
   // Each settings destination gathers the relevant sections authored above.
+  // `sep` starts a group in the menu: you, the app, the agent, the Code workspace.
   const MERGED = [
-    { id: "account", icon: "agent", title: "Account", blurb: "Your profile and what the assistant remembers.", from: ["account"] },
-    { id: "general", icon: "sparkle", title: "General", blurb: "Look, text, how tabs behave and the keyboard shortcuts.", from: ["appearance", "session", "shortcuts"] },
+    { id: "account", icon: "agent", title: "Profile", blurb: "Your profile and what the assistant remembers.", from: ["account"] },
+    { id: "oauthAccounts", icon: "link", title: "Accounts", blurb: "Signed-in subscription accounts: which one each provider uses, and their names.", from: ["oauthAccounts"] },
+    { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", from: ["usage"] },
+    { id: "general", icon: "cog", title: "General", sep: true, blurb: "Language and how tabs behave.", from: ["language", "session"] },
+    { id: "appearance", icon: "sparkle", title: "Appearance", blurb: "Colour theme, accent, density and text size of the whole window.", from: ["appearance"] },
     { id: "chat", icon: "thinking", title: "Chat", blurb: "The transcript, workflow pipelines and the prompt box.", from: ["chat"] },
     { id: "conversations", icon: "clock", title: "Conversations", blurb: "Manage, search, preview, export and organize your conversation history across projects.", from: ["conversations"] },
     { id: "memory", icon: "layers", title: "Memory", blurb: "What the assistant remembers about you, in Chat, Code and Academic.", from: ["memory"] },
-    { id: "models", icon: "bolt", title: "Models", blurb: "The default model, favourites and vendors.", from: ["models"] },
-    { id: "oauthAccounts", icon: "link", title: "Accounts", blurb: "Signed-in subscription accounts: which one each provider uses, and their names.", from: ["oauthAccounts"] },
-    { id: "usage", icon: "cost", title: "Usage", blurb: "What is left of your subscriptions, and what this computer has used.", from: ["usage"] },
-    { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors, subagents, MCP and skills.", from: ["agent", "approvals"] },
+    { id: "notifications", icon: "info", title: "Notifications", blurb: "System banners while the window is not in front.", from: ["notifications"] },
+    { id: "shortcuts", icon: "command", title: "Shortcuts", blurb: "Every app action and its chords.", from: ["shortcuts"] },
+    { id: "models", icon: "bolt", title: "Models", sep: true, blurb: "The default model, favourites and vendors.", from: ["models"] },
+    { id: "agent", icon: "agent", title: "Agent", blurb: "Profiles, execution behaviors and subagents.", from: ["agent"] },
+    { id: "approvals", icon: "check", title: "Approvals", blurb: "When the agent asks before it runs a tool.", from: ["approvals"] },
+    { id: "extensions", icon: "build", title: "Extensions", blurb: "Plugins, MCP servers and skills.", from: ["plugins", "mcpSkills"] },
     { id: "computerUse", icon: "web", title: "Computer Use", blurb: "Screen access, app control and macOS permissions.", from: ["computerUse"] },
-    { id: "code", icon: "terminal", title: "Code", sep: true, blurb: "Side column and column widths, terminal, browser and the floating cards.", from: ["layout", "terminal", "browser", "rail"] },
+    { id: "code", icon: "grid", title: "Code", sep: true, blurb: "Side column and column widths, the floating cards and the browser.", from: ["layout", "rail", "browser"] },
+    { id: "terminal", icon: "terminal", title: "Terminal", blurb: "The shell panel under the chat.", from: ["terminal"] },
   ];
   /** Authored sections no destination gathers: never shown. A test keeps this empty. */
   const UNPLACED = RAW_SECTIONS.filter(r => !MERGED.some(m => m.from.includes(r.id))).map(r => r.id);

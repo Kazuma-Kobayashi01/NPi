@@ -27,7 +27,7 @@ The glass is AppKit's, through `objc2-app-kit` (`quick_ask_glass.rs`). `install`
 
 ## Tray icon and Cmd+W
 
-A menu-bar icon (the mark, as a template image) with "Open NPi Desktop", "Quick Ask ⌥Space" and "Quit NPi Desktop"; a left click shows the main window. On macOS Cmd+W and the red button only hide the main window (`hides_on_close`); the Dock icon is dropped while it is hidden (`ActivationPolicy::Accessory`) and comes back when it is shown, so the tray icon is how the app is reached. Quitting is the tray menu or Cmd+Q (`CloseGuard` still asks first while a tab is busy).
+A menu-bar icon (the mark, as a template image) with "Open NPi Desktop", "Quick Ask ⌥Space" and "Quit NPi Desktop"; a left click shows the main window. On macOS Cmd+W and the red button only hide the main window (`hides_on_close`); the app stays an ordinary Dock app (its activation policy is never changed), so the Dock icon keeps its running dot while the window is hidden, and a click on it (`RunEvent::Reopen`) or on the tray icon brings the window back. Quitting is the tray menu or Cmd+Q (`CloseGuard` still asks first while a tab is busy).
 
 ## Not verified
 

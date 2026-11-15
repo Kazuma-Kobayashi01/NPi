@@ -45,6 +45,8 @@
     // Section titles
     ["Account", "账户", "帳號", "アカウント"],
     ["General", "通用", "一般", "一般"],
+    ["Appearance", "外观", "外觀", "外観"],
+    ["Shortcuts", "快捷键", "快速鍵", "ショートカット"],
     ["Conversations", "会话", "對話", "会話"],
     ["Models", "模型", "模型", "モデル"],
     ["Agent", "代理", "代理", "エージェント"],
@@ -53,13 +55,19 @@
 
     // Section blurbs
     ["Your profile and what the assistant remembers.", "你的个人资料，以及助手记住的内容。", "你的個人資料，以及助理記住的內容。", "あなたのプロフィールと、アシスタントが覚えている内容。"],
-    ["Look, text, how tabs behave and the keyboard shortcuts.", "外观、文字、标签页的行为，以及键盘快捷键。", "外觀、文字、分頁的行為，以及鍵盤快速鍵。", "外観、文字、タブの動作、キーボードショートカット。"],
+    ["Language and how tabs behave.", "界面语言，以及标签页的行为。", "介面語言，以及分頁的行為。", "表示言語とタブの動作。"],
+    ["Colour theme, accent, density and text size of the whole window.", "整个窗口的配色主题、强调色、密度和文字大小。", "整個視窗的配色主題、強調色、密度和文字大小。", "ウィンドウ全体の配色テーマ、アクセントカラー、密度、文字サイズ。"],
+    ["System banners while the window is not in front.", "窗口不在前台时的系统通知横幅。", "視窗不在前景時的系統通知橫幅。", "ウィンドウが前面にないときのシステム通知バナー。"],
+    ["Every app action and its chords.", "应用的每个操作及其快捷键。", "應用程式的每個操作及其快速鍵。", "アプリのすべての操作とそのショートカットキー。"],
     ["The transcript, workflow pipelines and the prompt box.", "对话记录、工作流管线和输入框。", "對話記錄、工作流程管線和輸入框。", "会話の表示、ワークフロー、入力欄。"],
     ["Manage, search, preview, export and organize your conversation history across projects.", "跨项目管理、搜索、预览、导出和整理你的会话历史。", "跨專案管理、搜尋、預覽、匯出和整理你的對話歷史。", "プロジェクトをまたいで会話履歴を管理・検索・プレビュー・エクスポート・整理します。"],
     ["Default model, favourites, vendors and usage statistics.", "默认模型、收藏、服务商和用量统计。", "預設模型、收藏、供應商和用量統計。", "既定のモデル、お気に入り、プロバイダー、使用状況。"],
-    ["Profiles, execution behaviors, subagents, MCP and skills.", "配置、执行行为、子代理、MCP 和技能。", "設定檔、執行行為、子代理、MCP 和技能。", "プロファイル、実行の挙動、サブエージェント、MCP、スキル。"],
+    ["Profiles, execution behaviors and subagents.", "配置、执行行为和子代理。", "設定檔、執行行為和子代理。", "プロファイル、実行の挙動、サブエージェント。"],
+    ["When the agent asks before it runs a tool.", "代理在运行工具前何时先询问。", "代理在執行工具前何時先詢問。", "エージェントがツールを実行する前に確認するタイミング。"],
+    ["Plugins, MCP servers and skills.", "插件、MCP 服务器和技能。", "外掛、MCP 伺服器和技能。", "プラグイン、MCP サーバー、スキル。"],
     ["Screen access, app control and macOS permissions.", "屏幕访问、应用控制和 macOS 权限。", "螢幕存取、應用程式控制和 macOS 權限。", "画面へのアクセス、アプリ操作、macOS の権限。"],
-    ["Side column and column widths, terminal, browser and the floating cards.", "侧栏与各列宽度、终端、浏览器和浮动卡片。", "側欄與各欄寬度、終端機、瀏覽器和浮動卡片。", "サイド列と列の幅、ターミナル、ブラウザ、フローティングカード。"],
+    ["Side column and column widths, the floating cards and the browser.", "侧栏与各列宽度、浮动卡片和浏览器。", "側欄與各欄寬度、浮動卡片和瀏覽器。", "サイド列と列の幅、フローティングカード、ブラウザ。"],
+    ["The shell panel under the chat.", "聊天下方的 Shell 面板。", "聊天下方的 Shell 面板。", "チャットの下のシェルパネル。"],
     ["Layout and keyboard shortcuts.", "布局和键盘快捷键。", "版面配置和鍵盤快速鍵。", "レイアウトとキーボードショートカット。"],
 
     // Group names

@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Settings → Agent → Plugins: the installed plugins with their developer, uninstall, and installing a `.npix` plugin package after seeing what it adds and who made it.
+- Settings → Extensions → Plugins: the installed plugins with their developer, uninstall, and installing a `.npix` plugin package after seeing what it adds and who made it.
 - Side agent tabs (Code): a project's right-click menu opens a conversation with Claude, Codex, Gemini CLI or Antigravity through the Agent Client Protocol (`omp --side-agent`). The agent signs in with its own account; its replies and tool calls stream like omp's, its permission requests use the approval prompt, and the tab reopens with the same agent after a relaunch.
 - File approvals can accept only selected write/edit hunks, with checkbox diff previews and folded long diffs. Full selection keeps ordinary approval; empty selection denies. Partial answers never create standing grants, reject stale file contents and tell the assistant exactly which changes were rejected.
 - Generative UI: display cards update in place without resetting their local state; suggested follow-up chips and non-blocking choice cards send ordinary prompts or queued follow-ups, never approvals. Forms add keyboard/pointer ranking, project-file/directory pickers and multi-step navigation; tables add numeric-aware sorting, filtering and Copy CSV.
@@ -75,6 +75,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Librarian PDFs: "Add PDF…" reads page 1 into a draft (DOI, title, authors, year; the guessed fields are marked) that is added only when you confirm, then files the PDF under `papers/`. PDFs can be attached to any reference and opened from it, and "Look up online…" compares a record with Crossref and takes only the fields you tick (it runs only when you click and sends only a DOI or title).
 ### Changed
 
+- Settings: the menu is grouped (you, the app, the agent, the Code workspace) and General, Agent and Code are split up: Appearance, Notifications, Shortcuts, Approvals, Extensions (plugins, MCP servers, skills) and Terminal have their own pages; General keeps the language and tab behaviour. Pages are a plain title over flat rows separated by hairlines, without cards, header icons or changed-count badges in the menu (a changed row keeps its dot and reset). `/shortcuts` and its chord open the Shortcuts page.
+- Settings: the first menu entry is named Profile (it was Account, next to the separate Accounts page).
+- Model menu: a card after LabBot's picker instead of a list with an Effort submenu: the level in large type (the model's deepest level, when it has three or more, is "Ultra" in a gradient, also on the button), the model's name under it, and a stepped slider with one stop per level; a click on the model name lists the models (digit keys 1-9 still pick). Dragging or clicking a stop sets the level and the menu stays open. `xhigh` reads "Extra high".
+- Chat: an earlier plan block (one a newer plan replaced) folds to one line showing how far it had got and the task then in progress; its head opens the tasks. The newest plan stays open and editable. "Jump to latest" is a small round arrow button instead of a labelled pill over the text.
+- Chat: your messages are a bubble at the right, as wide as their text (up to about three quarters of the column), instead of a full-width bar.
 - Quick ask (Option+Space) uses the system's own Liquid Glass on macOS 26 and later: the card and the mode capsule are AppKit `NSGlassEffectView`s in one `NSGlassEffectContainerView`, shaped to the page; earlier macOS keeps a native blur. The page no longer paints glass of its own there.
 - One memory: the kernel's own memory pipeline and its per-folder notes no longer run in the app's tabs whatever the CLI's config says; in Code and Academic it may still write skills from what worked (Settings → Memory → Write skills from what worked), and turning Memory off stops that too. Each note the assistant keeps about you shows for a moment at the bottom of the window, with Undo. Memory now fits as many Chinese notes in a prompt as English ones, and remembers which conversation wrote each note.
 - Files moved beside the command line's: settings to `~/.local/share/npi/desktop`, the Chat profile and instructions to `~/.local/share/npi`, caches to `~/.cache/npi/desktop`, worktree tasks to `~/Documents/NPi/Code/.worktrees`. Interface settings are kept in `~/.local/share/npi/desktop/ui-state.json` too. The old folders are moved over on the first start.
@@ -85,6 +90,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- macOS: closing the main window with Cmd+W or the red button no longer drops the app from the Dock; the Dock icon keeps its running dot, and a click on it brings the window back.
+- Settings → Agent → Profiles: the description no longer wraps one word per line beside the profile list.
+- The History window (its own OS window): the search field no longer sits under the traffic lights, and the list fills the window so the footer stays at the bottom.
 - Plan usage no longer asks every signed-in provider for fresh quota after each finished turn: a settled turn re-reads the kernel's cached limits at most once a minute, and only the manual refresh forces a new probe.
 - Session names no longer start with a wide blank: the Nerd Font icon a terminal-titled session carries (`󰄡 RC: …`) is dropped in tabs and the history list.
 - The plan in the chat and the Todo and plan window followed only `get_state`: the kernel's tool is `todo`, not `todo_write`, so its results were never picked up live. Plan blocks now also come back from history, so a tab switch or a reopened conversation no longer loses them. The plan-approval prompt names the `todo` tool.

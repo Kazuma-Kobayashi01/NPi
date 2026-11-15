@@ -74,5 +74,18 @@ check("the roster shows each tier, the roles set apart from it, and a single ven
   assert.equal(plain(M.rosterView(null)).rows.length, 5);
 });
 
+check("effort levels: names, and the slider stop of the level in use", () => {
+  assert.deepEqual(["off", "minimal", "xhigh", "max", "auto", "turbo", "", undefined].map(M.levelLabel),
+    ["Off", "Minimal", "Extra high", "Max", "Auto", "Turbo", "", ""]);
+  const levels = ["off", "low", "medium", "high", "xhigh"];
+  assert.deepEqual(plain(M.effortStops(levels, "high")), { index: 3, last: 4, usable: true, fraction: 0.75, ultra: false });
+  assert.deepEqual(plain(M.effortStops(levels, "off")), { index: 0, last: 4, usable: true, fraction: 0, ultra: false });
+  assert.deepEqual(plain(M.effortStops(levels, "auto")), { index: -1, last: 4, usable: true, fraction: 0, ultra: false }, "a level omp did not list has no stop");
+  assert.equal(M.effortStops(levels, "xhigh").ultra, true, "the deepest level is Ultra");
+  assert.equal(M.effortStops(["off", "high"], "high").ultra, false, "two stops have no Ultra");
+  assert.equal(M.effortStops(["high"], "high").usable, false, "one level is nothing to slide");
+  assert.equal(M.effortStops(null, "high").usable, false);
+});
+
 if (failed) process.exit(1);
-console.log("test-model-pick: 6 checks passed");
+console.log("test-model-pick: 7 checks passed");

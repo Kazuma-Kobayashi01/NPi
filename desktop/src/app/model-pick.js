@@ -124,5 +124,25 @@
     return { rows, overrides, oneVendor: set >= 2 && vendors.size === 1 };
   }
 
-  window.OMP_MODELS = { vendorLabel, keyOf, pickerModels, groupByVendor, toggleFavorite, rosterView };
+  // omp's thinking levels as the menu names them; any other level is capitalised.
+  const LEVEL_LABELS = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max", auto: "Auto" };
+  const levelLabel = (level) => {
+    const l = String(level ?? "");
+    return LEVEL_LABELS[l] ?? (l ? l.charAt(0).toUpperCase() + l.slice(1) : "");
+  };
+
+  /**
+   * The effort slider of the model menu over `levels` (what omp listed for the model, in its order):
+   * `index` is the stop of `level`, or -1 when it is not one of them (`auto` before it resolves),
+   * `fraction` where the thumb sits (0-1), `usable` whether there is anything to slide between, and
+   * `ultra` whether `level` is the model's deepest of at least three (the menu calls it "Ultra").
+   */
+  function effortStops(levels, level) {
+    const list = Array.isArray(levels) ? levels : [];
+    const index = list.indexOf(level);
+    const last = list.length - 1;
+    return { index, last, usable: last >= 1, fraction: last >= 1 && index > 0 ? index / last : 0, ultra: last >= 2 && index === last };
+  }
+
+  window.OMP_MODELS = { vendorLabel, keyOf, pickerModels, groupByVendor, toggleFavorite, rosterView, levelLabel, effortStops };
 })();

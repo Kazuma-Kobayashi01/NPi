@@ -74,13 +74,16 @@ function _SP_AnyRow({ row, ctx, query }) {
   return <Comp row={row} ctx={ctx} query={query} modified={modified} onReset={onReset} />;
 }
 
-function _SP_Group({ name, src, rows, ctx, query, translated }) {
+/** `bare`: no heading (a section's only group, which the page title already names). */
+function _SP_Group({ name, src, rows, ctx, query, translated, bare }) {
   return (
     <>
-      <div className="st-grp-name">
-        {translated ? name : _SP_T(name)}
-        {src && <span className="st-src" title={_SP_T("Saved by the app in this file, not in the window's local storage")}>{src}</span>}
-      </div>
+      {!bare && (
+        <div className="st-grp-name">
+          {translated ? name : _SP_T(name)}
+          {src && <span className="st-src" title={_SP_T("Saved by the app in this file, not in the window's local storage")}>{src}</span>}
+        </div>
+      )}
       <div className="st-grp">
         {rows.map(r => <_SP_AnyRow key={r.id} row={r} ctx={ctx} query={query} />)}
       </div>
@@ -104,9 +107,6 @@ function SettingsPage({ ctx }) {
   const section = sections[idx];
   const q = query.trim();
   const hits = React.useMemo(() => S.search(q, t), [S, q, t]);
-  const counts = React.useMemo(
-    () => (q ? hits.bySection : Object.fromEntries(sections.map(s => [s.id, S.modifiedCount(s.id, t, ctx.keyOpts)]))),
-    [S, q, hits, sections, t, ctx.keyOpts]);
   // While searching, the footer resets the matched rows only.
   const resetEdits = React.useMemo(() => (q
     ? S.resetRows(hits.groups.flatMap(g => g.rows), t, ctx.keyOpts)
@@ -169,20 +169,13 @@ function SettingsPage({ ctx }) {
     body = (
       <>
         <div className="st-head">
-          <div className="st-head-row">
-            <div className="st-head-icon" aria-hidden="true">
-              <_SP_Icon name="search" size={22} />
-            </div>
-            <div className="st-head-text">
-              <div className="st-kicker">{_SP_T(hits.total === 1 ? "search · {n} setting" : "search · {n} settings", { n: hits.total })}</div>
-              <div className="st-h1">“{q}”</div>
-              <p className="st-blurb">{_SP_T("Settings matching your query across all sections.")}</p>
-            </div>
-          </div>
+          <div className="st-kicker">{_SP_T(hits.total === 1 ? "search · {n} setting" : "search · {n} settings", { n: hits.total })}</div>
+          <div className="st-h1">“{q}”</div>
+          <p className="st-blurb">{_SP_T("Settings matching your query across all sections.")}</p>
         </div>
         {hits.groups.length === 0 && <div className="st-empty">{_SP_T("No setting matches “{q}”.", { q })}</div>}
         {hits.groups.map(g => (
-          <_SP_Group key={`${g.sectionId}/${g.groupName}`} translated name={`${_SP_T(g.sectionTitle)} › ${_SP_T(g.groupName)}`}
+          <_SP_Group key={`${g.sectionId}/${g.groupName}`} translated name={g.sectionTitle === g.groupName ? _SP_T(g.sectionTitle) : `${_SP_T(g.sectionTitle)} › ${_SP_T(g.groupName)}`}
             src={g.src} rows={g.rows} ctx={ctx} query={q} />
         ))}
       </>
@@ -191,22 +184,13 @@ function SettingsPage({ ctx }) {
     body = (
       <>
         <div className="st-head">
-          <div className="st-head-row">
-            {section.icon && (
-              <div className="st-head-icon" aria-hidden="true">
-                <_SP_Icon name={section.icon} size={22} />
-              </div>
-            )}
-            <div className="st-head-text">
-              <div className="st-kicker">{String(idx + 1).padStart(2, "0")} · {_SP_T(section.title)}</div>
-              <div className="st-h1">{_SP_T(section.title)}</div>
-              {section.blurb && <p className="st-blurb">{_SP_T(section.blurb)}</p>}
-            </div>
-          </div>
+          <div className="st-h1">{_SP_T(section.title)}</div>
+          {section.blurb && <p className="st-blurb">{_SP_T(section.blurb)}</p>}
         </div>
         {section.groups.map(g => {
           const rows = g.rows.filter(r => S.visible(r, t));
-          return rows.length ? <_SP_Group key={g.name} name={g.name} src={g.src} rows={rows} ctx={ctx} query="" /> : null;
+          const bare = section.groups.length === 1 && !g.src;
+          return rows.length ? <_SP_Group key={g.name} name={g.name} src={g.src} rows={rows} ctx={ctx} query="" bare={bare} /> : null;
         })}
       </>
     );
@@ -222,7 +206,7 @@ function SettingsPage({ ctx }) {
               spellCheck={false} aria-label={_SP_T("Search settings")} onChange={e => setQuery(e.target.value)} />
             <span className="st-kbd">{_SP_IS_MAC ? "⌘F" : "Ctrl+F"}</span>
           </label>
-          <_SP_Strip sections={sections} active={section.id} counts={counts} searching={!!q} onSelect={select} />
+          <_SP_Strip sections={sections} active={section.id} counts={hits.bySection} searching={!!q} onSelect={select} />
         </nav>
         <div className="st-main">
           <div className="st-body" ref={bodyRef}>

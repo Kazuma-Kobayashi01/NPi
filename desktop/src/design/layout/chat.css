@@ -29,13 +29,13 @@
   left: 50%;
   bottom: 16px;
   transform: translateX(-50%);
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 14px;
-  border-radius: var(--r-pill);
+  /* A small round button: a labelled pill sat on top of a line of the reply. */
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border-radius: 50%;
   border: 1px solid var(--line-bright);
   background: var(--bg-elevated);
-  color: var(--fg);
-  font-size: 12.5px; font-weight: 600;
+  color: var(--fg-2);
   cursor: pointer;
   box-shadow: var(--shadow-pop);
   animation: chat-jump-in 0.15s var(--ease-out);
@@ -185,6 +185,18 @@
   background: color-mix(in oklab, var(--accent) 4%, transparent);
 }
 .inline-plan-body { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+/* An earlier plan (a newer block took over): plain, and folded to its head
+   until the head is clicked. */
+.inline-plan:not(.is-live) { background: var(--bg-surface); border-color: var(--line); }
+.inline-plan:not(.is-live) > .inline-plan-head { background: transparent; cursor: pointer; }
+.inline-plan:not(.is-live) > .inline-plan-head:hover { background: var(--bg-hover); }
+.inline-plan:not(.is-live) > .inline-plan-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.inline-plan.is-folded > .inline-plan-head { padding: 6px 12px; border-bottom: 0; }
+.inline-plan-progress { flex: none; color: var(--fg-3); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; }
+.inline-plan-now {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--fg-3); font-size: var(--d-text-sm);
+}
 .inline-phase-head {
   display: flex; align-items: center; gap: 8px;
   font-size: var(--d-text-xs); letter-spacing: 0.08em;

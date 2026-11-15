@@ -155,7 +155,17 @@
     ].join("\n");
   }
 
+  /** How far a plan block got: tasks done out of all, and the text of the one in progress (or null). */
+  function progress(plan) {
+    const tasks = (plan?.phases ?? []).flatMap(p => p.tasks ?? []);
+    return {
+      total: tasks.length,
+      done: tasks.filter(t => t.status === "done").length,
+      current: tasks.find(t => t.status === "in_progress")?.text ?? null,
+    };
+  }
+
   window.OMP_PLAN_EDIT = Object.freeze({
-    planSignature, startDraft, toggleTask, setRemoved, moveTask, dropTask, changes, isDirty, buildMessage,
+    planSignature, startDraft, toggleTask, setRemoved, moveTask, dropTask, changes, isDirty, buildMessage, progress,
   });
 })();
