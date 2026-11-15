@@ -6,6 +6,13 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## Remote Connect FCM 推送（2026-11-15，已验证，未提交）
+
+- Relay 推送已启用：服务账号 `npi-relay-fcm@npi-remote`（与手机端 `google-services.json` 同为 Firebase 项目 `npi-remote`），密钥只在服务器 `/opt/npi-relay/secrets/`，本地副本已删；`omp/relay/compose.yaml` 已启用（omp 未提交），`./deploy.sh` 发布 `npi-relay:cc29fd8b08b6-dirty.20261115044228`，日志 `push enabled`。详见 omp `docs/plan-android-remote-connect.md` §6.2。
+- 手机端 FCM 已写（`npi-remote/lib/push/`，未提交）：`firebase_core` 5.1、`firebase_messaging` 17.0、`flutter_local_notifications` 22.3（23 要求 compileSdk 37，超出 AGP 9.1.0）；后台 isolate 用配对的 notification 密钥解密摘要（认证失败只显示通用文案），每个会话一条通知（审批/提问高优先级，完成/出错安静），`dismiss` 且无待处理时清除，打开该会话也清除；点击通知切到对应主机、刷新概况后打开该会话并弹出审批；每次 Relay 会话就绪后上报 FCM token，忘记主机时清空；`allowBackup=false` + 数据提取规则；Android 13+ 通知权限。推送只走 Relay，`--listen` 直连没有推送。
+- 已验证：`flutter analyze` 2 条 info；`flutter test` 116 项通过（新增 7 项，用协议向量测解密、篡改、dismiss、id 稳定、Relay 地址）；debug APK 装到 Galaxy S23，Firebase 初始化成功、通知权限已授予。**已验证**（2026-11-15 12:56–12:57）：Relay 配对 + `/rc`，App 在后台时 Relay 两次发出 NORMAL 优先级推送（任务完成类），Google Play 服务显示送达并转交 App，App 在「任务进展」频道弹出通知；Relay 日志无发送失败。12:59 用户测完其余各项并确认可用：手机日志可见「审批与提问」频道的通知、点击后拉起 App 并移除通知、「任务进展」通知被清除，以及 12:59:38 结束进程；杀进程后收到推送这一项以用户确认为准（日志未覆盖）。
+- `npi-remote/.gitignore` 已排除 `keys/` 与 `*service-account*.json`。
+
 ## 3.1.0.104（2026-11-15，已提交、未推送、已打包未安装）
 
 - Desktop 分支 `3.1.0.104`：`4855410` 功能改动、`946e81b` 版本号；内核 `kernel.2.1.2-universal`（= coldfix 快进 + `cc29fd8b08` 版本号 3.1.0.104）。
@@ -35,8 +42,8 @@
 - 实现：`runRpcMode` 新增嵌入模式（输出走内存管道，不接管终端弹窗、不初始化扩展、不调度 goal、不写 stderr，断开时只停止监听不销毁会话）；守护进程新增“终端会话通道”（不回收、手机关不掉）；弹窗抢答从 collab 访客扩展为多方（`guest-ui-peers.ts`）。
 - 会话名乱码已修：列表只读前 4 KB，长中文/emoji 首条消息被截在字符中间，显示为 `�`。
 - 已验证：新增 `remote-control.test.ts`（嵌入服务 + 守护进程 + 模拟手机走加密通道：会话匹配、弹窗应答与撤回、断开后会话仍在）和乱码回归测试；相关远程/RPC/弹窗测试 78 项通过，类型检查通过。`test/rpc` 剩 1 项 goal 测试失败，改动前同样失败；collab 注册表冒烟 1 项失败，原因是注册目录 `.omp` 与 NPi 不一致，与本次无关。
-- 追加（2026-11-15，未重新打包）：设置 `remote.autoStart`（Interaction → Remote Control → Start /rc Automatically，默认关）在启动交互会话时自动 `/rc`；`/rc` 模式下手机只能看到和打开终端正在共享的那个会话（列表过滤、其他会话和新建会话被拒，`host.info` 带 `remoteControl: true`）。手机端（`npi-remote`，未编译：Flutter/Android 环境所在外接存储离线）已写：采用守护进程返回的通道 id、`/rc` 模式自动打开该会话并隐藏“新会话”、会话离线时显示 Claude 式的离线卡片与“已与电脑断开”提示条并禁用输入。
-- 已打包：`dist/3.1.0.103/NPi Desktop_3.1.0.103_rc_aarch64.dmg`（见 RELEASES）。未验证：没有在真实终端和手机上跑过 `/rc`。
+- 追加（2026-11-15，未重新打包）：设置 `remote.autoStart`（Interaction → Remote Control → Start /rc Automatically，默认关）在启动交互会话时自动 `/rc`；`/rc` 模式下手机只能看到和打开终端正在共享的那个会话（列表过滤、其他会话和新建会话被拒，`host.info` 带 `remoteControl: true`）。手机端（`npi-remote`，2026-11-15 已编译 debug APK：`flutter analyze` 1 条 info、`flutter test` 109 项通过）已写：采用守护进程返回的通道 id、`/rc` 模式自动打开该会话并隐藏“新会话”、会话离线时显示 Claude 式的离线卡片与“已与电脑断开”提示条并禁用输入。
+- 已打包：`dist/3.1.0.103/NPi Desktop_3.1.0.103_rc_aarch64.dmg`（见 RELEASES）。**已验证**（2026-11-15）：用户用全局 `npi/3.1.0.104` + 真实数据，在 Galaxy S23（Android 15，debug APK，USB `adb reverse` 直连 `--listen 127.0.0.1:8787`）上跑通 `/rc`。
 
 ## 对话内交互 P0–P2（2026-11-13，未提交、未打包）
 
