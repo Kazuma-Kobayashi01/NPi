@@ -54,6 +54,7 @@ mod fx_rate;
 mod panel_window;
 mod ocr;
 mod pdf_text;
+mod npix;
 mod omp_cli;
 mod open_tabs;
 mod pr_automation;
@@ -1565,6 +1566,66 @@ async fn usage_limits(
     off_ipc(move || model_config::usage_limits(profile.as_deref(), force)).await?
 }
 
+/// Pick a `.npix` plugin package; `None` when cancelled.
+#[tauri::command]
+async fn npix_pick(window: tauri::WebviewWindow) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = std::sync::mpsc::channel();
+    window
+        .dialog()
+        .file()
+        .set_title("Install Plugin")
+        .set_parent(&window)
+        .add_filter("NPi plugin", &["npix"])
+        .pick_file(move |result| {
+            let _ = tx.send(result);
+        });
+    off_ipc(move || picked_program(&rx)).await?
+}
+
+/// What the `.npix` package at `path` declares, before installing it — see `npix::run`.
+#[tauri::command]
+async fn npix_inspect(
+    path: String,
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || npix::run(profile.as_deref(), &path, npix::Action::Inspect)).await?
+}
+
+/// Install the `.npix` package at `path` for `profile`'s tabs started from now on.
+#[tauri::command]
+async fn npix_install(
+    path: String,
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || npix::run(profile.as_deref(), &path, npix::Action::Install)).await?
+}
+
+/// Installed plugins with their source and developer — see `npix::list`.
+#[tauri::command]
+async fn plugins_list(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || npix::list(profile.as_deref())).await?
+}
+
+/// Uninstall plugin `name` for `profile`; tabs opened afterwards no longer load it.
+#[tauri::command]
+async fn plugin_uninstall(
+    name: String,
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<(), String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || npix::uninstall(profile.as_deref(), &name)).await?
+}
+
 /// Signed-in OAuth accounts by provider — see `accounts::run`.
 #[tauri::command]
 async fn accounts_list(
@@ -2378,6 +2439,11 @@ pub fn run() {
             models_catalog,
             usage_limits,
             accounts_list,
+            npix_pick,
+            npix_inspect,
+            npix_install,
+            plugins_list,
+            plugin_uninstall,
             account_activate,
             account_rotate,
             account_rename,

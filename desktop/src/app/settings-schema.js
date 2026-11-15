@@ -239,6 +239,9 @@
         custom("notifications", "System notifications", "A banner from the system when the window is not in front: a long run finished, a question or approval is waiting, or a request failed. It names the project and says nothing of the conversation.", "notification notify banner alert toast permission sound",
           { keys: ["notifications", "notifyDone", "notifyAsk", "notifyFailed"] }),
       ] },
+      { name: "Plugins", src: "omp plugin", rows: [
+        custom("npixInstall", "Plugins", "The plugins of this tab's profile, who made them, and uninstalling them. A .npix package shows what it adds and who made it before it is installed. Tabs opened afterwards load the change.", "plugin npix extension install uninstall remove developer package addon"),
+      ] },
     ] },
     { id: "approvals", icon: "check", title: "Approvals", sep: true, blurb: "When the agent asks before it runs a tool.", groups: [
       { name: "Approval mode", src: "approval-mode.json", rows: [

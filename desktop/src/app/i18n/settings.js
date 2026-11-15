@@ -6,6 +6,7 @@
   I.add([
     // Page chrome
     ["Settings", "设置", "設定", "設定"],
+    ["Plugins", "插件", "外掛", "プラグイン"],
     ["Settings sections", "设置分区", "設定分區", "設定のセクション"],
     ["Search", "搜索", "搜尋", "検索"],
     ["Search settings", "搜索设置", "搜尋設定", "設定を検索"],

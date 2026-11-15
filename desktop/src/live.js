@@ -1212,6 +1212,8 @@
   // its tab is in the background. Replay must not emit completion twice.
   const settledListeners = new Map();
   const settledSubscribers = new Set();
+  // Plugin events (`extension_event`, `ctx.ui.emitEvent` in omp) of the active tab, see `onExtensionEvent`.
+  const extensionEventSubscribers = new Set();
 
   function _dropSettledListener(id) {
     settledListeners.get(id)?.stop();
@@ -2273,6 +2275,17 @@
     const { type } = ev;
     const now  = Date.now();
     const time = timeNow();
+
+    if (type === "extension_event") {
+      for (const subscriber of extensionEventSubscribers) {
+        try {
+          subscriber({ sessionId: activeSessionId, name: ev.name, data: ev.data });
+        } catch (e) {
+          console.error(`[live] extension event subscriber failed on '${ev.name}':`, e);
+        }
+      }
+      return;
+    }
 
     if ((type === "message_start" || type === "message_end") &&
         ev.message?.role === "custom" &&
@@ -3841,6 +3854,28 @@
     accountsList(profile = _activeProfileId()) {
       return _invokeResult("accounts_list", { profile });
     },
+    /** Pick a `.npix` plugin package; the path, or null when cancelled (npix.rs). */
+    npixPick() {
+      return _invokeSafe("npix_pick", {}, null);
+    },
+    /** What a `.npix` package declares — `{ok, value: {name, version, description?, capabilities,
+     *  bundles, files, bytes}}` (`omp plugin inspect --json`). Installs nothing. */
+    npixInspect(path, profile = _activeProfileId()) {
+      return _invokeResult("npix_inspect", { path, profile });
+    },
+    /** Install a `.npix` package for `profile`; tabs started afterwards load it (`omp plugin install`). */
+    npixInstall(path, profile = _activeProfileId()) {
+      return _invokeResult("npix_install", { path, profile });
+    },
+    /** Installed plugins of `profile` — `{ok, value: {npm: [{name, version, enabled, manifest, npix,
+     *  developer?}], marketplace}}` (`omp plugin list --json`). */
+    pluginsList(profile = _activeProfileId()) {
+      return _invokeResult("plugins_list", { profile });
+    },
+    /** Uninstall plugin `name` for `profile` (`omp plugin uninstall`); tabs opened afterwards stop loading it. */
+    pluginUninstall(name, profile = _activeProfileId()) {
+      return _invokeResult("plugin_uninstall", { name, profile });
+    },
     /** Make one account the only one omp uses for its provider; the others go idle. */
     accountActivate(provider, credentialId, profile = _activeProfileId()) {
       return _invokeResult("account_activate", { profile, provider, credentialId });
@@ -4700,6 +4735,19 @@
      *  models, profile credentials and tools are not used. Resolves/rejects like `openSession`. */
     async openSideAgent(cwd, agentId, agentName) {
       return _openReported(cwd, { profile: _activeProfileId(), sideAgent: agentId, sideAgentName: agentName });
+    },
+
+    /** Run plugin RPC command `name` (`<plugin>/<command>`, omp `registerRpcCommand`) in the active tab;
+     *  resolves with its `result`, rejects with the plugin's error or `unsupported` when no plugin serves it. */
+    async extensionCommand(name, params) {
+      const data = await _sendWithResponse({ type: "extension_command", name, params }, QUICK_CMD_TIMEOUT_MS);
+      return data?.result ?? null;
+    },
+
+    /** Subscribe to plugin events of the active tab (`{ sessionId, name, data }`); returns the unsubscribe. */
+    onExtensionEvent(callback) {
+      extensionEventSubscribers.add(callback);
+      return () => extensionEventSubscribers.delete(callback);
     },
 
     /** Open project folder `path` (a recent-projects row) under the active

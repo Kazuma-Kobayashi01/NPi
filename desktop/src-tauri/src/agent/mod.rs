@@ -83,6 +83,8 @@ const ALLOWED_COMMAND_TYPES: &[&str] = &[
     "get_messages",
     "get_available_models",
     "get_available_commands",
+    // A plugin's own RPC command (`registerRpcCommand` in omp): the plugin validates its params.
+    "extension_command",
     "negotiate_protocol",
     "prompt",
     "abort",

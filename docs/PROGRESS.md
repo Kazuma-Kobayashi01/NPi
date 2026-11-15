@@ -6,6 +6,17 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 插件化开发方案（2026-11-15，设计稿，未实施）
+
+- 用户决定：现有代码不动，之后的新功能默认写成插件。方案见 omp `docs/npi-plugin-development.md`（未提交）。
+- 依据：NPi 相对上游基线 `6a86df8539` 已改 541 个上游源码文件（+10.5k/−2.5k 行）、新增 80 个（+15.6k 行），其中 282 个文件只改 1–4 行（品牌改名）；继续改上游文件会扩大每次移植的冲突面。
+- 要点：复用上游 Extension API 与插件包（`package.json` 的 `npi` 清单、`--plugin-dir`、编译版用虚拟模块提供 `@oh-my-pi/*`）；需新增扩展点 S1 RPC 命令与事件（优先）、S2 命令行子命令、S3 启动模式、S4 TUI 区块（暂缓）；官方插件放 NPi-Kernel 顶层 `npi-plugins/`，随 Desktop 放 `Resources/plugins/` 并传 `--plugin-dir`；Desktop 侧界面优先用侧栏卡片与 Generative UI，专门界面走沙箱 iframe + 消息桥。
+- S1 已实现（未提交）：内核 `registerRpcCommand` / `ctx.ui.emitEvent` / `extension_command` / `extension_event`（wire 与三种 SDK 已重新生成），Desktop 白名单与 `OMP_BRIDGE.extensionCommand` / `onExtensionEvent`；新增 `rpc-extension-command.test.ts` 通过，相关已有测试 138 项通过（`extensions-runner` 审批生命周期 2 项失败，改动前同样失败）；Desktop Rust agent 101 项、`npm test` 通过。临时 hello-world 插件用源码与编译后二进制都验证通过后已删除（详见方案文档 S1 节）。更正：插件清单字段是 `package.json#omp`（不是 `npi`），加载用 `-e`。未在真实 App 界面里跑插件（无插件界面框架）。
+- `.npix` 安装包已做（未提交）：内核 `npi plugin pack | inspect | install <file>.npix`（npm pack 格式 tar.gz、依赖自带、安装不联网；解压前检查条目都在 `package/` 下、解压后拒绝符号链接；装到 `<插件目录>/npix/<包名>/<版本>/` 再链接，卸载一并清理）；Desktop 设置 → Agent → Plugins 选文件、显示声明内容、确认后安装（`npix.rs` 调随包内核，按当前 profile）。验证：内核新增 3 项 + 原有本地安装 10 项通过；源码内核端到端：打包 → 查看 → 安装 → 新会话自动加载插件命令 → 卸载后消失，过程中修了 `inspect` 临时目录提前清理的 bug；Desktop Rust `npix` 测试与 `npm test`（含 i18n、设置 schema）通过。**未在真实 App 中点过**，随包内核需重编才带 `.npix` 支持。
+- 插件开发者信息与 Desktop 管理（未提交）：`.npix` 必须带 `developer.json`（`name` 必填，`email`/`url`/`organization` 可选，`url` 限 http(s)），`inspect` 与 `plugin list --json` 显示；Desktop 设置 → Agent → Plugins 列出已安装插件（来源、开发者、停用状态）并可卸载（两次点击确认），安装前显示开发者。验证：内核 `.npix` 4 项 + 本地安装 10 项通过；Desktop Rust 103 项（含新增插件名校验）与 `npm test` 通过；clippy（stable）在改动范围内干净。未在真实 App 中点过。
+- 可插件化功能调研：见方案文档第 10 节（A 类现在可做 / B 类缺一个扩展点 / C 类留内核）。
+- 下一步：远程可调用的插件命令；Desktop 插件面板框架；插件附带主题；官方插件目录 `npi-plugins/` 与 `-e Resources/plugins`；双击 `.npix` 打开；S2/S3/S4 按需。
+
 ## SideAgent：ACP 侧载外部 Agent（2026-11-15，已打包 3.1.0.105，未安装）
 
 - 版本：Desktop 分支 `3.1.0.105`（`332b453` 功能、`2dba65a` 版本号），内核 `kernel.2.1.3-universal`（`959b820662`，含 SideAgent `a97a91af7d`）；产物 `dist/3.1.0.105/NPi Desktop_3.1.0.105_aarch64.dmg`（见 RELEASES）。均未推送。
