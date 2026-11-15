@@ -6,6 +6,14 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 界面整理（2026-11-15，已打包 3.1.0.105 UI，未提交、未安装）
+
+- 已做：设置页分组菜单与扁平行、拆页（Appearance / Notifications / Shortcuts / Approvals / Extensions / Terminal）；历史独立窗口错位修复；模型菜单 Effort 滑动条；旧 Plan 卡片折叠、Jump to latest 小圆钮；Cmd+W 后保留 Dock 小白点。细节见 `desktop/CHANGELOG.md` 的 Unreleased 与 `desktop/docs/architecture/settings.md`。
+- 之后又做：设置第一项改名 Profile、用户消息靠右气泡、模型菜单改成 LabBot 样式卡片（Ultra 渐变滑块）。
+- 打包：`dist/3.1.0.105/NPi Desktop_3.1.0.105_ui_aarch64.dmg`，加上含后续三项的 `..._ui2_aarch64.dmg`（见 RELEASES），内核未重编。
+- 未验证：只有 `npm test`、`cargo check` 和浏览器演示模式；Dock 小白点与各界面改动待在真实应用里确认。
+- 遗留：DevStore `rust/current` 没有 nightly clippy，项目规定的 clippy 门禁没法跑；stable clippy 1.99 在既有代码上报 343 条。
+
 ## 插件化开发方案（2026-11-15，S1 与 `.npix` 已实施，已打包 3.1.0.105 Plugins，未安装）
 
 - 用户决定：现有代码不动，之后的新功能默认写成插件。方案见 omp `docs/npi-plugin-development.md`。
