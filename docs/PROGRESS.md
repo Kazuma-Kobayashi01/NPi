@@ -6,6 +6,16 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## SideAgent：ACP 侧载外部 Agent（2026-11-15，进行中，内核未提交）
+
+- 目标：Desktop 新建标签页时可选外部 Agent（首批 Antigravity `agy acp`、Claude、任意 ACP Registry Agent），用 NPi 界面对话；外部 Agent 用它自己的登录，NPi 不碰凭据。对 Antigravity 这是不冒充官方客户端的合规路线（内核原 Antigravity 提供方仍暂停），只用于用户亲自发起的对话，不用于后台任务。审批接入 NPi 现有弹窗（含 `/rc` 手机与 FCM）。
+- 第 1 层已做（omp `kernel.2.1.2-universal` 工作区）：`packages/coding-agent/src/side-agent/`——`connection.ts`（NPi 作 ACP 客户端：启动、握手、登录、会话新建/恢复/列出、提示、取消、模式与配置；审批交宿主；读写文件与终端代办，路径先解析符号链接再限制在会话根目录内）、`terminals.ts`、`registry.ts`（读官方 Registry、缓存 1 小时；二进制必须有 sha256 才下载安装，否则退回 npx/uvx）；`utils` 新增 `getSideAgentsDir()`。
+- 已验证：新增 12 项测试通过（真实子进程假 Agent：审批往返、读写越界与符号链接逃逸被拒、终端、取消、登录、退出与崩溃；Registry：路径穿越条目被丢弃、校验和不符拒装、每版本只装一次、无 sha256 不运行）；对 NPi 自己的 `--mode acp`（临时 HOME，不发提示词）握手与新建会话成功；真实 Registry 46 个中本机可启动 37 个（Antigravity、Claude 为二进制）。未接真实外部 Agent。
+- 第 2 层已做：`npi --mode rpc-ui --side-agent <id>`（`main.ts` 在加载插件与创建会话之前分流，无需 NPi 自己的模型）。`side-agent/translator.ts` 把 ACP 更新翻成 NPi 事件（用户消息、流式文本与思考、工具调用先结束所属助手消息再执行、工具结果、`turn_end`/`agent_end`），`side-agent/rpc-host.ts` 讲 RPC 协议子集：`prompt`/`steer`/`follow_up`（进行中排队）、`abort`、`get_state`、`get_messages`、斜杠命令、`new_session`、`set_session_name`；审批变成带 `toolCallId` 的 `select`（`yolo` 自动允许）；登录：Agent 可内部完成的直接调用，终端或环境变量方式给出操作提示；其余 `set_*` 空操作成功、查询类回 `unsupported`。本机有 `agy` 时 Antigravity 用 `agy acp`。CHANGELOG 已记。
+- 已验证：第 2 层新增 6 项 RPC 测试，SideAgent 共 18 项通过；命令行用临时 HOME、无 API key 跑不存在的 id 得到一行错误（分流先于模型检查）。未在 Desktop 中运行。2026-11-15 用户同意后用本机 `agy` 1.5.9（用户的 Google 账号）跑了一轮真实只读对话：`--side-agent antigravity-acp` 启动、读取既有登录、建会话、发提示词、流式回复、正常退出全部走通，用时 6 秒；但回复是 `This service has been disabled in this account for violation of Terms of Service`——该账号的 Antigravity 仍处于 11-14 起的停用状态（不是本次造成）。agy 把这条错误当普通回复返回（`end_turn`），所以 `prompt_result` 为 completed。账号恢复前不要再用 agy 测试。NPi 里的 `google-antigravity` 凭据（id 3）早已登出（软删除 `deleted by user`，内核不再使用），记录里仍留着旧 refresh token；要彻底失效需在 Google 账号权限页撤销授权，不手工硬删该行（会绕过防重新导入的机制）。用户已了解申诉流程（官方表单，每账号一次）。
+- 同日用 Claude 实测通过：`--side-agent claude-acp` 从 Registry 下载 `claude-agent-acp` 0.107.0（sha256 校验）装到 `side-agents/claude-acp/`，用本机 Claude Code 的登录；一轮只读对话 41 秒（含下载），Claude 调 `Bash` 列目录，事件顺序与 NPi 一致（助手消息结束 → 工具开始/输出/结束 → 工具结果 → 最终回复），回复正确，临时目录未被修改。该轮 Claude 未发起审批请求，真实 Agent 的审批弹窗尚未实测。
+- 未做：模型与思考档位切换（ACP 配置项）、计划（plan）显示、上下文用量、会话持久化与历史列表、Desktop 标签页（第 3 层）。
+
 ## Remote Connect FCM 推送（2026-11-15，已验证，未提交）
 
 - Relay 推送已启用：服务账号 `npi-relay-fcm@npi-remote`（与手机端 `google-services.json` 同为 Firebase 项目 `npi-remote`），密钥只在服务器 `/opt/npi-relay/secrets/`，本地副本已删；`omp/relay/compose.yaml` 已启用（omp 未提交），`./deploy.sh` 发布 `npi-relay:cc29fd8b08b6-dirty.20261115044228`，日志 `push enabled`。详见 omp `docs/plan-android-remote-connect.md` §6.2。
