@@ -201,6 +201,41 @@ fn check_omp_version(omp: &Omp) -> Result<(), String> {
     Ok(())
 }
 
+// ── component versions ──────────────────────────────────────────────────────
+
+/// The value of the `name/value` line in `omp --version --all` output: the
+/// omp core (`omp/18.14.0`) or the kernel line
+/// (`kernel/kernel.2.1.3-universal`). It is shown to the user, so anything
+/// but a short run of version characters is `None`.
+fn component_version(output: &str, name: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let value = line.trim().strip_prefix(name)?.strip_prefix('/')?;
+        let plain = !value.is_empty()
+            && value.len() <= 64
+            && value
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'));
+        plain.then(|| value.to_string())
+    })
+}
+
+/// `omp --version --all` output as one line for the About panel
+/// (`omp 18.14.0 · kernel.2.1.3-universal`), or `None` when it names
+/// neither. An omp without `--all` prints only its own version line.
+fn about_line(output: &str) -> Option<String> {
+    let core = component_version(output, "omp").map(|version| format!("omp {version}"));
+    let kernel = component_version(output, "kernel");
+    let parts: Vec<String> = [core, kernel].into_iter().flatten().collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+/// The omp core and kernel versions of the omp this app runs
+/// ([`about_line`]), or `None` when it cannot be run or reports neither.
+pub fn about_versions() -> Option<String> {
+    let output = Omp::locate().ok()?.output(&["--version", "--all"]).ok()?;
+    about_line(&String::from_utf8_lossy(&output.stdout))
+}
+
 /// Build the `--profile=<id>` flag from a resolved profile id, or `None`
 /// for the built-in profile — `Some(id)` becomes `--profile=<id>`; a
 /// blank id (defence-in-depth: `ProfileStore::resolve` already maps
@@ -511,7 +546,7 @@ pub(crate) fn spawn_omp(
 #[cfg(test)]
 mod tests {
     use super::{
-        fmt_version, omp_args, parse_version_line, resolve_cwd, sanitize_child_env,
+        about_line, fmt_version, omp_args, parse_version_line, resolve_cwd, sanitize_child_env,
         version_refusal, ApprovalMode, Command, MIN_OMP_VERSION,
     };
     use std::path::Path;
@@ -533,6 +568,17 @@ mod tests {
         } else {
             [major - 1, 99, 99]
         }
+    }
+
+    #[test]
+    fn about_line_names_the_core_and_the_kernel() {
+        assert_eq!(
+            about_line("npi/3.1.0.105\nomp/18.14.0\nkernel/kernel.2.1.3-universal\n").as_deref(),
+            Some("omp 18.14.0 · kernel.2.1.3-universal")
+        );
+        // An omp without `--all`, and values that are not plain versions.
+        assert_eq!(about_line("npi/3.1.0.105\n"), None);
+        assert_eq!(about_line("omp/18.14.0 (dev)\nkernel/\n"), None);
     }
 
     #[test]

@@ -7,6 +7,7 @@
 // their helper processes (`git`, `sh`, stand-in browsers) directly.
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
+mod about_panel;
 mod academic_space;
 mod accounts;
 mod agent;
@@ -2488,6 +2489,7 @@ pub fn run() {
             setup(app);
             computer_overlay::setup(app.handle())?;
             quick_ask::setup(app.handle());
+            about_panel::setup(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())

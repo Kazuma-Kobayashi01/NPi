@@ -61,6 +61,6 @@
 ## 文档与发布
 
 - 功能修改同步维护对应架构文档和 changelog；构建步骤参见 [项目 README](../README.md)。
-- 发版时同步 `desktop/package.json`、`desktop/src-tauri/Cargo.toml`、`desktop/src-tauri/tauri.conf.json` 和 `omp/packages/utils/src/dirs.ts` 的 `NPI_VERSION`。
+- 发版时同步 `desktop/package.json`、`desktop/src-tauri/Cargo.toml`、`desktop/src-tauri/tauri.conf.json` 和 `omp/packages/utils/src/dirs.ts` 的 `NPI_VERSION`；内核换代（新的 `kernel.x.y.z-platform` 分支）时同步同一文件的 `NPI_KERNEL_VERSION`，`/version` 显示的内核版本取自它。
 - omp 包自身的版本表示上游内核版本，不要为了同步 NPi 产品版本而批量替换。
 - 此处只保留稳定约束；临时排查输出、个人路径、密钥和缓存不要写入项目规则。
