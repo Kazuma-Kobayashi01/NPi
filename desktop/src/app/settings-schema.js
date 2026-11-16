@@ -264,6 +264,7 @@
       ] },
       { name: "Sandbox VM permissions", src: "sandbox-vm", rows: [
         custom("vmPermissions", "Network", "Whether the Sandbox VM can reach the network. Off: no network device at all. On: commands in the VM can download and send data like any program on this machine. Applies when the VM restarts. Needs the Sandbox VM plugin.", "vm virtual machine sandbox permissions network internet nat project read only write folders mount cpu cores memory ram idle stop restart"),
+        custom("vmCleanup", "Remove Sandbox VM", "For when you no longer want the VM: stops it, sends bash back to this machine (also in the saved config), and deletes the images built here and the plugin's settings. Ticked, it also uninstalls the plugin and the images it ships. Needs the Sandbox VM plugin loaded in this tab.", "vm virtual machine sandbox clean cleanup remove delete uninstall reclaim disk space image"),
       ] },
       { name: "Standing rules", rows: [
         custom("approvalRules", "Always-allow rules", "Rules are only granted from a prompt; here you review and revoke them.", "rules always allow revoke saved answers"),
