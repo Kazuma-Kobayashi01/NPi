@@ -242,8 +242,12 @@ fn scan_skills_dir(dir: &Path, source: &str, items: &mut Vec<SkillItem>) {
 }
 
 #[tauri::command]
-pub fn skills_list(app: AppHandle) -> Result<Vec<SkillItem>, String> {
+pub fn skills_list(app: AppHandle, project: Option<String>) -> Result<Vec<SkillItem>, String> {
     let mut items = Vec::new();
+    // First, so a project skill that shares an id with a global one is the one kept.
+    if let Some(dir) = project.as_deref().and_then(|p| project_skills_dir(p).ok()) {
+        scan_skills_dir(&dir, "project", &mut items);
+    }
     if let Ok(home) = app.path().home_dir() {
         scan_skills_dir(&home.join(".omp/agent/skills"), "user", &mut items);
         scan_skills_dir(&home.join(".local/share/npi/agent/skills"), "npi", &mut items);
@@ -258,6 +262,22 @@ pub fn skills_list(app: AppHandle) -> Result<Vec<SkillItem>, String> {
 /// built-in profile's agent folder). User-authored skills are never in it.
 fn managed_skills_dir(home: &Path) -> PathBuf {
     crate::profiles::agent_dir_for(home, None, std::env::var_os("PI_CODING_AGENT_DIR").as_deref()).join("managed-skills")
+}
+
+/// Where the agent writes a project's skills: `<project>/.npi/skills`. `project` arrives from the
+/// webview, so only an absolute path of an existing directory is accepted.
+fn project_skills_dir(project: &str) -> Result<PathBuf, String> {
+    let root = Path::new(project);
+    if !root.is_absolute() || !root.is_dir() {
+        return Err(format!("not a project folder: {project}"));
+    }
+    Ok(root.join(".npi").join("skills"))
+}
+
+/// The folder a managed skill is deleted from: the project's when `project` is given, else the
+/// global `global` one.
+fn managed_dir_for(global: PathBuf, project: Option<&str>) -> Result<PathBuf, String> {
+    project.map_or(Ok(global), project_skills_dir)
 }
 
 /// Moves the managed skill `name` out of `managed` into `trash` (kept, not erased) and returns
@@ -281,14 +301,16 @@ fn set_aside(managed: &Path, trash: &Path, name: &str) -> Result<PathBuf, String
     Ok(to)
 }
 
-/// Removes a skill the agent wrote: Undo on the notice, or Delete in Settings. It is moved to
-/// `~/.cache/npi/desktop/skill-trash/`, so a mistake can still be taken back by hand. A running
-/// session keeps it listed until it next refreshes its skills.
+/// Removes a skill the agent wrote: Undo on the notice, or Delete in Settings. It comes from
+/// `<project>/.npi/skills` when `project` is given, else from the global managed folder. It is
+/// moved to `~/.cache/npi/desktop/skill-trash/`, so a mistake can still be taken back by hand. A
+/// running session keeps it listed until it next refreshes its skills.
 #[tauri::command]
-pub fn skill_delete_managed(app: AppHandle, name: String) -> Result<String, String> {
+pub fn skill_delete_managed(app: AppHandle, name: String, project: Option<String>) -> Result<String, String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let trash = crate::npi_dirs::cache_dir()?.join("skill-trash");
-    set_aside(&managed_skills_dir(&home), &trash, &name).map(|p| p.to_string_lossy().into_owned())
+    let managed = managed_dir_for(managed_skills_dir(&home), project.as_deref())?;
+    set_aside(&managed, &trash, &name).map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -324,5 +346,41 @@ mod tests {
         let moved = set_aside(&managed, &trash, "plan-trip").unwrap();
         assert!(!managed.join("plan-trip").exists() && moved.join("SKILL.md").is_file());
         assert!(d.path().join("SKILL.md").is_file());
+    }
+
+    #[test]
+    fn the_project_folder_is_resolved_only_for_an_existing_absolute_directory() {
+        let d = TempDir::new("mcp-skills", "project-dir");
+        let global = d.path().join("managed-skills");
+        let project = d.path().to_string_lossy().into_owned();
+        assert_eq!(managed_dir_for(global.clone(), None).unwrap(), global);
+        assert_eq!(managed_dir_for(global.clone(), Some(&project)).unwrap(), d.path().join(".npi/skills"));
+        for bad in ["", "relative/dir", ".", "~"] {
+            assert!(managed_dir_for(global.clone(), Some(bad)).is_err(), "{bad:?}");
+        }
+        let missing = d.path().join("missing").to_string_lossy().into_owned();
+        assert!(managed_dir_for(global.clone(), Some(&missing)).is_err());
+        let file = d.path().join("file");
+        fs::write(&file, "x").unwrap();
+        let file = file.to_string_lossy().into_owned();
+        assert!(managed_dir_for(global, Some(&file)).is_err());
+    }
+
+    #[test]
+    fn a_project_skill_is_set_aside_and_its_sibling_is_left() {
+        let d = TempDir::new("mcp-skills", "project-set-aside");
+        let trash = d.path().join("trash");
+        let project = d.path().join("proj");
+        let skills = project.join(".npi/skills");
+        for name in ["plan-trip", "keep-me"] {
+            fs::create_dir_all(skills.join(name)).unwrap();
+            fs::write(skills.join(name).join("SKILL.md"), "---\nname: x\n---\nbody").unwrap();
+        }
+        let project = project.to_string_lossy().into_owned();
+        let dir = managed_dir_for(d.path().join("managed-skills"), Some(&project)).unwrap();
+        let moved = set_aside(&dir, &trash, "plan-trip").unwrap();
+        assert!(!skills.join("plan-trip").exists() && moved.join("SKILL.md").is_file());
+        assert!(skills.join("keep-me/SKILL.md").is_file());
+        assert!(set_aside(&dir, &trash, "../proj").is_err());
     }
 }

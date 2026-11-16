@@ -29,6 +29,7 @@ check("a notice offers Undo only for something new", () => {
     { what: "Remembered", title: "Home", text: "Osaka", undo: { note: 4 } });
   assert.equal(M.noticeOf({ note: { id: 4, title: "Home", text: "Kyoto" }, replaced: true }).undo, null);
   assert.deepEqual(plain(M.noticeOf({ skill: "plan-build", replaced: false }).undo), { skill: "plan-build" });
+  assert.deepEqual(plain(M.noticeOf({ skill: "plan-build", replaced: false, project: "/work/trip" }).undo), { skill: "plan-build", project: "/work/trip" });
   assert.equal(M.noticeOf({ skill: "plan-build", replaced: true }).what, "Skill updated");
   const p = M.noticeOf({ profile: "academic", text: "Pages for every claim." });
   assert.equal(p.title, "Academic"); assert.equal(p.undo, null);

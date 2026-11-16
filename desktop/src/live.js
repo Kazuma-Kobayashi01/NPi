@@ -2824,7 +2824,7 @@
       // A skill the agent just wrote from what worked (omp's autolearn): the page shows it with Undo.
       const skill = ev.toolName === "manage_skill" && !ev.isError ? ev.result?.details : null;
       if (skill && (skill.action === "create" || skill.action === "update") && typeof skill.name === "string") {
-        window.dispatchEvent(new CustomEvent("npi:memory-noted", { detail: { skill: skill.name, replaced: skill.action === "update" } }));
+        window.dispatchEvent(new CustomEvent("npi:memory-noted", { detail: { skill: skill.name, replaced: skill.action === "update", project: skill.scope === "project" ? skill.cwd : undefined } }));
       }
       const idx = activeToolCards.get(ev.toolCallId);
       if (idx !== undefined) {
@@ -5257,9 +5257,10 @@
     answerReview(id, accept) {
       return _invokeResult("expert_review_answer", { id, accept });
     },
-    /** Sets aside a skill the agent wrote (mcp_skills.rs `skill_delete_managed`). */
-    deleteManagedSkill(name) {
-      return _invokeResult("skill_delete_managed", { name });
+    /** Sets aside a skill the agent wrote (mcp_skills.rs `skill_delete_managed`): from `<project>/.npi/skills`
+     *  with `project` (the project folder), else from the global managed folder. */
+    deleteManagedSkill(name, project) {
+      return _invokeResult("skill_delete_managed", { name, project });
     },
 
     /** A command of the paper of one Academic project (writing/commands.rs): `write_<name>`. Only the listed names go through. */

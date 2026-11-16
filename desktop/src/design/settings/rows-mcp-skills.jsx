@@ -157,20 +157,23 @@
     );
   }
 
-  function SkillsManagerRow({ row, query }) {
+  function SkillsManagerRow({ row, ctx, query }) {
     const [skills, setSkills] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState(null);
 
+    // The active tab's project folder (none: no tab, or a pathless one): its `.npi/skills` is listed too.
+    const project = ctx.activeProject?.id && ctx.activeProject.path ? ctx.activeProject.path : undefined;
+
     const loadSkills = React.useCallback(() => {
       setLoading(true);
       setError(null);
-      _invokeMcp("skills_list").then(res => {
+      _invokeMcp("skills_list", { project }).then(res => {
         setLoading(false);
         if (res.ok) setSkills(res.value || []);
         else setError(res.error);
       });
-    }, []);
+    }, [project]);
 
     React.useEffect(() => {
       loadSkills();
@@ -182,10 +185,11 @@
 
     // A skill the agent wrote is set aside (mcp_skills.rs), after a second click.
     const [armed, setArmed] = React.useState(null);
-    const handleDelete = (name) => {
+    // `from` is the skill's source: a project skill is set aside from the project, a managed one from the global folder.
+    const handleDelete = (name, from) => {
       if (armed !== name) { setArmed(name); return; }
       setArmed(null);
-      _invokeMcp("skill_delete_managed", { name }).then(res => { if (res.ok) loadSkills(); else setError(res.error); });
+      _invokeMcp("skill_delete_managed", { name, project: from === "project" ? project : undefined }).then(res => { if (res.ok) loadSkills(); else setError(res.error); });
     };
 
     return (
@@ -220,8 +224,8 @@
                 <Button onClick={() => handleOpen(s.path)} title="Open SKILL.md in external editor">
                   Open <Icon name="external" size={10} />
                 </Button>
-                {s.source === "managed" && (
-                  <Button onClick={() => handleDelete(s.id)} title={window.OMP_I18N.t("Written by the agent. Delete moves it to ~/.cache/npi/desktop/skill-trash.")}>
+                {(s.source === "managed" || s.source === "project") && (
+                  <Button onClick={() => handleDelete(s.id, s.source)} title={window.OMP_I18N.t("Written by the agent. Delete moves it to ~/.cache/npi/desktop/skill-trash.")}>
                     {armed === s.id ? window.OMP_I18N.t("Delete?") : window.OMP_I18N.t("Delete")}
                   </Button>
                 )}

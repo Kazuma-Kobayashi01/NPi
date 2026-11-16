@@ -187,12 +187,13 @@ fn write_session_overlay(overlay: Option<PathBuf>, session_id: &str, policy: &st
     Ok(path)
 }
 
-/// A session's memory (`memory/`): its tools on top of the session's own host tools, and the block
-/// for its prompt. `None` when a folder it needs can't be resolved: the session starts without it.
+/// A session's memory (`memory/`): its tools on top of the session's own host tools (none in Code),
+/// and the block for its prompt. `None` when a folder it needs can't be resolved: the session starts
+/// without it.
 fn memory_host(
     app: &AppHandle,
     store: &memory::Store,
-    inner: &Arc<dyn copilot::HostTools>,
+    inner: Option<&Arc<dyn copilot::HostTools>>,
     mode: &'static str,
     session_id: &str,
     cwd: Option<&str>,
@@ -210,7 +211,7 @@ fn memory_host(
         let _ = emitter.emit("memory://noted", change);
     });
     let cx = memory::tools::Context { db, root, mode, session: session_id.to_string(), search, noticed: Some(noticed) };
-    Some((Arc::new(memory::tools::MemoryHost::new(Arc::clone(inner), cx)), block))
+    Some((Arc::new(memory::tools::MemoryHost::new(inner.map(Arc::clone), cx)), block))
 }
 
 /// What `search_conversations` sees as `here`: every chat folder in Chat, the tab's folder in Code
@@ -297,29 +298,31 @@ fn start_session(
         ),
         None => None,
     };
-    // The agent can look things up in the user's Academic library, read only
-    // (`copilot::ResearchHub`).
     // Chat keeps no library lookups: its one host tool offers the hand-off to
     // Code or Academic (`chat_handoff`).
     // An Academic session in an Academic project has that project's library and research tools built
-    // in (`copilot::AcademicHost`: host tools, so no approval prompt and no MCP to connect).
+    // in (`copilot::AcademicHost`: host tools, so no approval prompt and no MCP to connect); one
+    // outside a project looks things up in the user's Academic library, read only
+    // (`copilot::ResearchHub`). Code has no research tools: looking up papers is Academic's.
     let space = Arc::clone(&*app.state::<Arc<academic_space::AcademicSpace>>());
     let academic_project = (app_mode == app_mode::AppMode::Academic)
         .then(|| cwd_opt.and_then(|c| space.project(Path::new(c))))
         .flatten();
-    let research: Arc<dyn copilot::HostTools> = if app_mode == app_mode::AppMode::Chat {
-        Arc::new(chat_handoff::ChatHandoff::new(app.clone(), args.session_id.clone()))
-    } else if let Some(project) = &academic_project {
-        // The project's tools, and a multi-expert review that starts only on the user's yes to a card.
-        let emitter = app.clone(); // the host outlives this call
-        let tab = args.session_id.clone(); // each card names its tab
-        let consent = expert_review::Consent::Card(Box::new(move |id, card| {
-            emitter.emit("review://confirm", serde_json::json!({ "sessionId": tab, "id": id, "card": card })).is_ok()
-        }));
-        let main: Arc<dyn copilot::HostTools> = Arc::new(copilot_worker::MainHost::new(project.clone(), profile));
-        Arc::new(expert_review::ReviewHost::new(main, project.clone(), profile, consent))
-    } else {
-        Arc::new(copilot::ResearchHub::new(space))
+    let research: Option<Arc<dyn copilot::HostTools>> = match app_mode {
+        app_mode::AppMode::Chat => Some(Arc::new(chat_handoff::ChatHandoff::new(app.clone(), args.session_id.clone()))),
+        app_mode::AppMode::Code => None,
+        app_mode::AppMode::Academic => Some(if let Some(project) = &academic_project {
+            // The project's tools, and a multi-expert review that starts only on the user's yes to a card.
+            let emitter = app.clone(); // the host outlives this call
+            let tab = args.session_id.clone(); // each card names its tab
+            let consent = expert_review::Consent::Card(Box::new(move |id, card| {
+                emitter.emit("review://confirm", serde_json::json!({ "sessionId": tab, "id": id, "card": card })).is_ok()
+            }));
+            let main: Arc<dyn copilot::HostTools> = Arc::new(copilot_worker::MainHost::new(project.clone(), profile));
+            Arc::new(expert_review::ReviewHost::new(main, project.clone(), profile, consent))
+        } else {
+            Arc::new(copilot::ResearchHub::new(space))
+        }),
     };
     // A registered MCP server whose program has moved would fail at every start.
     if let (Some(project), Ok(exe)) = (&academic_project, std::env::current_exe()) {
@@ -339,9 +342,9 @@ fn start_session(
     let (research, append_prompt) = match notes
         .ok()
         .filter(|_| memory_on)
-        .and_then(|store| memory_host(&app, &store, &research, mode_name, &args.session_id, cwd_opt, profile))
+        .and_then(|store| memory_host(&app, &store, research.as_ref(), mode_name, &args.session_id, cwd_opt, profile))
     {
-        Some((host, block)) => (host, format!("{append_prompt}\n{block}")),
+        Some((host, block)) => (Some(host), format!("{append_prompt}\n{block}")),
         None => (research, append_prompt),
     };
     bridge.start_session_with_host(
@@ -361,7 +364,7 @@ fn start_session(
         },
         app,
         Arc::clone(rule_book.inner()),
-        Some(research),
+        research,
     )?;
     widget_host.session_started(&args.session_id, cwd_opt.map(Path::new));
     Ok(mode.as_str().to_string())

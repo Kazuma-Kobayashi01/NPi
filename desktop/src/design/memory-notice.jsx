@@ -24,7 +24,7 @@ function MemoryNotice({ bridge }) {
     const { undo: what } = shown;
     setShown(null);
     if (what?.note !== undefined) await bridge.memory("delete", { id: what.note });
-    else if (what?.skill) await bridge.deleteManagedSkill(what.skill);
+    else if (what?.skill) await bridge.deleteManagedSkill(what.skill, what.project);
   };
   return (
     <div className="memory-notice" role="status">

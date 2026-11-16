@@ -88,14 +88,14 @@ pub struct Context {
     pub noticed: Option<Noticed>,
 }
 
-/// A session's host tools with the memory tools on top.
+/// A session's host tools (none in Code) with the memory tools on top.
 pub struct MemoryHost {
-    inner: Arc<dyn HostTools>,
+    inner: Option<Arc<dyn HostTools>>,
     cx: Context,
 }
 
 impl MemoryHost {
-    pub fn new(inner: Arc<dyn HostTools>, cx: Context) -> Self {
+    pub fn new(inner: Option<Arc<dyn HostTools>>, cx: Context) -> Self {
         Self { inner, cx }
     }
 
@@ -144,14 +144,17 @@ impl MemoryHost {
 
 impl HostTools for MemoryHost {
     fn definitions(&self) -> Value {
-        let mut all = self.inner.definitions().as_array().cloned().unwrap_or_default();
+        let mut all = self.inner.as_ref().and_then(|inner| inner.definitions().as_array().cloned()).unwrap_or_default();
         all.extend(definitions(self.cx.search.is_some()));
         Value::Array(all)
     }
 
     fn call(&self, id: &str, tool: &str, args: &Value) -> Value {
         if !definitions(self.cx.search.is_some()).iter().any(|d| d["name"] == tool) {
-            return self.inner.call(id, tool, args);
+            return match &self.inner {
+                Some(inner) => inner.call(id, tool, args),
+                None => frame(id, Err(format!("unknown tool: {tool}"))),
+            };
         }
         frame(id, self.run(tool, args))
     }
@@ -186,7 +189,7 @@ mod tests {
         let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
         let log = Arc::clone(&heard);
         let tell: Noticed = Box::new(move |change| log.lock().unwrap().push(change));
-        let host = MemoryHost::new(Arc::new(Inner), context(&d, "academic", None, Some(tell)));
+        let host = MemoryHost::new(Some(Arc::new(Inner)), context(&d, "academic", None, Some(tell)));
         assert_eq!(names(&host), ["inner_tool", "remember", "memory_lookup", "forget_memory", "update_user_profile"]);
         assert!(host.call("1", "inner_tool", &json!({})).to_string().contains("inner inner_tool"));
         assert!(host.call("2", "remember", &json!({ "kind": "you", "title": "Study", "text": "Studies in Osaka." })).to_string().contains("Remembered"));
@@ -203,6 +206,14 @@ mod tests {
     }
 
     #[test]
+    fn without_session_tools_only_the_memory_tools_are_offered() {
+        let d = TempDir::new("memory-tools", "alone");
+        let host = MemoryHost::new(None, context(&d, "code", None, None));
+        assert_eq!(names(&host), ["remember", "memory_lookup", "forget_memory", "update_user_profile"]);
+        assert!(host.call("1", "academic_projects", &json!({})).to_string().contains("unknown tool"));
+    }
+
+    #[test]
     fn search_is_offered_only_with_a_scope_and_keeps_to_it_unless_asked_for_all() {
         let d = TempDir::new("memory-tools", "search");
         let root = d.path().join("sessions");
@@ -214,9 +225,9 @@ mod tests {
             ];
             std::fs::write(root.join(folder).join(format!("x_{folder}.jsonl")), lines.join("\n")).unwrap();
         }
-        assert!(!names(&MemoryHost::new(Arc::new(Inner), context(&d, "code", None, None))).contains(&"search_conversations".to_string()));
+        assert!(!names(&MemoryHost::new(Some(Arc::new(Inner)), context(&d, "code", None, None))).contains(&"search_conversations".to_string()));
         let here = Scope { root, cwds: Some(vec![crate::saved_sessions::normalize_cwd("/u/Code/One")]) };
-        let host = MemoryHost::new(Arc::new(Inner), context(&d, "code", Some(Search { index: d.path().join("index.db"), here }), None));
+        let host = MemoryHost::new(Some(Arc::new(Inner)), context(&d, "code", Some(Search { index: d.path().join("index.db"), here }), None));
         let near = host.call("1", "search_conversations", &json!({ "query": "hokkaido" })).to_string();
         assert!(near.contains("winter") && !near.contains("ski"));
         let far = host.call("2", "search_conversations", &json!({ "query": "hokkaido", "scope": "all" })).to_string();
@@ -230,7 +241,7 @@ mod tests {
     fn real_model_takes_notes_and_uses_them() {
         let d = TempDir::new("memory-tools", "real");
         let store = Store::open(&d.path().join("memory.db")).unwrap();
-        let host = || Arc::new(MemoryHost::new(Arc::new(Inner), context(&d, "chat", None, None))) as Arc<dyn HostTools>;
+        let host = || Arc::new(MemoryHost::new(Some(Arc::new(Inner)), context(&d, "chat", None, None))) as Arc<dyn HostTools>;
         let prompt = || super::super::prompt::block(&store, d.path(), "chat", false);
         let first = crate::copilot_worker::run(d.path(), None, &prompt(), Some(host()), "我在大阪留学，研究电阻抗成像，最近在做一个帮我读论文的 Agent。先简单说一句：多层感知机是什么？").unwrap();
         println!("--- first\n{first}");

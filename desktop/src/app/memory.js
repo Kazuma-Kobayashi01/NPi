@@ -20,7 +20,7 @@
   /**
    * What the bottom notice says about one change the agent made (`memory://noted` from Rust, or a
    * `manage_skill` result seen in live.js): `{ what, title, text, undo }`, where `undo` is
-   * `{ note: id }` or `{ skill: name }` for something new, else null. Null for a payload it does
+   * `{ note: id }` or `{ skill: name, project }` (`project`: the folder of a project skill, absent for a global one) for something new, else null. Null for a payload it does
    * not know.
    */
   function noticeOf(d) {
@@ -31,7 +31,7 @@
       return { what: "Profile updated", title: MODE_LABELS[d.profile], text: d.text ?? "", undo: null };
     }
     if (typeof d?.skill === "string" && d.skill) {
-      return { what: d.replaced ? "Skill updated" : "New skill", title: d.skill, text: "", undo: d.replaced ? null : { skill: d.skill } };
+      return { what: d.replaced ? "Skill updated" : "New skill", title: d.skill, text: "", undo: d.replaced ? null : (d.project ? { skill: d.skill, project: d.project } : { skill: d.skill }) };
     }
     return null;
   }
