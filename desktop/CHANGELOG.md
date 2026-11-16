@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `scripts/build-web-ui.mjs` bundles the Code view's chat components for the kernel's `/web` page, so a CLI session opened in a browser on the LAN looks like this app. It only reads `src/`; the app's own build is unchanged.
 - Settings → Approvals → Remove Sandbox VM: one confirmed step that stops the VM, sends bash back to this machine (saved config included), deletes the images built here and the plugin's settings, and by default uninstalls the plugin with the images it ships.
 - Settings → Approvals → Command backend: run the agent's bash commands on this machine or in the Sandbox VM plugin's Linux virtual machine (omp's `exec.backend`). Tabs opened afterwards use it; with the VM chosen and its plugin not installed, bash stops with an error instead of running locally.
 - About NPi Desktop also shows the omp core and kernel versions of the kernel the app runs (`omp 18.14.0 · kernel.2.1.3-universal`), read from `npi --version --all`; an older kernel leaves the panel as it was.

@@ -259,11 +259,12 @@ function ToolCard({ msg, idx, highlighted, onInspectSubagent, onOpenFile, onPrev
             </span>
           ) : msg.isError ? (
             <span className="chip" style={{ color: "var(--rose)" }}>failed</span>
-          ) : (
+          ) : msg.duration != null ? (
+            // No timing for a card rebuilt from history (the kernel's /web page): no chip.
             <span className="chip muted">
               <span className="mono">{msg.duration}ms</span>
             </span>
-          )}
+          ) : null}
           {!collapsed && <span className="chip muted mono">{msg.time}</span>}
           <_TC_Icon name={collapsed ? "chevR" : "chev"} size={11} color="var(--fg-3)" />
         </button>
