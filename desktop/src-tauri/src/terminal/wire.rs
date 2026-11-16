@@ -81,6 +81,8 @@ pub struct TerminalStatus {
     /// The program, for display.
     pub shell: String,
     pub state: TerminalState,
+    /// `true` when the shell is a bash in the Sandbox VM (`container.rs`), not one on this machine.
+    pub container: bool,
     /// Set once exited; `None` there = killed by a signal.
     pub exit_code: Option<i32>,
     /// The pseudo console xterm.js has to adapt to (Windows only, `null`

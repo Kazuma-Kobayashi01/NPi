@@ -56,7 +56,7 @@ function TerminalPanels({ sessions, activeId, terminal }) {
             onClose={() => terminal.close(s.id)}
             mountRef={terminal.mountFor(s.id)}
             onContextMenu={(e) => { if (terminal.copySelection(s.id)) e.preventDefault(); }}
-            shellLabel={_TP_shellLabel(entry.status?.shell)}
+            shellLabel={entry.status?.container ? "Sandbox VM" : _TP_shellLabel(entry.status?.shell)}
             cwd={s.path}
           />
         );

@@ -50,6 +50,8 @@ pub struct SpawnSpec<'a> {
     pub shell_args: &'a [String],
     pub cols: u16,
     pub rows: u16,
+    /// The program is the Sandbox VM's client, not a shell on this machine.
+    pub container: bool,
 }
 
 /// A running (or exited) shell: what `TerminalManager` keeps per tab, behind
@@ -57,6 +59,7 @@ pub struct SpawnSpec<'a> {
 pub struct Pty {
     instance: u64,
     shell: PathBuf,
+    container: bool,
     killer: Arc<TreeKiller>,
     master: Mutex<Box<dyn MasterPty + Send>>,
     input: SyncSender<Vec<u8>>,
@@ -68,6 +71,10 @@ impl Pty {
     #[cfg(all(test, unix))]
     pub fn killer(&self) -> &TreeKiller {
         &self.killer
+    }
+
+    pub const fn container(&self) -> bool {
+        self.container
     }
 
     pub const fn instance(&self) -> u64 {
@@ -255,6 +262,7 @@ pub fn spawn(
     Ok(Pty {
         instance,
         shell: spec.program,
+        container: spec.container,
         killer,
         master: Mutex::new(pair.master),
         input,

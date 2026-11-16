@@ -6,6 +6,22 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 沙盒虚拟机（2026-11-16，Desktop `3.1.0.106`，内核 `kernel.2.1.4-universal`；内核扩展点已提交，插件与 Desktop 设置行未提交）
+
+- 目标：agent 的 bash 命令跑在本机一个 Linux 虚拟机里（Apple Virtualization.framework），用户选“安全隔离”，项目目录按相同绝对路径读写挂入，默认没有网络。做成插件，内核只补通用扩展点。
+- 内核（已提交 `7f11b4e66a` 版本号、`7767287971` 扩展点）：`pi.registerExecBackend("<插件>/<后端>", { run, release })` 与设置 `exec.backend`；原生 `bash` 的审批、输出截断与产物、后台任务、卡片不变，只换“在哪跑”；设置指向未加载的后端时 `bash` 报错，绝不回退本机；传给后端的 `env` 只含本次调用追加的变量。`executeBash` 的输出截断抽到 `exec/output-capture.ts` 共用。`test/exec-backend.test.ts` 11 项通过，原有 bash 与扩展测试 103 项通过。
+- 插件 `omp/plugins/sandbox-vm`（未提交）：`/vm` 与 `sandbox-vm/*` RPC；VM 作后端期间关闭 `eval`/`python`/`debug`（会回到宿主执行代码），切回后只恢复自己关的；空闲 15 分钟自动停机。Swift helper（`helper/main.swift`，带 `com.apple.security.virtualization` 签名，独立进程，不动 Desktop 签名）；guest 为 Alpine aarch64 内核加内存根文件系统（bash、git、python3、curl、ripgrep、make），约 1.5 秒启动；guest 里的命令代理 `guest/agent.py` 经 virtio 控制台第二个端口通信，同一会话共享已导出变量与函数，取消或超时杀整个进程组。`scripts/build-image.sh` 用 Alpine 官方文件（内核、minirootfs 按 SHA-256 固定）和 apk 包在构建 VM 里生成镜像（下载约 60 MB，其中 apk 包的大小是估计）。
+- 已验证（本机 macOS 27 / arm64）：真实 VM 9 项（跑命令与退出码、同路径读写挂载与只读挂载、会话状态保持、无网卡、git/python/bash/rg/curl 可用、取消后进程消失、超时、并发、`BashTool` 经后端运行且宿主 shell 未启动）；`nat` 联网（取得地址、DNS、HTTPS 200）；编译版内核加载插件并经 RPC 切换后端、启动停止 VM；`pack` → `install` 到全新 HOME 后可执行位与签名保留，并从安装副本启动真实 VM。插件测试共 23 项。
+- Desktop：设置 → Approvals → Command backend（`exec.backend`，`exec_backend_config.rs`、`OMP_BRIDGE.execBackend` / `setExecBackend`、四语言文案）；`npm test` 与新增 Rust 测试通过。
+- 未验证：没有“真实模型调用 bash → VM”的整条链；子 Agent（task）经后端运行未单独验证；Desktop 打包后的应用里没点过这一行，也没在应用里装插件跑 VM；guest 根是内存盘，运行时装的包下次启动消失，要加包就改 `guest/packages.txt` 重建镜像。
+- 没做：镜像按需下载与分发、持久磁盘、会话结束时清理 `:async:` 作业状态、Desktop 插件面板里的 VM 状态界面（目前只有 `/vm` 命令和侧栏状态文本）、Linux CLI 的等价方案。
+- 底座选择（2026-11-16，未提交、未重新打包）：插件新增 `base`（`alpine` 默认 / `ubuntu` 24.04.5 LTS），`/vm base`、`sandbox-vm/set-base`、Desktop 设置 → Approvals → Sandbox VM system；`scripts/build-image.sh [alpine|ubuntu]`，Ubuntu 用固定哈希的 ubuntu-base 加构建 VM 里 chroot 的 apt，两者共用 Alpine 内核；各自一个镜像目录（`image`、`image-ubuntu`），回收按底座或 `all`。已实机验证：Ubuntu 镜像构建成功（根文件系统 76 MB，目录 107 MB）、1.8 秒启动、python3 3.12.3/git 2.43.0/rg/make/curl 可用、`nat` 下 DHCP 与 HTTPS 正常、关机正常；Alpine 用新 init 重建后 1.3 秒启动、关机正常。插件 `tsc --noEmit` 通过，新增 `test/base.test.ts` 未运行（本机没有 bun）。GUI 命令行面板在 VM 为后端时进容器（2026-11-16，见下一条）。
+- 容器命令行（2026-11-16，未提交、未重新打包）：Desktop 终端面板在标签页的命令后端是 Sandbox VM 时连进 VM 里的 bash（`bash -i`，项目目录，面板标题“Sandbox VM”），VM 没启动先启动，启动失败报错而不回落本机 shell。通道：guest 代理加 `pty-*` 操作，helper 加终端 unix socket（仅本人，校验对端 uid）和 `attach` 子命令，插件发布 `<tmp>/npi-vm-routes/<omp pid>.json`，Rust `terminal/container.rs` 按标签页 omp 的 pid 读取并校验（目录/文件仅本人、helper 为绝对路径可执行文件、socket 是 socket），网页端只传 `container: true`。已实机验证（helper + 新 Ubuntu 镜像）：目录、TERM、窗口大小变化、退出码、socket 权限与清理；Rust `terminal` 60 项测试通过。旧镜像要重建才有终端，helper 会在终端里提示。
+- 镜像随插件分发（2026-11-16，未提交）：插件升到 1.0.0，`scripts/pack.sh` 把两个镜像打进 `.npix`（`images/<base>/`，git 忽略，打包后清掉）；启动顺序为设置里的 `image`、本机构建的镜像、包内镜像；`/vm reclaim` 只删本机构建的。本机 `~/.local/share/npi/sandbox-vm` 已清理，待用户安装 1.0.0 试用。
+- 权限面板与修复（2026-11-16，未提交）：VM 权限面板（网络、项目目录读写/只读、额外只读目录、核心数、内存上限、空闲停机）：TUI `/vm permissions`，GUI 设置 → Approvals → Sandbox VM permissions，RPC `sandbox-vm/permissions|set-permissions`，改动校验后保存、下次启动生效并提供重启；新增 `projectAccess`。VM 默认 8 核、内存上限 8 GiB：VZ 按需提交内存（刚启动约 480 MB），气球设备实测不归还内存（宿主占用不变）也没有空闲页报告，故不配置，停机才归还。修复 GUI 终端“the Sandbox VM is not running for this tab”：`npi` 会再起一个子进程跑真正的 omp，插件发布路由用的是子进程 pid，而 Rust 用的是外层进程 pid；Rust 现在按进程树（`proc_listchildpids`）查找，插件也清理已死进程的路由残留。用本机 `npi` 复现并确认了 pid 差一位；Rust `terminal` 62 项测试通过。插件测试在本机用 `BUN_BE_BUN=1 npi test` 跑：33 通过、12 跳过，`kernel.test.ts` 因 fake helper 需要真 bun 无法在此环境运行，已手动复现同样的六步 RPC 全部通过。
+- 打包：`dist/3.1.0.106/NPi Desktop_3.1.0.106_aarch64.dmg`（见 RELEASES），随包内核 `npi/3.1.0.106`；插件不随 App 分发。本机已把镜像放进 `~/.local/share/npi/sandbox-vm/image`。内核相关测试里 51 项失败（插件管理器、Claude 插件发现、`ExtensionRunner` 审批生命周期）在改动前的提交上同样失败，与本次无关。
+- 使用：`helper/build.sh`、`scripts/build-image.sh`（镜像在 `~/.local/share/npi/sandbox-vm/image`）、`npi plugin pack` + 安装 `.npix`，然后 `/vm on` 或 Desktop 设置里选 Sandbox VM。
+
 ## 界面整理（2026-11-15，已打包 3.1.0.105 UI，未提交、未安装）
 
 - 已做：设置页分组菜单与扁平行、拆页（Appearance / Notifications / Shortcuts / Approvals / Extensions / Terminal）；历史独立窗口错位修复；模型菜单 Effort 滑动条；旧 Plan 卡片折叠、Jump to latest 小圆钮；Cmd+W 后保留 Dock 小白点。细节见 `desktop/CHANGELOG.md` 的 Unreleased 与 `desktop/docs/architecture/settings.md`。

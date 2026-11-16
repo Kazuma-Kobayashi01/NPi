@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Settings → Approvals → Command backend: run the agent's bash commands on this machine or in the Sandbox VM plugin's Linux virtual machine (omp's `exec.backend`). Tabs opened afterwards use it; with the VM chosen and its plugin not installed, bash stops with an error instead of running locally.
 - About NPi Desktop also shows the omp core and kernel versions of the kernel the app runs (`omp 18.14.0 · kernel.2.1.3-universal`), read from `npi --version --all`; an older kernel leaves the panel as it was.
 - Settings → Extensions → Plugins: the installed plugins with their developer, uninstall, and installing a `.npix` plugin package after seeing what it adds and who made it.
 - Side agent tabs (Code): a project's right-click menu opens a conversation with Claude, Codex, Gemini CLI or Antigravity through the Agent Client Protocol (`omp --side-agent`). The agent signs in with its own account; its replies and tool calls stream like omp's, its permission requests use the approval prompt, and the tab reopens with the same agent after a relaunch.

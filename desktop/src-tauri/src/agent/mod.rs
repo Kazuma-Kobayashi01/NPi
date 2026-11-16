@@ -452,6 +452,13 @@ impl AgentBridge {
     /// Look up the last cached spawn / startup error for a `session_id`.
     /// Returns `None` if the session is currently running cleanly (or
     /// has never been started for this id).
+    /// The process id of the omp this app started for `session_id`, `None` for an unknown or finished session.
+    /// The Sandbox VM terminal keys its route by it (`terminal::container`).
+    pub fn omp_pid(&self, session_id: &str) -> Option<u32> {
+        let sessions = self.sessions.lock().ok()?;
+        sessions.get(session_id)?.child.as_ref().map(std::process::Child::id)
+    }
+
     pub fn last_error(&self, session_id: &str) -> Option<String> {
         let Ok(errs) = self.last_errors.lock() else {
             return None;

@@ -43,6 +43,7 @@ mod git_browser;
 mod git_watcher;
 mod goal_config;
 mod sandbox_config;
+mod exec_backend_config;
 mod model_config;
 mod json_store;
 mod keybindings;
@@ -717,7 +718,8 @@ async fn close_all_tabs(app: AppHandle) -> Result<(), String> {
 }
 
 /// Start the tab's terminal shell, in the tab's folder (else the home
-/// folder) with the shell setting — see `terminal`. While one is starting or
+/// folder) with the shell setting — see `terminal`. `container` asks for a shell in the Sandbox VM
+/// instead (the tab's VM plugin must have published its route). While one is starting or
 /// running, returns its status instead. `async` + `spawn_blocking`: spawning
 /// a shell (and killing an exited one's leftovers) blocks.
 #[tauri::command]
@@ -725,11 +727,23 @@ async fn terminal_open(
     session_id: String,
     cols: u16,
     rows: u16,
+    container: Option<bool>,
     app: AppHandle,
     terminal: State<'_, Arc<terminal::TerminalManager>>,
+    bridge: State<'_, AgentBridge>,
 ) -> Result<terminal::TerminalStatus, String> {
+    // `container` is only a request for the Sandbox VM's shell: the program and the socket come from the route
+    // the VM plugin published for this tab's omp (`terminal::container`), never from the webview.
+    let route = if container == Some(true) {
+        let pid = bridge
+            .omp_pid(&session_id)
+            .ok_or_else(|| format!("no agent process for tab {session_id}"))?;
+        Some(terminal::container_route(pid)?)
+    } else {
+        None
+    };
     with_blocking(&terminal, move |t| {
-        t.open(terminal::TauriEmit(app), &session_id, cols, rows)
+        t.open_with(terminal::TauriEmit(app), &session_id, cols, rows, route)
     })
     .await
 }
@@ -1518,6 +1532,29 @@ async fn goal_continuation_set(
 ) -> Result<bool, String> {
     let profile = store.resolve_owned(profile)?;
     off_ipc(move || goal_config::set(profile.as_deref(), enabled)).await?
+}
+
+/// omp's command backend (`exec.backend`: empty for this machine, or the Sandbox VM's name) for `profile` — see
+/// `exec_backend_config::get`. Same shape as [`sandbox_mode_get`].
+#[tauri::command]
+async fn exec_backend_get(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<String, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || exec_backend_config::get(profile.as_deref())).await?
+}
+
+/// Write omp's command backend for `profile` and return the value omp reports afterwards — see
+/// `exec_backend_config::set`. Tabs pick it up when they start.
+#[tauri::command]
+async fn exec_backend_set(
+    profile: Option<String>,
+    backend: String,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<String, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || exec_backend_config::set(profile.as_deref(), &backend)).await?
 }
 
 /// omp's process sandbox mode (`off`, `workspace-write`, `read-only`) for
@@ -2429,6 +2466,8 @@ pub fn run() {
             goal_continuation_set,
             sandbox_mode_get,
             sandbox_mode_set,
+            exec_backend_get,
+            exec_backend_set,
             computer_use::computer_use_get,
             computer_use::computer_use_set,
             computer_use::computer_use_request_permission,

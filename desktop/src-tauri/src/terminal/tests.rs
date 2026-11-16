@@ -510,12 +510,14 @@ fn status_goes_from_starting_to_running_to_exited() {
         instance: 999,
         shell: "/bin/pending".to_owned(),
         state: TerminalState::Starting,
+        container: false,
         exit_code: None,
         windows_pty: None,
     };
     manager.tabs().get_mut("states").unwrap().slot = Slot::Spawning {
         instance: 999,
         shell: PathBuf::from("/bin/pending"),
+        container: false,
     };
     assert_eq!(manager.status("states").as_ref(), Some(&pending));
     assert_eq!(

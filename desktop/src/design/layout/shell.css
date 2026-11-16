@@ -236,6 +236,8 @@ html.is-fullscreen.tauri-native .chrome-left,
 .composer-pill svg, .composer-pill .dot { display: none; }
 .thinking-level { text-transform: capitalize; }
 .composer-foot .composer-bg-note { margin-right: auto; }
+.composer-foot .composer-vm { margin-right: auto; }
+.composer-foot .composer-vm + .composer-bg-note { margin-left: 0; }
 
 /* ── Collapsed sidebar: the top-left segment melts into the bar ── */
 .tauri-native .chrome:not(.with-sidebar) { background: var(--bg-window); border-bottom: 1px solid var(--line); }
@@ -248,7 +250,7 @@ html.is-fullscreen.tauri-native .chrome-left,
 /* ── Composer: narrower box; the choices under it in the system sans ── */
 .composer-row { min-height: calc(var(--u) * 3); padding: 0 calc(var(--u) * 0.6); }
 .composer-input textarea { min-height: calc(var(--u) * 1.5); line-height: 1.5; }
-.composer-foot, .composer-pill, .composer-pill span { font-family: var(--font-ui-sans); }
+.composer-foot, .composer-pill, .composer-pill span, .composer-vm { font-family: var(--font-ui-sans); }
 
 /* ── Welcome page ── */
 .empty-ws { display: flex; align-items: center; justify-content: center; background: var(--bg-window); }

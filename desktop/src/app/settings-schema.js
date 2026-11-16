@@ -258,6 +258,13 @@
       { name: "Sandbox", src: "omp config", rows: [
         custom("sandboxMode", "Process sandbox", "omp runs commands, eval, file tools and MCP servers inside a macOS Seatbelt sandbox. Workspace write: they can write only inside the project (its git repository), npi's own folders and temporary folders. Read only: not even the project. Reading files and network access stay open. Tabs started or restarted afterwards use it; it is the same setting as the CLI's sandbox.mode.", "sandbox seatbelt contain containment restrict write read only workspace isolation"),
       ] },
+      { name: "Command backend", src: "omp config", rows: [
+        custom("execBackend", "Run commands in", "Where the agent's bash commands run. This machine: your own shell. Sandbox VM: a Linux virtual machine of the Sandbox VM plugin, with the project folder mounted at the same path and no network unless the plugin allows it; eval, python and debug are switched off while it is chosen. If the plugin is not installed, bash stops with an error and never runs here. Tabs started or restarted afterwards use it; it is the same setting as the CLI's exec.backend.", "vm virtual machine sandbox backend isolate isolation container linux exec commands bash"),
+        custom("vmBase", "Sandbox VM system", "The Linux the Sandbox VM boots: Alpine (small, about 70 MB, musl) or Ubuntu 24.04 LTS (about 110 MB on disk, glibc and apt packages; a bigger root in the VM's memory). Both images come with the plugin package; one built on this machine with scripts/build-image.sh [alpine|ubuntu] takes precedence. Switching stops this tab's VM; it boots the new system at the next command. Needs the Sandbox VM plugin.", "vm virtual machine sandbox base image ubuntu alpine linux distro system os"),
+      ] },
+      { name: "Sandbox VM permissions", src: "sandbox-vm", rows: [
+        custom("vmPermissions", "Network", "Whether the Sandbox VM can reach the network. Off: no network device at all. On: commands in the VM can download and send data like any program on this machine. Applies when the VM restarts. Needs the Sandbox VM plugin.", "vm virtual machine sandbox permissions network internet nat project read only write folders mount cpu cores memory ram idle stop restart"),
+      ] },
       { name: "Standing rules", rows: [
         custom("approvalRules", "Always-allow rules", "Rules are only granted from a prompt; here you review and revoke them.", "rules always allow revoke saved answers"),
       ] },

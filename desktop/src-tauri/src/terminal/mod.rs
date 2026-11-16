@@ -26,6 +26,7 @@
 //! that blocks runs on the IPC thread: input is queued for the shell's
 //! writer thread, and spawning and killing run in `spawn_blocking`.
 
+mod container;
 mod kill;
 mod pty;
 mod pump;
@@ -51,6 +52,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
+pub use container::{route as container_route, ContainerRoute};
 pub use pump::Emit;
 pub use settings::TerminalSettings;
 pub use wire::{ReplayWire, TauriEmit, TerminalState, TerminalStatus};
@@ -80,7 +82,11 @@ enum Slot {
     /// No shell yet (or its spawn failed).
     Idle,
     /// An `open` is spawning `instance` without holding the map.
-    Spawning { instance: u64, shell: PathBuf },
+    Spawning {
+        instance: u64,
+        shell: PathBuf,
+        container: bool,
+    },
     /// A shell, running or exited.
     Live(Arc<Pty>),
 }
@@ -89,10 +95,15 @@ impl Slot {
     fn status(&self) -> Option<TerminalStatus> {
         match self {
             Self::Idle => None,
-            Self::Spawning { instance, shell } => Some(TerminalStatus {
+            Self::Spawning {
+                instance,
+                shell,
+                container,
+            } => Some(TerminalStatus {
                 instance: *instance,
                 shell: shell.display().to_string(),
                 state: TerminalState::Starting,
+                container: *container,
                 exit_code: None,
                 windows_pty: windows_pty(),
             }),
@@ -121,6 +132,7 @@ fn live_status(pty: &Pty) -> TerminalStatus {
         instance: pty.instance(),
         shell: pty.shell().display().to_string(),
         state,
+        container: pty.container(),
         exit_code,
         windows_pty: windows_pty(),
     }
@@ -183,17 +195,31 @@ impl TerminalManager {
         self.tabs().get(id).and_then(|tab| tab.folder.clone())
     }
 
-    /// Start the tab's shell and return its status. While one is starting or
-    /// running, returns that one's status instead (no second spawn); an
-    /// exited one is replaced, and its leftovers are killed. `emit` becomes
-    /// the new shell's emitter. Blocks while spawning and killing: call off
-    /// the IPC thread.
+    /// [`Self::open_with`] for a shell on this machine.
+    #[cfg(test)]
     pub fn open<E: Emit>(
         &self,
         emit: E,
         id: &str,
         cols: u16,
         rows: u16,
+    ) -> Result<TerminalStatus, String> {
+        self.open_with(emit, id, cols, rows, None)
+    }
+
+    /// Start the tab's shell and return its status. While one is starting or
+    /// running, returns that one's status instead (no second spawn, whichever
+    /// kind it is); an exited one is replaced, and its leftovers are killed.
+    /// `emit` becomes the new shell's emitter. With `container`, the shell is
+    /// the Sandbox VM's client (`container.rs`) instead of the shell setting's
+    /// program. Blocks while spawning and killing: call off the IPC thread.
+    pub fn open_with<E: Emit>(
+        &self,
+        emit: E,
+        id: &str,
+        cols: u16,
+        rows: u16,
+        container: Option<ContainerRoute>,
     ) -> Result<TerminalStatus, String> {
         check_size(cols, rows)?;
         #[cfg(windows)]
@@ -210,9 +236,20 @@ impl TerminalManager {
         };
         // Both may touch the disk (and the default shell may query the user
         // database): before taking the map again.
-        let preference = self.settings.shell();
-        let (program, shell_args) = shell::resolve_shell(&preference)?;
         let cwd = tab_cwd(folder.as_deref())?;
+        let (program, shell_args) = match &container {
+            Some(route) => (
+                route.program.clone(),
+                vec![
+                    "attach".to_owned(),
+                    route.socket.display().to_string(),
+                    "--cwd".to_owned(),
+                    cwd.display().to_string(),
+                ],
+            ),
+            None => shell::resolve_shell(&self.settings.shell())?,
+        };
+        let is_container = container.is_some();
 
         let (instance, replaced) = {
             let mut tabs = self.tabs();
@@ -226,6 +263,7 @@ impl TerminalManager {
             let starting = Slot::Spawning {
                 instance,
                 shell: program.clone(),
+                container: is_container,
             };
             let replaced = std::mem::replace(&mut tab.slot, starting);
             drop(tabs);
@@ -246,6 +284,7 @@ impl TerminalManager {
                 shell_args: &shell_args,
                 cols,
                 rows,
+                container: is_container,
             },
         );
         let orphan = {

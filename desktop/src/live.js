@@ -3924,6 +3924,17 @@
       return _invokeResult("goal_continuation_set", { profile, enabled });
     },
 
+    /** omp's command backend for `profile` (src-tauri exec_backend_config.rs): resolves
+     *  `{ok: true, value}` with `""` (this machine) or `"sandbox-vm/default"`, or `{ok: false, error}`.
+     *  Same value as the CLI's `exec.backend`. */
+    execBackend(profile) {
+      return _invokeResult("exec_backend_get", { profile });
+    },
+    /** Write it; resolves like `execBackend` with the value omp reports afterwards. Tabs started or
+     *  restarted afterwards use it. */
+    setExecBackend(profile, backend) {
+      return _invokeResult("exec_backend_set", { profile, backend });
+    },
     /** omp's process sandbox mode for `profile` (src-tauri sandbox_config.rs):
      *  `{ok, value}` with "off" / "workspace-write" / "read-only", or
      *  `{ok: false, error}`. Same value as the CLI's `sandbox.mode`. */
@@ -4557,14 +4568,29 @@
 
     /** Start the tab's shell (Rust picks the folder and the shell) at `cols`
      *  x `rows`; a live or starting shell is returned as is. Resolves
-     *  `{ ok: true, status }` (Rust's `TerminalStatus`) or `{ ok: false, error }`. */
+     *  `{ ok: true, status }` (Rust's `TerminalStatus`) or `{ ok: false, error }`.
+     *  A tab whose commands run in the Sandbox VM (`sandbox-vm/status`: `backend`) gets a bash in the VM
+     *  instead: the VM is started first and Rust is only told `container: true`, it finds the VM's route
+     *  itself. A VM that cannot start is an error, never a shell on this machine. */
     async terminalOpen(sessionId, cols, rows) {
-      const res = await _invokeResult("terminal_open", { sessionId, cols, rows });
+      let container = false;
+      if (sessionId === activeSessionId) {
+        const vm = await window.OMP_BRIDGE.extensionCommand("sandbox-vm/status").catch(() => null);
+        if (vm?.backend) {
+          try {
+            await window.OMP_BRIDGE.extensionCommand("sandbox-vm/terminal");
+            container = true;
+          } catch (err) {
+            return { ok: false, error: `Sandbox VM: ${err?.message || err}` };
+          }
+        }
+      }
+      const res = await _invokeResult("terminal_open", { sessionId, cols, rows, container });
       return res.ok ? { ok: true, status: res.value } : res;
     },
 
     /** The tab's shell as Rust sees it — `{ instance, shell, state,
-     *  exitCode }` — or `null` when none was started (or no Tauri). */
+     *  container, exitCode }` — or `null` when none was started (or no Tauri). */
     terminalStatus(sessionId) {
       return _invokeSafe("terminal_status", { sessionId }, null);
     },

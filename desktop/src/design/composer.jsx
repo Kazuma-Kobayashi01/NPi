@@ -104,6 +104,32 @@ function ComposerAttachMenu({ onImages, onFolder }) {
 // tweaks (Settings › Composer); the defaults match TWEAK_DEFAULTS.
 const _cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
+// Sandbox VM plugin state of this tab (`sandbox-vm/status`, `sandbox-vm/state` events), shown at the left of the
+// composer's footer. Hidden when the plugin is not loaded or the VM is stopped and bash runs on this machine.
+function SandboxVmChip({ sessionId }) {
+  const [vm, setVm] = React.useState(null);
+  React.useEffect(() => {
+    const bridge = window.OMP_BRIDGE;
+    let live = true;
+    setVm(null);
+    bridge?.extensionCommand?.("sandbox-vm/status").then((v) => { if (live && v) setVm(v); }, () => {});
+    const off = bridge?.onExtensionEvent?.((e) => {
+      if (e.name === "sandbox-vm/state" && (!e.sessionId || e.sessionId === sessionId)) setVm((prev) => ({ ...prev, ...e.data }));
+    });
+    return () => { live = false; off?.(); };
+  }, [sessionId]);
+  if (!vm || (vm.state === "stopped" && !vm.backend)) return null;
+  const tone = vm.state === "error" ? "err" : vm.state === "running" ? "ok" : "wait";
+  const word = { running: "running", starting: "starting", stopped: "stopped", error: "error" }[vm.state] || vm.state;
+  return (
+    <span className={`composer-vm ${tone}`}
+      title={`Sandbox VM${vm.base ? ` (${vm.base})` : ""} ${word}${vm.detail ? ` (${vm.detail})` : ""}; bash runs ${vm.backend ? "in the VM" : "on this machine"}. /vm reclaim deletes its image.`}>
+      <span className="composer-vm-dot" />
+      <span>Sandbox VM{vm.base ? ` · ${vm.base}` : ""} · {word}</span>
+    </span>
+  );
+}
+
 function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePlan, planBlocked = "", goalMode = false, goalTint = false, onToggleGoal, goalBlocked = "", goalStrip = null, onOpenCmd, onOpenModel, currentModel, approvalMode = null, onApprovals, favoriteModels = [], onPickModel, onManageModels, profileId, contextInfo = null, onToggleDetails, usage = null, thinking, onLoadThinkingLevels, onSetThinking, isStreaming, isCompacting = false, backgroundWork = false, onAbort, onApprove, annotationCount = 0, microcopy, onFollowUp, draftInsert, promptHistory = [], promptInsert, queue, queueSending, onRemoveQueued, onPromoteQueued, onSendQueuedNow, browserChips = [], onRemoveBrowserChip, onBrowserChipClick, submitKey = "enter", pasteCollapseLines = 5 }) {
   // Drafts are per tab (issue #28). The composer stays mounted across tab
   // switches and keeps one draft per session id (app/session-ui.js
@@ -790,6 +816,7 @@ function Composer({ sessionId, sessionIds, onSend, onPick, planMode, onTogglePla
       </div>
 
       <div className="composer-foot">
+        <SandboxVmChip key={sessionId} sessionId={sessionId} />
         {isCompacting && <span className="composer-bg-note">Compacting context… · sending paused; your draft is preserved</span>}
         {backgroundWork && (
           <span className="composer-bg-note" title="omp reports background work (an async bash, task or eval job) whose result will wake the agent">
