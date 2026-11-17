@@ -3909,6 +3909,14 @@
     setRosterRole(role, selector, profile = _activeProfileId()) {
       return _invokeResult("model_roster_set", { profile, role, selector });
     },
+    /** Each model's chosen context window (`provider/id` → tokens); models without one use their default. */
+    modelContextWindows(profile = _activeProfileId()) {
+      return _invokeResult("model_context_windows_get", { profile });
+    },
+    /** Sets one model's context window (null: back to its default); returns every entry. */
+    setModelContextWindow(model, tokens, profile = _activeProfileId()) {
+      return _invokeResult("model_context_window_set", { profile, model, tokens });
+    },
 
     /** omp's auto-continue setting for `profile` (src-tauri goal_config.rs):
      *  `{ok, value}` (true / false) or `{ok: false, error}` with omp's

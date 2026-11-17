@@ -144,5 +144,23 @@
     return { index, last, usable: last >= 1, fraction: last >= 1 && index > 0 ? index / last : 0, ultra: last >= 2 && index === last };
   }
 
-  window.OMP_MODELS = { vendorLabel, keyOf, pickerModels, groupByVendor, toggleFavorite, rosterView, levelLabel, effortStops };
+  // The context windows Settings → Models offers (omp's `modelContextWindows`, config/model-context-window.ts).
+  const CONTEXT_STEPS = [200000, 400000, 1000000];
+
+  /** The windows a model whose largest window is `ceiling` can pick: every step below it, then that
+   *  largest window (1M at most). Empty when it is unknown or below 200K (nothing to pick). */
+  function contextStops(ceiling) {
+    const c = Number(ceiling);
+    if (!Number.isFinite(c) || c < CONTEXT_STEPS[0]) return [];
+    const top = Math.min(c, CONTEXT_STEPS[CONTEXT_STEPS.length - 1]);
+    return [...CONTEXT_STEPS.filter(s => s < top), top];
+  }
+
+  /** A window as the slider labels it: `200K`, `1M`, `1.05M`. */
+  function contextLabel(tokens) {
+    const t = Number(tokens) || 0;
+    return t >= 1000000 ? `${Number((t / 1000000).toFixed(2))}M` : `${Math.round(t / 1000)}K`;
+  }
+
+  window.OMP_MODELS = { vendorLabel, keyOf, pickerModels, groupByVendor, toggleFavorite, rosterView, levelLabel, effortStops, contextStops, contextLabel };
 })();

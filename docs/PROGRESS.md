@@ -6,6 +6,12 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 按模型的上下文窗口（2026-11-17，Desktop `3.1.0.106`，omp `fix/sandbox-vm-robustness` `e145865f58`；已提交，两边 main 快进并推送）
+
+- 内核：新设置 `modelContextWindows`（`provider/id` → token，`config/model-context-window.ts`）。可选 200K / 400K / 1M，上限为模型最大窗口（不足 1M 时最高档即最大窗口）。选择超过标准窗口时该模型打开扩展窗口，小于时 `fitContextWindow` 把会话绑定的窗口封顶（压缩与上下文显示跟随）；运行中的会话监听设置变化后重新套用。`models --json` 新增 `maxContextWindow`。CLI：/settings → Context → Model Context Windows（先选模型再选窗口）。
+- Desktop：设置 → 模型的“收藏的模型”改为表格（模型 · 显示 · 上下文窗口拖动条），写入走 `model_context_window_set` → `omp config set`；模型选择器去掉单独的强度卡片，点按钮直接进模型列表，强度拖动条在列表顶部。
+- 已做：omp `model-registry` 164 项（新增 1 项）、`tsgo` 类型检查；Desktop `model_config` 12 项（新增 1 项）、`npm test` 全部通过；UI demo 里用桩桥接看过设置表格（拖动保存）和新模型菜单。已打包 `dist/3.1.0.106/NPi Desktop_3.1.0.106_context_aarch64.dmg`（随包内核已重编，见 RELEASES）。**未验证**：打包后的应用未运行；CLI /settings 子菜单未实际打开。
+
 ## 沙盒虚拟机（2026-11-16，Desktop `3.1.0.106`，内核 `kernel.2.1.4-universal`；内核扩展点已提交，插件与 Desktop 设置行未提交）
 
 - 目标：agent 的 bash 命令跑在本机一个 Linux 虚拟机里（Apple Virtualization.framework），用户选“安全隔离”，项目目录按相同绝对路径读写挂入，默认没有网络。做成插件，内核只补通用扩展点。

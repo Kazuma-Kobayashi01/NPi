@@ -163,7 +163,7 @@
         custom("modelRoster", "Model roster", "Four tiers of models the assistant schedules subagents onto by how hard their work is, and the arbiter of a multi-expert review. In Auto subagent mode a batch on one tier starts without asking. Fast, Subtask and Thinking follow Economy, Standard and Flagship unless set apart. Shared with the terminal.", "model roster tier flagship high standard economy arbiter subagent schedule"),
       ] },
       { name: "Picker", rows: [
-        custom("favoriteModels", "Favourite models", "The few models the small picker next to the prompt box lists. The others are under More models.", "favorite favourite common picker"),
+        custom("favoriteModels", "Models", "Every model: whether the small picker next to the prompt box lists it (the others are under More models), and its context window, 200K to 1M up to the model's largest. Context windows are shared with the terminal.", "favorite favourite common picker visibility context window 200k 400k 1m"),
       ] },
       { name: "Vendors", src: "omp login", rows: [
         custom("vendors", "Vendors", "Who the models come from. Signing in uses omp's own sign-in, so the terminal stays signed in too.", "vendor provider login sign in oauth anthropic openai google api"),

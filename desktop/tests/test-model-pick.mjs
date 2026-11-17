@@ -87,5 +87,16 @@ check("effort levels: names, and the slider stop of the level in use", () => {
   assert.equal(M.effortStops(null, "high").usable, false);
 });
 
+check("context window stops: 200K, 400K, 1M, topped by the model's largest window", () => {
+  assert.deepEqual(plain(M.contextStops(1000000)), [200000, 400000, 1000000]);
+  assert.deepEqual(plain(M.contextStops(2000000)), [200000, 400000, 1000000], "past 1M the slider stops at 1M");
+  assert.deepEqual(plain(M.contextStops(272000)), [200000, 272000], "below 400K the top stop is the model's window");
+  assert.deepEqual(plain(M.contextStops(400000)), [200000, 400000]);
+  assert.deepEqual(plain(M.contextStops(200000)), [200000], "a 200K model has one stop");
+  assert.deepEqual(plain(M.contextStops(128000)), [], "below 200K there is nothing to pick");
+  assert.deepEqual(plain(M.contextStops(null)), []);
+  assert.deepEqual([200000, 1000000, 1050000].map(M.contextLabel), ["200K", "1M", "1.05M"]);
+});
+
 if (failed) process.exit(1);
-console.log("test-model-pick: 7 checks passed");
+console.log("test-model-pick: 8 checks passed");

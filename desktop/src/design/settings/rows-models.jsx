@@ -3,7 +3,8 @@
      defaultModel    the model new tabs start on (omp's `modelRoles.default`)
      modelRoster     the four tiers subagents are scheduled onto, and the arbiter
                      (omp's `modelRoles.flagship` … `arbiter`; OMP_MODELS.rosterView)
-     favoriteModels  which models the small picker lists (an app setting)
+     favoriteModels  every model: whether the small picker lists it (an app setting)
+                     and its context window (omp's `modelContextWindows`)
      vendors         the vendors omp can use now, and signing in to more
 
    Models and the default come from omp's CLI (`omp models --json`,
@@ -140,12 +141,72 @@ function _SRM_Roster({ row, ctx, query }) {
   );
 }
 
+/** One model's context window: a stepped slider over 200K / 400K / 1M (topped by the model's
+ *  largest window, `OMP_MODELS.contextStops`). Without an entry the thumb sits at the default window
+ *  and reads "Default"; a drag shows its stop and saves once, on release. */
+function _SRM_Window({ model, chosen, onSet }) {
+  const M = window.OMP_MODELS;
+  const T = window.OMP_I18N.t;
+  const stops = M.contextStops(model.maxContextWindow ?? model.contextWindow);
+  const [drag, setDrag] = React.useState(null);
+  if (stops.length < 2) {
+    const only = stops[0] ?? model.contextWindow;
+    return <div className="st-ctx st-ctx-fixed">{only ? M.contextLabel(only) : "—"}</div>;
+  }
+  const fallback = Math.max(0, stops.filter(t => t <= (model.contextWindow ?? 0)).length - 1);
+  const index = drag ?? (chosen ? Math.max(0, stops.indexOf(chosen)) : fallback);
+  const last = stops.length - 1;
+  const commit = (i) => {
+    setDrag(null);
+    if (stops[i] !== chosen) onSet(stops[i]);
+  };
+  const value = drag !== null ? M.contextLabel(stops[drag])
+    : chosen ? M.contextLabel(chosen)
+    : T("Default");
+  return (
+    <div className={`st-ctx${chosen || drag !== null ? "" : " unset"}`}>
+      <div className="st-ctx-track" style={{ "--ctx-at": index / last }}>
+        <div className="st-ctx-fill" aria-hidden="true" />
+        <input type="range" min={0} max={last} step={1} value={index}
+          aria-label={T("Context window")} aria-valuetext={value}
+          onChange={e => setDrag(Number(e.target.value))}
+          onPointerUp={e => commit(Number(e.currentTarget.value))}
+          onKeyUp={e => { if (drag !== null) commit(Number(e.currentTarget.value)); }}
+          onBlur={e => { if (drag !== null) commit(Number(e.currentTarget.value)); }} />
+      </div>
+      <div className="st-ctx-ticks" aria-hidden="true">
+        {stops.map((t, i) => (
+          <span key={t} className={i === index ? "on" : ""} style={{ left: `${(i / last) * 100}%` }}>{M.contextLabel(t)}</span>
+        ))}
+      </div>
+      <div className="st-ctx-value">
+        <span title={!chosen && model.contextWindow ? M.contextLabel(model.contextWindow) : undefined}>{value}</span>
+        {chosen && <button type="button" className="st-fav-link" onClick={() => onSet(null)} title={T("Back to the model's default window")}>{T("Reset")}</button>}
+      </div>
+    </div>
+  );
+}
+
+/** Settings → Models: every model by vendor, whether the small picker lists it (Visibility, an app
+ *  setting) and its context window (omp's `modelContextWindows`, shared with the terminal). */
 function _SRM_Favorites({ row, ctx, query }) {
-  const { SettingsRow: Row } = window;
+  const { SettingsRow: Row, SettingsToggle: Toggle } = window;
   const M = window.OMP_MODELS;
   const T = window.OMP_I18N.t;
   const cat = _SRM_useCatalog(ctx);
   const [filter, setFilter] = React.useState("");
+  const [windows, setWindows] = React.useState({});
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    ctx.bridge?.modelContextWindows?.().then(r => { if (r?.ok) setWindows(r.value ?? {}); else if (r) setError(String(r.error ?? "")); });
+  }, [ctx.bridge, ctx.profileId]);
+  const setWindow = async (key, tokens) => {
+    setError("");
+    setWindows(w => { const next = { ...w }; if (tokens) next[key] = tokens; else delete next[key]; return next; });
+    const r = await ctx.bridge?.setModelContextWindow?.(key, tokens);
+    if (r?.ok) setWindows(r.value ?? {});
+    else if (r) setError(String(r.error ?? "could not save"));
+  };
   const favorites = Array.isArray(ctx.t.favoriteModels) ? ctx.t.favoriteModels : [];
   const groups = React.useMemo(() => M.groupByVendor(cat.models), [cat.models]);
   const set = next => ctx.setTweak("favoriteModels", next);
@@ -184,16 +245,24 @@ function _SRM_Favorites({ row, ctx, query }) {
                   <button type="button" className="st-fav-link" disabled={on === 0} onClick={() => setMany(keys, false)}>{T("None")}</button>
                 </span>
               </header>
-              <div className="st-fav-grid">
+              <div className="st-mtab" role="table" aria-label={g.vendor}>
+                <div className="st-mtab-row st-mtab-cols" role="row">
+                  <span role="columnheader">{T("Model")}</span>
+                  <span role="columnheader">{T("Visibility")}</span>
+                  <span role="columnheader">{T("Context window")}</span>
+                </div>
                 {g.visible.map(m => {
                   const k = M.keyOf(m);
                   const picked = favorites.includes(k);
                   return (
-                    <label key={k} className={`st-fav-item${picked ? " on" : ""}`} title={k}>
-                      <input type="checkbox" checked={picked} onChange={() => set(M.toggleFavorite(favorites, k))} />
-                      <span className="st-fav-name">{m.name}</span>
-                      {tagOf(g, m) && <span className="st-fav-id mono">{tagOf(g, m)}</span>}
-                    </label>
+                    <div key={k} className={`st-mtab-row${picked ? " on" : ""}`} role="row" title={k}>
+                      <span className="st-mtab-name" role="cell">
+                        <span className="st-fav-name">{m.name}</span>
+                        {tagOf(g, m) && <span className="st-fav-id mono">{tagOf(g, m)}</span>}
+                      </span>
+                      <span role="cell"><Toggle value={picked} label={T("Show {model} in the picker").replace("{model}", m.name)} onChange={() => set(M.toggleFavorite(favorites, k))} /></span>
+                      <span role="cell"><_SRM_Window model={m} chosen={windows[k]} onSet={t => setWindow(k, t)} /></span>
+                    </div>
                   );
                 })}
               </div>
@@ -202,7 +271,8 @@ function _SRM_Favorites({ row, ctx, query }) {
         })}
         {groups.length === 0 && <div className="st-fav-empty">{cat.loading ? "Loading models…" : "No models yet. Add a vendor below."}</div>}
         {groups.length > 0 && shown.length === 0 && <div className="st-fav-empty">{T("No model matches.")}</div>}
-        {favorites.length > 0 && <div className="st-fav-empty">The picker lists every ticked model, sorted by vendor.</div>}
+        {error && <div className="st-row-error">{error}</div>}
+        <div className="st-fav-empty">{T("Visible models are listed in the picker, sorted by vendor. A context window past the model's default may cost more; new turns use it.")}</div>
       </div>
     </Row>
   );

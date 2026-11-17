@@ -1,14 +1,14 @@
 /* ═════════════════════════════════════════════════════════════════════
    model-menu.jsx — the small floating model picker next to the prompt box
 
-   One button ("Sonnet 5.5  Ultra ⌄") that opens a card (after LabBot's):
-   - the level card: the level in large type (the model's deepest is "Ultra",
-     in a gradient), the model's name under it (a click lists the models),
-     and a stepped slider with one stop per level the model supports;
-   - Model ›: the favourite models (Settings → Models), each with its vendor
-     in a small bordered tag, the current one ticked, the others numbered
-     1-9 (those keys work on the card too), then More models › vendors, then
-     that vendor's models, and Manage models….
+   One button ("Sonnet 5.5  Ultra ⌄") that opens the model list:
+   - on top, the effort strip: the level (the model's deepest is "Ultra", in
+     a gradient) and a stepped slider with one stop per level the model
+     supports (no strip for a model with fewer than two levels);
+   - the favourite models (Settings → Models), each with its vendor in a
+     small bordered tag, the current one ticked, the others numbered 1-9
+     (those keys pick it), then More models › vendors, then that vendor's
+     models, and Manage models….
    Used by the composer (a live tab), the start page (no session yet) and
    SideChat, which differ only in where models and levels come from, so both
    are props.
@@ -30,12 +30,13 @@ const _MM_SPARKS = Array.from({ length: 10 }, (_, k) => ({
   left: `${(k * 37 + 11) % 97}%`, top: `${20 + ((k * 53) % 60)}%`, delay: `${-(k * 0.37).toFixed(2)}s`, dur: `${(2.2 + (k % 4) * 0.4).toFixed(1)}s`,
 }));
 
-/** The level card. A drag shows its level and sends it once, on release
- *  (pointer, key or blur); a click on the stop in use sends it too, which
- *  pins a level `auto` resolved to. The thumb stays where it was dropped
- *  until omp reports the level (it may clamp it), or briefly when the level
- *  did not change. A model with fewer than two levels has no slider. */
-function _MMCard({ levels, level, current, onSet, onModels }) {
+/** The effort strip on top of the model list. A drag shows its level and
+ *  sends it once, on release (pointer, key or blur); a click on the stop in
+ *  use sends it too, which pins a level `auto` resolved to. The thumb stays
+ *  where it was dropped until omp reports the level (it may clamp it), or
+ *  briefly when the level did not change. A model with fewer than two levels
+ *  has no strip. */
+function _MMEffort({ levels, level, onSet }) {
   const M = window.OMP_MODELS;
   const T = window.OMP_I18N.t;
   const [drag, setDrag] = React.useState(null);
@@ -51,31 +52,27 @@ function _MMCard({ levels, level, current, onSet, onModels }) {
   const { index, last, fraction, usable, ultra } = M.effortStops(list, shown);
   const commit = (l) => { setDrag(null); setSent(l); onSet?.(l); };
   const title = ultra ? "Ultra" : _mmLevel(shown);
+  if (!usable) return null;
   return (
     <div className="mm-card" data-lv={shown || undefined}>
-      <button type="button" role="menuitem" className="mm-card-model" onClick={onModels} title={T("Model")}>
-        {title && <span className={`mm-card-level${ultra ? " ultra" : ""}`}>{title}</span>}
-        <span className="mm-card-name">
-          <span className="mm-card-name-text">{current?.name ?? current?.id ?? T("Choose a model")}</span>
-          <_MMChevron size={12} />
-        </span>
-      </button>
-      {usable && (
-        <div className={`mm-effort${index < 0 ? " unset" : ""}${ultra ? " ultra" : ""}`} style={{ "--mm-at": fraction }}>
-          <div className="mm-effort-stops" aria-hidden="true">{list.map(l => <i key={l} />)}</div>
-          {index >= 0 && (
-            <div className="mm-effort-fill" aria-hidden="true">
-              {ultra && _MM_SPARKS.map((s, k) => <i key={k} style={{ left: s.left, top: s.top, animationDelay: s.delay, animationDuration: s.dur }} />)}
-            </div>
-          )}
-          <input type="range" min={0} max={last} step={1} value={Math.max(0, index)}
-            aria-label={T("Effort")} aria-valuetext={title}
-            onChange={e => setDrag(list[Number(e.target.value)])}
-            onPointerUp={e => commit(list[Number(e.currentTarget.value)])}
-            onKeyUp={() => { if (drag !== null) commit(drag); }}
-            onBlur={() => { if (drag !== null) commit(drag); }} />
-        </div>
-      )}
+      <div className="mm-card-head">
+        <span className="mm-card-label">{T("Effort")}</span>
+        <span className={`mm-card-level${ultra ? " ultra" : ""}`}>{title || T("Model default")}</span>
+      </div>
+      <div className={`mm-effort${index < 0 ? " unset" : ""}${ultra ? " ultra" : ""}`} style={{ "--mm-at": fraction }}>
+        <div className="mm-effort-stops" aria-hidden="true">{list.map(l => <i key={l} />)}</div>
+        {index >= 0 && (
+          <div className="mm-effort-fill" aria-hidden="true">
+            {ultra && _MM_SPARKS.map((s, k) => <i key={k} style={{ left: s.left, top: s.top, animationDelay: s.delay, animationDuration: s.dur }} />)}
+          </div>
+        )}
+        <input type="range" min={0} max={last} step={1} value={Math.max(0, index)}
+          aria-label={T("Effort")} aria-valuetext={title}
+          onChange={e => setDrag(list[Number(e.target.value)])}
+          onPointerUp={e => commit(list[Number(e.currentTarget.value)])}
+          onKeyUp={() => { if (drag !== null) commit(drag); }}
+          onBlur={() => { if (drag !== null) commit(drag); }} />
+      </div>
     </div>
   );
 }
@@ -95,7 +92,7 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
   const M = window.OMP_MODELS;
   const T = window.OMP_I18N.t;
   const [open, setOpen] = React.useState(false);
-  const [view, setView] = React.useState("main"); // main | models | vendors | {vendor}
+  const [view, setView] = React.useState("main"); // main (effort + models) | vendors | {vendor}
   const [levels, setLevels] = React.useState(null);
   const [recent, setRecent] = React.useState([]);
   const rootRef = React.useRef(null);
@@ -137,7 +134,7 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
     const away = e => { if (!rootRef.current?.contains(e.target)) close(); };
     const key = e => {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); view === "main" ? close() : setView("main"); return; }
-      if ((view === "main" || view === "models") && /^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (view === "main" && /^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const m = picks[Number(e.key) - 1];
         if (m) { e.preventDefault(); onPick(m); close(); }
       }
@@ -166,7 +163,7 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
   if (view === "vendors") {
     const groups = M.groupByVendor(models ?? []);
     body = (<>
-      {back("More models", "models")}
+      {back("More models")}
       {groups.map(g => (
         <button key={g.vendor} type="button" role="menuitem" className="mm-row nav" onClick={() => setView({ vendor: g.vendor })}>
           <span className="mm-name">{g.vendor}</span>
@@ -182,9 +179,9 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
       {back(view.vendor, "vendors")}
       {(group?.models ?? []).map(m => row(m, M.keyOf(m) === currentKey ? tick : null))}
     </>);
-  } else if (view === "models") {
+  } else {
     body = (<>
-      {back(T("Model"))}
+      <_MMEffort levels={levels} level={level} onSet={onSetLevel} />
       {picks.map((m, i) => row(m, M.keyOf(m) === currentKey ? tick : <span className="mm-num">{i + 1}</span>))}
       {picks.length === 0 && <div className="mm-empty">No models available. Add a vendor in Settings → Models.</div>}
       <div className="mm-sep" />
@@ -198,8 +195,6 @@ function ModelMenu({ models, current, favorites, level, loadLevels, loadRecent, 
         </button>
       )}
     </>);
-  } else {
-    body = <_MMCard levels={levels} level={level} current={current} onSet={onSetLevel} onModels={() => setView("models")} />;
   }
 
   const ultra = !!level && M.effortStops(levels, level).ultra;

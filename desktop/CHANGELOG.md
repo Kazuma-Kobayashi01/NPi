@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Settings → Models lists every model in a table with its picker visibility and a context window slider (200K / 400K / 1M, topped by the model's largest window); the choice is omp's `modelContextWindows`, shared with the terminal's /settings.
+- The model picker opens straight to the model list with the effort slider on top; the separate level card is gone.
 - `scripts/build-web-ui.mjs` bundles the Code view's chat components for the kernel's `/web` page, so a CLI session opened in a browser on the LAN looks like this app. It only reads `src/`; the app's own build is unchanged.
 - Settings → Approvals → Remove Sandbox VM: one confirmed step that stops the VM, sends bash back to this machine (saved config included), deletes the images built here and the plugin's settings, and by default uninstalls the plugin with the images it ships.
 - Settings → Approvals → Command backend: run the agent's bash commands on this machine or in the Sandbox VM plugin's Linux virtual machine (omp's `exec.backend`). Tabs opened afterwards use it; with the VM chosen and its plugin not installed, bash stops with an error instead of running locally.

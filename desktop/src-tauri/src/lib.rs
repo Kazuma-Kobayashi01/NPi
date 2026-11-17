@@ -1791,6 +1791,28 @@ async fn model_roster_set(
     off_ipc(move || model_config::roster_set(profile.as_deref(), &role, selector.as_deref())).await?
 }
 
+/// Each model's chosen context window for `profile` (`model_config::context_windows_get`).
+#[tauri::command]
+async fn model_context_windows_get(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || model_config::context_windows_get(profile.as_deref())).await?
+}
+
+/// Set or clear (`tokens: null`) one model's context window; returns every entry afterwards.
+#[tauri::command]
+async fn model_context_window_set(
+    profile: Option<String>,
+    model: String,
+    tokens: Option<u64>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<serde_json::Value, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || model_config::context_window_set(profile.as_deref(), &model, tokens)).await?
+}
+
 /// Shared profile-resolution and home-dir setup for the three keybindings
 /// commands. Returns `(home, resolved_profile, env_dir)` ready to pass to
 /// `keybindings::payload` / `keybindings::payload_with_overlay`.
@@ -2494,6 +2516,8 @@ pub fn run() {
             model_roster_get,
             expert_review_answer,
             model_roster_set,
+            model_context_windows_get,
+            model_context_window_set,
             list_project_files,
             list_profiles,
             create_profile,

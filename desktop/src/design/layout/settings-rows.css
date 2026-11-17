@@ -143,6 +143,32 @@
 .st-fav-item input { flex: none; accent-color: var(--accent); margin: 0; }
 .st-fav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-fav-id { flex: none; color: var(--fg-4); font-size: var(--d-text-xs); }
+/* Settings → Models table: model · visibility · context window slider */
+.st-mtab { display: flex; flex-direction: column; }
+.st-mtab-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px minmax(180px, 260px); align-items: center; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--line-soft); color: var(--fg-2); font-size: var(--d-text-sm); }
+.st-mtab-row.on { color: var(--fg-1); }
+.st-mtab-cols { border-top: 0; padding-block: 6px; color: var(--fg-4); font-size: var(--d-text-xs); }
+.st-mtab-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.st-ctx { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; }
+.st-ctx-fixed { display: block; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.st-ctx-track { --ctx-at: 0; position: relative; height: 18px; grid-column: 1; grid-row: 1; }
+.st-ctx-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; background: color-mix(in oklab, var(--fg-1) 12%, transparent); }
+.st-ctx-fill { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; width: calc(var(--ctx-at) * 100%); background: var(--accent); }
+.st-ctx.unset .st-ctx-fill { background: color-mix(in oklab, var(--fg-1) 32%, transparent); }
+.st-ctx-track input { position: absolute; inset: 0; width: 100%; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+.st-ctx-track input::-webkit-slider-runnable-track { height: 18px; background: transparent; }
+.st-ctx-track input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; background: var(--bg-1, #fff); border: 2px solid var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+.st-ctx.unset .st-ctx-track input::-webkit-slider-thumb { border-color: color-mix(in oklab, var(--fg-1) 45%, transparent); }
+.st-ctx-track input:focus-visible { outline: none; }
+.st-ctx-track input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 35%, transparent); }
+.st-ctx-ticks { position: relative; grid-column: 1; grid-row: 2; height: 14px; margin: 0 7px; }
+.st-ctx-ticks span { position: absolute; transform: translateX(-50%); color: var(--fg-4); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-ctx-ticks span:first-child { transform: none; }
+.st-ctx-ticks span:last-child:not(:first-child) { transform: translateX(-100%); }
+.st-ctx-ticks span.on { color: var(--fg-1); font-weight: 600; }
+.st-ctx-value { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; min-width: 52px; color: var(--fg-2); font-size: var(--d-text-xs); font-variant-numeric: tabular-nums; }
+.st-ctx.unset .st-ctx-value { color: var(--fg-4); }
+@media (max-width: 720px) { .st-mtab-row { grid-template-columns: minmax(0, 1fr) 64px; } .st-mtab-row > :last-child { grid-column: 1 / -1; } .st-mtab-cols > :last-child { display: none; } }
 @media (max-width: 720px) { .st-fav-grid { grid-template-columns: minmax(0, 1fr); } .st-fav-item:nth-child(2) { border-top: 1px solid var(--line-soft); } .st-fav-item:nth-child(odd) { border-right: 0; } }
 
 /* Settings → Models → Model roster (design/settings/rows-models.jsx). */

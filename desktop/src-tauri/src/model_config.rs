@@ -23,6 +23,10 @@ const OMP_CONFIG: &str = "omp config";
 
 /// The omp setting holding the model of each role (`default`, `smol`, …).
 const ROLES_KEY: &str = "modelRoles";
+/// The omp setting holding each model's chosen context window (`provider/id` → tokens).
+const WINDOWS_KEY: &str = "modelContextWindows";
+/// The most a context window entry may ask for; omp still caps it at the model's largest window.
+const MAX_WINDOW_TOKENS: u64 = 100_000_000;
 const DEFAULT_ROLE: &str = "default";
 
 /// How much of unexpected CLI output is quoted in an error.
@@ -34,7 +38,7 @@ const OUTPUT_SNIPPET_MAX_CHARS: usize = 120;
 static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 
 /// Every chat model omp offers, one object per model:
-/// `{provider, id, name, selector, thinking: [levels], contextWindow}`.
+/// `{provider, id, name, selector, thinking: [levels], contextWindow, maxContextWindow}`.
 ///
 /// Spawns `omp`; callers MUST run this off the main thread.
 pub fn catalog(profile: Option<&str>) -> Result<Value, String> {
@@ -124,6 +128,52 @@ pub fn roster_set(profile: Option<&str>, role: &str, selector: Option<&str>) -> 
     read_roles(profile).map(|roles| roster_of(&roles))
 }
 
+/// Each model's chosen context window (`provider/id` → tokens); a model without
+/// an entry runs with its default window.
+pub fn context_windows_get(profile: Option<&str>) -> Result<Value, String> {
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    read_record(profile, WINDOWS_KEY).map(|m| Value::Object(windows_of(&m)))
+}
+
+/// Set (`Some(tokens)`) or clear (`None`) the context window of `model`
+/// (`provider/id`), keeping every other entry; returns the map re-read after
+/// the write. Running tabs follow it on their next model refit.
+pub fn context_window_set(
+    profile: Option<&str>,
+    model: &str,
+    tokens: Option<u64>,
+) -> Result<Value, String> {
+    let model = model.trim();
+    if !valid_selector(model) || model.contains(':') {
+        return Err(format!("not a model: {model:?}"));
+    }
+    if let Some(t) = tokens {
+        if t == 0 || t > MAX_WINDOW_TOKENS {
+            return Err(format!("not a context window: {t}"));
+        }
+    }
+    let _guard = CONFIG_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut windows = windows_of(&read_record(profile, WINDOWS_KEY)?);
+    match tokens {
+        Some(t) => windows.insert(model.to_string(), json!(t)),
+        None => windows.remove(model),
+    };
+    crate::omp_cli::run(
+        &record_set_args(profile, WINDOWS_KEY, &windows)?,
+        OMP_CONFIG,
+    )?;
+    read_record(profile, WINDOWS_KEY).map(|m| Value::Object(windows_of(&m)))
+}
+
+/// Only positive integer entries: a `null` (cleared in a lower layer) or a stray value is dropped.
+fn windows_of(record: &Map<String, Value>) -> Map<String, Value> {
+    record
+        .iter()
+        .filter(|(_, v)| v.as_u64().is_some_and(|t| t > 0))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
 fn roster_of(roles: &Map<String, Value>) -> Value {
     let own = |role: &str| roles.get(role).and_then(Value::as_str).filter(|s| !s.is_empty()).map_or(Value::Null, |s| json!(s));
     let mut out = Map::new();
@@ -152,20 +202,32 @@ fn valid_selector(selector: &str) -> bool {
 }
 
 fn read_roles(profile: Option<&str>) -> Result<Map<String, Value>, String> {
+    read_record(profile, ROLES_KEY)
+}
+
+fn read_record(profile: Option<&str>, key: &str) -> Result<Map<String, Value>, String> {
     let mut args: Vec<String> = Vec::with_capacity(5);
     args.extend(crate::agent::spawn::profile_flag(profile));
-    args.extend(["config", "get", ROLES_KEY, "--json"].map(String::from));
-    parse_roles(&crate::omp_cli::run(&args, OMP_CONFIG)?)
+    args.extend(["config", "get", key, "--json"].map(String::from));
+    parse_record(key, &crate::omp_cli::run(&args, OMP_CONFIG)?)
 }
 
 /// Argv for `omp [--profile=<id>] config set modelRoles '<json object>'`: the
 /// object text is ONE argv element, so no shell or quoting layer is involved.
 fn set_args(profile: Option<&str>, roles: &Map<String, Value>) -> Result<Vec<String>, String> {
-    let value = serde_json::to_string(roles)
-        .map_err(|e| format!("could not encode {ROLES_KEY}: {e}"))?;
+    record_set_args(profile, ROLES_KEY, roles)
+}
+
+fn record_set_args(
+    profile: Option<&str>,
+    key: &str,
+    record: &Map<String, Value>,
+) -> Result<Vec<String>, String> {
+    let value =
+        serde_json::to_string(record).map_err(|e| format!("could not encode {key}: {e}"))?;
     let mut args: Vec<String> = Vec::with_capacity(5);
     args.extend(crate::agent::spawn::profile_flag(profile));
-    args.extend(["config", "set", ROLES_KEY].map(String::from));
+    args.extend(["config", "set", key].map(String::from));
     args.push(value);
     Ok(args)
 }
@@ -180,13 +242,17 @@ fn snippet_error(what: &str, stdout: &[u8]) -> String {
 
 /// `omp config get modelRoles --json` prints
 /// `{"key":…,"value":{…},"type":"record",…}`; an unset record may be `null`.
+#[cfg(test)]
 fn parse_roles(stdout: &[u8]) -> Result<Map<String, Value>, String> {
-    let parsed: Value =
-        serde_json::from_slice(stdout).map_err(|_| snippet_error(ROLES_KEY, stdout))?;
+    parse_record(ROLES_KEY, stdout)
+}
+
+fn parse_record(key: &str, stdout: &[u8]) -> Result<Map<String, Value>, String> {
+    let parsed: Value = serde_json::from_slice(stdout).map_err(|_| snippet_error(key, stdout))?;
     match parsed.get("value") {
         Some(Value::Object(map)) => Ok(map.clone()),
         Some(Value::Null) | None => Ok(Map::new()),
-        Some(_) => Err(snippet_error(ROLES_KEY, stdout)),
+        Some(_) => Err(snippet_error(key, stdout)),
     }
 }
 
@@ -214,6 +280,8 @@ fn parse_catalog(stdout: &[u8]) -> Result<Value, String> {
                     .map_or_else(|| format!("{provider}/{id}"), str::to_owned),
                 "thinking": m.get("thinking").cloned().unwrap_or_else(|| json!([])),
                 "contextWindow": m.get("contextWindow").cloned().unwrap_or(Value::Null),
+                "maxContextWindow": m.get("maxContextWindow").or_else(|| m.get("contextWindow"))
+                    .cloned().unwrap_or(Value::Null),
             }))
         })
         .collect();
@@ -294,6 +362,27 @@ mod tests {
     fn only_roster_roles_and_real_selectors_are_written() {
         assert!(roster_set(None, "default", Some("a/b")).unwrap_err().contains("not a roster role"));
         assert!(roster_set(None, "flagship", Some("no-slash")).unwrap_err().contains("not a model selector"));
+    }
+
+    #[test]
+    fn context_windows_keep_positive_entries_and_refuse_bad_input_before_omp() {
+        let record = parse_record(
+            WINDOWS_KEY,
+            br#"{"value":{"a/b":400000,"c/d":null,"e/f":"1m","g/h":0}}"#,
+        )
+        .unwrap();
+        let windows = windows_of(&record);
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows["a/b"], 400_000);
+        assert!(context_window_set(None, "no-slash", Some(200_000))
+            .unwrap_err()
+            .contains("not a model"));
+        assert!(context_window_set(None, "a/b:high", Some(200_000))
+            .unwrap_err()
+            .contains("not a model"));
+        assert!(context_window_set(None, "a/b", Some(0))
+            .unwrap_err()
+            .contains("not a context window"));
     }
 
     #[test]
