@@ -6,6 +6,12 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 系统提示词与工具编排审理（2026-11-17，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `5a863fcc76`；已提交、未推送）
+
+- 对照 `../Temp` 的提示词合集（CL4R1T4S 中 Claude Code、Codex、Cursor 与 opencode）审理内核系统提示词与工具描述，修正：外部内容 XML 标签被当作系统指令（P0）、`task` 每次委派先弹设置表单、`find` 被设为必经第一步且禁止直接打开已知文件、每次编辑前查分支、验证要求三处重复、“never end early / start unbounded”、电报体规则；Desktop Chat 提示词去掉与交互策略重复的 UI 段。浏览器文档本已按需加载（`xd://eval/browser`），无需改。
+- 已做：omp 提示词相关 104 项测试通过（修正两项既有失败），Desktop `app_mode` 8 项通过；打包见 RELEASES 3.1.0.107。
+- 未验证：没用真实模型看行为是否真的改变（分支检查次数、委派是否还弹表单、搜索是否少用 `find`）；打包后的应用未运行。
+
 ## 按模型的上下文窗口（2026-11-17，Desktop `3.1.0.106`，omp `fix/sandbox-vm-robustness` `e145865f58`；已提交，两边 main 快进并推送）
 
 - 内核：新设置 `modelContextWindows`（`provider/id` → token，`config/model-context-window.ts`）。可选 200K / 400K / 1M，上限为模型最大窗口（不足 1M 时最高档即最大窗口）。选择超过标准窗口时该模型打开扩展窗口，小于时 `fitContextWindow` 把会话绑定的窗口封顶（压缩与上下文显示跟随）；运行中的会话监听设置变化后重新套用。`models --json` 新增 `maxContextWindow`。CLI：/settings → Context → Model Context Windows（先选模型再选窗口）。
