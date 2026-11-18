@@ -6,7 +6,14 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
-## 系统提示词与工具编排审理（2026-11-17，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `5a863fcc76`；已提交、未推送）
+## GPT-6.2 Astra / Sol（2026-11-18，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `ac9a630129`；已提交并推送）
+
+- 内核 catalog：OpenAI API 内置 `gpt-6.2-astra` / `gpt-6.2-sol`（价格、1.05M 窗口、长上下文档位、API Ultrafast 3 倍）；Codex 渠道的计价、默认窗口 272K / 500K、922K 扩展上限、Fast 2× / Ultrafast 6×、Plus 及以上路由；Codex 客户端版本升到 0.170.0（GPT-6.2 要求 ≥0.166.0）。Desktop 代码未改。
+- 已做：catalog 定向测试 178 项通过；新内核与 dmg 内内核用假 key 的 `rpc-ui` 探针能选中 GPT-6.2，价格正确；打包见 RELEASES 3.1.0.107 GPT-6.2。
+- 未验证：没用真实账号调用 GPT-6.2，Codex 发现是否列出新模型未实测；打包后的应用未运行。
+- 待办：2027-03-01 起 API Ultrafast 改为 6 倍（`providers/openai.kdl` 的 `gpt-6.2-*` `service-tier-cost`）。
+
+## 系统提示词与工具编排审理（2026-11-17，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `5a863fcc76`；已提交，2026-11-18 推送）
 
 - 对照 `../Temp` 的提示词合集（CL4R1T4S 中 Claude Code、Codex、Cursor 与 opencode）审理内核系统提示词与工具描述，修正：外部内容 XML 标签被当作系统指令（P0）、`task` 每次委派先弹设置表单、`find` 被设为必经第一步且禁止直接打开已知文件、每次编辑前查分支、验证要求三处重复、“never end early / start unbounded”、电报体规则；Desktop Chat 提示词去掉与交互策略重复的 UI 段。浏览器文档本已按需加载（`xd://eval/browser`），无需改。
 - 已做：omp 提示词相关 104 项测试通过（修正两项既有失败），Desktop `app_mode` 8 项通过；打包见 RELEASES 3.1.0.107。
