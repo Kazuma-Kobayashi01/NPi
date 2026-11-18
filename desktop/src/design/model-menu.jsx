@@ -25,11 +25,6 @@ function _MMChevron({ dir = "right", size = 14 }) {
   );
 }
 
-// Sparks drifting through the Ultra fill: fixed positions, so a render never moves them.
-const _MM_SPARKS = Array.from({ length: 10 }, (_, k) => ({
-  left: `${(k * 37 + 11) % 97}%`, top: `${20 + ((k * 53) % 60)}%`, delay: `${-(k * 0.37).toFixed(2)}s`, dur: `${(2.2 + (k % 4) * 0.4).toFixed(1)}s`,
-}));
-
 /** The effort strip on top of the model list. A drag shows its level and
  *  sends it once, on release (pointer, key or blur); a click on the stop in
  *  use sends it too, which pins a level `auto` resolved to. The thumb stays
@@ -54,18 +49,14 @@ function _MMEffort({ levels, level, onSet }) {
   const title = ultra ? "Ultra" : _mmLevel(shown);
   if (!usable) return null;
   return (
-    <div className="mm-card" data-lv={shown || undefined}>
+    <div className="mm-card">
       <div className="mm-card-head">
         <span className="mm-card-label">{T("Effort")}</span>
         <span className={`mm-card-level${ultra ? " ultra" : ""}`}>{title || T("Model default")}</span>
       </div>
       <div className={`mm-effort${index < 0 ? " unset" : ""}${ultra ? " ultra" : ""}`} style={{ "--mm-at": fraction }}>
         <div className="mm-effort-stops" aria-hidden="true">{list.map(l => <i key={l} />)}</div>
-        {index >= 0 && (
-          <div className="mm-effort-fill" aria-hidden="true">
-            {ultra && _MM_SPARKS.map((s, k) => <i key={k} style={{ left: s.left, top: s.top, animationDelay: s.delay, animationDuration: s.dur }} />)}
-          </div>
-        )}
+        {index >= 0 && <div className="mm-effort-fill" aria-hidden="true" />}
         <input type="range" min={0} max={last} step={1} value={Math.max(0, index)}
           aria-label={T("Effort")} aria-valuetext={title}
           onChange={e => setDrag(list[Number(e.target.value)])}

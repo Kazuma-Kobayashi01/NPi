@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════
    OMP Desktop — design tokens
-   Two themes: graphite (default dark) and ivory (light).
+   Graphite (default dark) and Ivory (light) here; the other themes are in
+   themes.css, listed in app/settings-schema.js THEMES.
    Density: cozy / compact / dense (rem scale + line-height).
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -45,30 +46,30 @@
 /* ── Graphite (default dark) ───────────────────────────────────────────── */
 /* Neutral greys; also the fallback for any unknown theme id. */
 :root, .theme-graphite {
-  --bg-app: #111111;
-  --bg-window: #181818;
-  --bg-sidebar: #232323;
-  --bg-surface: #1E1E1E;
-  --bg-elevated: #252525;
-  --bg-input: #313131;
-  --bg-hover: #2C2C2C;
-  --bg-active: #353535;
+  --bg-app: #0E1013;
+  --bg-window: #121519;
+  --bg-sidebar: #16181C;
+  --bg-surface: #1A1B1F;
+  --bg-elevated: #222329;
+  --bg-input: #1C1E23;
+  --bg-hover: #24262C;
+  --bg-active: #2B2C33;
 
-  --line: #383838;
-  --line-soft: #2E2E2E;
-  --line-bright: #474747;
+  --line: #2A2C33;
+  --line-soft: #202228;
+  --line-bright: #3A3D46;
 
-  --fg: #ECECEC;
-  --fg-2: #C4C4C4;
-  --fg-3: #9B9B9B;
-  --fg-4: #727272;
-  --fg-5: #4D4D4D;
+  --fg: #E7E8EB;
+  --fg-2: #C3C6CD;
+  --fg-3: #A7ABB4;
+  --fg-4: #8B909A;
+  --fg-5: #5F646E;
 
-  --accent: #3F8FEA;
-  --accent-deep: #2F6FBA;
-  --accent-soft: rgba(63, 143, 234, 0.14);
-  --accent-glow: rgba(63, 143, 234, 0.45);
-  --on-accent: #FFFFFF;
+  --accent: #9E8CFC;
+  --accent-deep: #7769BD;
+  --accent-soft: rgba(158, 140, 252, 0.14);
+  --accent-glow: rgba(158, 140, 252, 0.45);
+  --on-accent: #121316;
 
   --magenta: #E26AA8;
   --cyan: #5CC8E8;
@@ -95,29 +96,29 @@
 
 /* ── Ivory (light) ─────────────────────────────────────────────────────── */
 .theme-ivory {
-  --bg-app: #E9E9E6;
-  --bg-window: #FFFFFF;
-  --bg-sidebar: #F4F4F1;
-  --bg-surface: #F8F8F6;
-  --bg-elevated: #F1F1EE;
+  --bg-app: #ECECF1;
+  --bg-window: #FBFBFC;
+  --bg-sidebar: #F3F3F6;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F2F2F5;
   --bg-input: #FFFFFF;
-  --bg-hover: #EBEBE7;
-  --bg-active: #E1E1DC;
+  --bg-hover: #EBEBF0;
+  --bg-active: #E3E3E9;
 
-  --line: #E2E2DD;
-  --line-soft: #EDEDE9;
-  --line-bright: #CDCDC6;
+  --line: #E4E4EA;
+  --line-soft: #EDEDF1;
+  --line-bright: #D2D2DA;
 
-  --fg: #1F1F1D;
-  --fg-2: #3D3D3A;
-  --fg-3: #6A6A65;
-  --fg-4: #8E8E88;
-  --fg-5: #BBBBB4;
+  --fg: #1D2129;
+  --fg-2: #3A404B;
+  --fg-3: #5C636E;
+  --fg-4: #6D7480;
+  --fg-5: #A9AEB8;
 
-  --accent: #2B6FD6;
-  --accent-deep: #1F57AD;
-  --accent-soft: rgba(43, 111, 214, 0.12);
-  --accent-glow: rgba(43, 111, 214, 0.4);
+  --accent: #6E56CF;
+  --accent-deep: #5F48C0;
+  --accent-soft: rgba(110, 86, 207, 0.12);
+  --accent-glow: rgba(110, 86, 207, 0.4);
   --on-accent: #FFFFFF;
 
   --magenta: #C2438C;

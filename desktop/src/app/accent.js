@@ -44,13 +44,14 @@
     return !!x && !!y && x.every((v, i) => v === y[i]);
   }
 
-  /** Every theme id (app/settings-schema.js THEMES); the classes to clear on a switch. */
-  const THEME_IDS = ["graphite", "ivory", "latte", "frappe", "macchiato", "mocha"];
   const TOKEN_NAMES = ["--accent", "--accent-soft", "--accent-glow", "--accent-deep"];
 
+  /** Puts `theme-<id>` and `tone-<light|dark>` on `root` (the theme list is
+   *  app/settings-schema.js THEMES, read at call time), then the accent override. */
   function applyThemeTokens(root, themeId, accent) {
-    root.classList.remove(...THEME_IDS.map(id => `theme-${id}`));
-    root.classList.add(`theme-${themeId}`);
+    const themes = window.OMP_SETTINGS.THEMES;
+    root.classList.remove(...themes.map(t => `theme-${t.id}`), "tone-light", "tone-dark");
+    root.classList.add(`theme-${themeId}`, `tone-${(themes.find(t => t.id === themeId) ?? themes[0]).tone}`);
     for (const name of TOKEN_NAMES) root.style.removeProperty(name);
     const tokens = accent ? accentTokens(accent) : null;
     if (tokens && !sameColor(getComputedStyle(root).getPropertyValue("--accent").trim(), accent)) {

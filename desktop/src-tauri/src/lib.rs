@@ -67,6 +67,7 @@ mod project_file;
 pub mod python_runtime;
 mod recent_projects;
 mod redaction;
+mod remote_control_config;
 mod saved_sessions;
 mod spawn_gate;
 mod stats;
@@ -1584,6 +1585,39 @@ async fn sandbox_mode_set(
     off_ipc(move || sandbox_config::set(profile.as_deref(), &mode)).await?
 }
 
+/// The terminal's `/rc` settings (`remote.autoStart`, `remote.relayUrl`) for `profile` — see
+/// `remote_control_config::get`. Same shape as [`sandbox_mode_get`].
+#[tauri::command]
+async fn remote_control_get(
+    profile: Option<String>,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<remote_control_config::RemoteControlConfig, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || remote_control_config::get(profile.as_deref())).await?
+}
+
+/// Write `remote.autoStart` for `profile`; resolves to both settings afterwards.
+#[tauri::command]
+async fn remote_control_set_auto_start(
+    profile: Option<String>,
+    enabled: bool,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<remote_control_config::RemoteControlConfig, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || remote_control_config::set_auto_start(profile.as_deref(), enabled)).await?
+}
+
+/// Write `remote.relayUrl` for `profile` (empty clears it); resolves to both settings afterwards.
+#[tauri::command]
+async fn remote_control_set_relay(
+    profile: Option<String>,
+    url: String,
+    store: State<'_, Arc<profiles::ProfileStore>>,
+) -> Result<remote_control_config::RemoteControlConfig, String> {
+    let profile = store.resolve_owned(profile)?;
+    off_ipc(move || remote_control_config::set_relay_url(profile.as_deref(), &url)).await?
+}
+
 /// Every chat model omp offers `profile` (no session needed) — see
 /// `model_config::catalog`.
 #[tauri::command]
@@ -2493,6 +2527,9 @@ pub fn run() {
             sandbox_mode_set,
             exec_backend_get,
             exec_backend_set,
+            remote_control_get,
+            remote_control_set_auto_start,
+            remote_control_set_relay,
             computer_use::computer_use_get,
             computer_use::computer_use_set,
             computer_use::computer_use_request_permission,

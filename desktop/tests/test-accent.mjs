@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const win  = {};
+const win  = {
+  OMP_SETTINGS: { THEMES: [{ id: "graphite", tone: "dark" }, { id: "ivory", tone: "light" }, { id: "nord", tone: "dark" }] },
+};
 // eslint-disable-next-line no-new-func
 new Function("window", readFileSync(join(root, "src/app/accent.js"), "utf8"))(win);
 const A = win.OMP_ACCENT;
@@ -59,21 +61,23 @@ check("sameColor: case and shorthand insensitive; non-hex never matches", () => 
   assert.equal(A.sameColor("red", "red"), false);
 });
 
-check("applyThemeTokens switches theme class and sets derived tokens only when accent differs", () => {
-  const classes = new Set(["theme-ivory"]);
+check("applyThemeTokens switches theme and tone classes and sets derived tokens only when accent differs", () => {
+  const classes = new Set(["theme-ivory", "tone-light"]);
   const props = new Map([["--accent", "#3F8FEA"]]);
   const root = {
-    classList: { remove: (...c) => c.forEach(x => classes.delete(x)), add: c => classes.add(c) },
+    classList: { remove: (...c) => c.forEach(x => classes.delete(x)), add: (...c) => c.forEach(x => classes.add(x)) },
     style: { removeProperty: k => props.delete(k), setProperty: (k, v) => props.set(k, v) },
   };
   globalThis.getComputedStyle = () => ({ getPropertyValue: () => "#3F8FEA" });
   A.applyThemeTokens(root, "graphite", "#3f8fea");
-  assert.deepEqual([...classes], ["theme-graphite"]);
+  assert.deepEqual([...classes], ["theme-graphite", "tone-dark"]);
   assert.equal(props.size, 0, "matching theme accent leaves tokens unset");
   A.applyThemeTokens(root, "ivory", "#FF7AC6");
-  assert.deepEqual([...classes], ["theme-ivory"]);
+  assert.deepEqual([...classes], ["theme-ivory", "tone-light"]);
   assert.equal(props.get("--accent"), "#ff7ac6");
   assert.equal(props.get("--accent-soft"), "rgba(255, 122, 198, 0.12)");
+  A.applyThemeTokens(root, "removed-theme", "#FF7AC6");
+  assert.deepEqual([...classes], ["theme-removed-theme", "tone-dark"], "an unknown id takes the first theme's tone");
 });
 
 console.log(`accent: ${passed} checks passed`);

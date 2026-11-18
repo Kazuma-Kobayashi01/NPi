@@ -1,5 +1,11 @@
-/* Catppuccin (https://catppuccin.com, MIT): Latte, Frappé, Macchiato, Mocha.
-   Same tokens as Graphite/Ivory in styles.css; accent is the flavour's Mauve. */
+/* Themes beyond Graphite/Ivory (styles.css), same tokens. Each is listed in
+   app/settings-schema.js THEMES with its tone; accent.js puts `theme-<id>` and
+   `tone-light|dark` on the root.
+   Catppuccin (https://catppuccin.com, MIT): Latte, Frappé, Macchiato, Mocha;
+   accent is the flavour's Mauve. The others follow their published palettes
+   (Tokyo Night, Nord, Rosé Pine, Gruvbox, GitHub Primer, Dracula, Kanagawa,
+   Everforest, Solarized); ramp steps and surfaces the palette lacks are
+   interpolated, and a few status colours are deepened for contrast. */
 
 /* ── Catppuccin Latte (light) ─── */
 .theme-latte {
@@ -201,4 +207,602 @@
   color-scheme: dark;
 }
 
-.theme-latte { --wp-opacity: 0.15; }
+/* ── Tokyo Night (dark) ─── */
+.theme-tokyo-night {
+  --bg-app: #16161E;
+  --bg-window: #1A1B26;
+  --bg-sidebar: #16161E;
+  --bg-surface: #1F2335;
+  --bg-elevated: #24283B;
+  --bg-input: #1F2335;
+  --bg-hover: #232433;
+  --bg-active: #292E42;
+
+  --line: #292E42;
+  --line-soft: #1F2335;
+  --line-bright: #3B4261;
+
+  --fg: #C0CAF5;
+  --fg-2: #A9B1D6;
+  --fg-3: #9AA5CE;
+  --fg-4: #737AA2;
+  --fg-5: #565F89;
+
+  --accent: #7AA2F7;
+  --accent-deep: #5C7AB9;
+  --accent-soft: rgba(122, 162, 247, 0.14);
+  --accent-glow: rgba(122, 162, 247, 0.45);
+  --on-accent: #1A1B26;
+
+  --magenta: #BB9AF7;
+  --cyan: #7DCFFF;
+  --amber: #E0AF68;
+  --lilac: #9D7CD8;
+  --rose: #F7768E;
+  --lime: #9ECE6A;
+
+  --syntax-comment: #565F89;
+  --syntax-key: #BB9AF7;
+  --syntax-str: #9ECE6A;
+  --syntax-num: #FF9E64;
+  --syntax-fn: #7AA2F7;
+  --syntax-tag: #F7768E;
+
+  --diff-add-bg: rgba(158, 206, 106, 0.12);
+  --diff-add-fg: #9ECE6A;
+  --diff-rm-bg: rgba(247, 118, 142, 0.1);
+  --diff-rm-fg: #F7768E;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Nord (dark) ─── */
+.theme-nord {
+  --bg-app: #242933;
+  --bg-window: #2E3440;
+  --bg-sidebar: #292E39;
+  --bg-surface: #353B49;
+  --bg-elevated: #3B4252;
+  --bg-input: #3B4252;
+  --bg-hover: #3B4252;
+  --bg-active: #434C5E;
+
+  --line: #3B4252;
+  --line-soft: #343A47;
+  --line-bright: #4C566A;
+
+  --fg: #ECEFF4;
+  --fg-2: #E5E9F0;
+  --fg-3: #D8DEE9;
+  --fg-4: #A3ACBC;
+  --fg-5: #6C788F;
+
+  --accent: #88C0D0;
+  --accent-deep: #66909C;
+  --accent-soft: rgba(136, 192, 208, 0.14);
+  --accent-glow: rgba(136, 192, 208, 0.45);
+  --on-accent: #2E3440;
+
+  --magenta: #B48EAD;
+  --cyan: #8FBCBB;
+  --amber: #EBCB8B;
+  --lilac: #81A1C1;
+  --rose: #D57780;
+  --lime: #A3BE8C;
+
+  --syntax-comment: #6C788F;
+  --syntax-key: #81A1C1;
+  --syntax-str: #A3BE8C;
+  --syntax-num: #B48EAD;
+  --syntax-fn: #88C0D0;
+  --syntax-tag: #D08770;
+
+  --diff-add-bg: rgba(163, 190, 140, 0.12);
+  --diff-add-fg: #A3BE8C;
+  --diff-rm-bg: rgba(213, 119, 128, 0.1);
+  --diff-rm-fg: #D57780;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Rosé Pine (dark) ─── */
+.theme-rose-pine {
+  --bg-app: #15131F;
+  --bg-window: #191724;
+  --bg-sidebar: #1F1D2E;
+  --bg-surface: #1F1D2E;
+  --bg-elevated: #26233A;
+  --bg-input: #1F1D2E;
+  --bg-hover: #21202E;
+  --bg-active: #2A273F;
+
+  --line: #26233A;
+  --line-soft: #21202E;
+  --line-bright: #403D52;
+
+  --fg: #E0DEF4;
+  --fg-2: #C4C1DC;
+  --fg-3: #A39FBD;
+  --fg-4: #908CAA;
+  --fg-5: #6E6A86;
+
+  --accent: #C4A7E7;
+  --accent-deep: #937DAD;
+  --accent-soft: rgba(196, 167, 231, 0.14);
+  --accent-glow: rgba(196, 167, 231, 0.45);
+  --on-accent: #191724;
+
+  --magenta: #EBBCBA;
+  --cyan: #3E8FB0;
+  --amber: #F6C177;
+  --lilac: #C4A7E7;
+  --rose: #EB6F92;
+  --lime: #9CCFD8;
+
+  --syntax-comment: #6E6A86;
+  --syntax-key: #3E8FB0;
+  --syntax-str: #F6C177;
+  --syntax-num: #EBBCBA;
+  --syntax-fn: #9CCFD8;
+  --syntax-tag: #EB6F92;
+
+  --diff-add-bg: rgba(156, 207, 216, 0.12);
+  --diff-add-fg: #9CCFD8;
+  --diff-rm-bg: rgba(235, 111, 146, 0.1);
+  --diff-rm-fg: #EB6F92;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Rosé Pine Dawn (light) ─── */
+.theme-rose-pine-dawn {
+  --bg-app: #F2E9E1;
+  --bg-window: #FAF4ED;
+  --bg-sidebar: #F4EDE8;
+  --bg-surface: #FFFAF3;
+  --bg-elevated: #F2E9E1;
+  --bg-input: #FFFAF3;
+  --bg-hover: #F0E8E0;
+  --bg-active: #DFDAD9;
+
+  --line: #DFDAD9;
+  --line-soft: #ECE4DD;
+  --line-bright: #CECACD;
+
+  --fg: #575279;
+  --fg-2: #625D82;
+  --fg-3: #797593;
+  --fg-4: #8A86A0;
+  --fg-5: #9893A5;
+
+  --accent: #286983;
+  --accent-deep: #1E4F62;
+  --accent-soft: rgba(40, 105, 131, 0.12);
+  --accent-glow: rgba(40, 105, 131, 0.4);
+  --on-accent: #FFFAF3;
+
+  --magenta: #D7827E;
+  --cyan: #286983;
+  --amber: #B8761A;
+  --lilac: #907AA9;
+  --rose: #B4637A;
+  --lime: #56949F;
+
+  --syntax-comment: #9893A5;
+  --syntax-key: #286983;
+  --syntax-str: #EA9D34;
+  --syntax-num: #907AA9;
+  --syntax-fn: #D7827E;
+  --syntax-tag: #56949F;
+
+  --diff-add-bg: rgba(86, 148, 159, 0.1);
+  --diff-add-fg: #56949F;
+  --diff-rm-bg: rgba(180, 99, 122, 0.08);
+  --diff-rm-fg: #B4637A;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}
+
+/* ── Gruvbox Dark (dark) ─── */
+.theme-gruvbox-dark {
+  --bg-app: #1D2021;
+  --bg-window: #282828;
+  --bg-sidebar: #252321;
+  --bg-surface: #32302F;
+  --bg-elevated: #3C3836;
+  --bg-input: #32302F;
+  --bg-hover: #3C3836;
+  --bg-active: #504945;
+
+  --line: #3C3836;
+  --line-soft: #32302F;
+  --line-bright: #504945;
+
+  --fg: #EBDBB2;
+  --fg-2: #D5C4A1;
+  --fg-3: #BDAE93;
+  --fg-4: #A89984;
+  --fg-5: #7C6F64;
+
+  --accent: #FE8019;
+  --accent-deep: #BE6013;
+  --accent-soft: rgba(254, 128, 25, 0.14);
+  --accent-glow: rgba(254, 128, 25, 0.45);
+  --on-accent: #282828;
+
+  --magenta: #D3869B;
+  --cyan: #83A598;
+  --amber: #FABD2F;
+  --lilac: #D3869B;
+  --rose: #FB4934;
+  --lime: #B8BB26;
+
+  --syntax-comment: #928374;
+  --syntax-key: #FB4934;
+  --syntax-str: #B8BB26;
+  --syntax-num: #D3869B;
+  --syntax-fn: #FABD2F;
+  --syntax-tag: #8EC07C;
+
+  --diff-add-bg: rgba(184, 187, 38, 0.12);
+  --diff-add-fg: #B8BB26;
+  --diff-rm-bg: rgba(251, 73, 52, 0.1);
+  --diff-rm-fg: #FB4934;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Gruvbox Light (light) ─── */
+.theme-gruvbox-light {
+  --bg-app: #EBDBB2;
+  --bg-window: #FBF1C7;
+  --bg-sidebar: #F4E8BE;
+  --bg-surface: #F9F5D7;
+  --bg-elevated: #F2E5BC;
+  --bg-input: #F9F5D7;
+  --bg-hover: #F2E5BC;
+  --bg-active: #E5D5AC;
+
+  --line: #D5C4A1;
+  --line-soft: #EBDBB2;
+  --line-bright: #BDAE93;
+
+  --fg: #3C3836;
+  --fg-2: #504945;
+  --fg-3: #665C54;
+  --fg-4: #7C6F64;
+  --fg-5: #A89984;
+
+  --accent: #AF3A03;
+  --accent-deep: #832C02;
+  --accent-soft: rgba(175, 58, 3, 0.12);
+  --accent-glow: rgba(175, 58, 3, 0.4);
+  --on-accent: #FBF1C7;
+
+  --magenta: #8F3F71;
+  --cyan: #076678;
+  --amber: #B57614;
+  --lilac: #8F3F71;
+  --rose: #9D0006;
+  --lime: #79740E;
+
+  --syntax-comment: #928374;
+  --syntax-key: #9D0006;
+  --syntax-str: #79740E;
+  --syntax-num: #8F3F71;
+  --syntax-fn: #427B58;
+  --syntax-tag: #076678;
+
+  --diff-add-bg: rgba(121, 116, 14, 0.1);
+  --diff-add-fg: #79740E;
+  --diff-rm-bg: rgba(157, 0, 6, 0.08);
+  --diff-rm-fg: #9D0006;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}
+
+/* ── GitHub Dark (dark) ─── */
+.theme-github-dark {
+  --bg-app: #010409;
+  --bg-window: #0D1117;
+  --bg-sidebar: #0B0F14;
+  --bg-surface: #161B22;
+  --bg-elevated: #1C2128;
+  --bg-input: #0D1117;
+  --bg-hover: #1A1F26;
+  --bg-active: #262C36;
+
+  --line: #30363D;
+  --line-soft: #21262D;
+  --line-bright: #3D444D;
+
+  --fg: #E6EDF3;
+  --fg-2: #C9D1D9;
+  --fg-3: #9198A1;
+  --fg-4: #7D8590;
+  --fg-5: #6E7681;
+
+  --accent: #4493F8;
+  --accent-deep: #336EBA;
+  --accent-soft: rgba(68, 147, 248, 0.14);
+  --accent-glow: rgba(68, 147, 248, 0.45);
+  --on-accent: #0D1117;
+
+  --magenta: #DB61A2;
+  --cyan: #39C5CF;
+  --amber: #D29922;
+  --lilac: #A371F7;
+  --rose: #F85149;
+  --lime: #3FB950;
+
+  --syntax-comment: #8B949E;
+  --syntax-key: #FF7B72;
+  --syntax-str: #A5D6FF;
+  --syntax-num: #79C0FF;
+  --syntax-fn: #D2A8FF;
+  --syntax-tag: #7EE787;
+
+  --diff-add-bg: rgba(63, 185, 80, 0.12);
+  --diff-add-fg: #3FB950;
+  --diff-rm-bg: rgba(248, 81, 73, 0.1);
+  --diff-rm-fg: #F85149;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── GitHub Light (light) ─── */
+.theme-github-light {
+  --bg-app: #EAEEF2;
+  --bg-window: #FFFFFF;
+  --bg-sidebar: #F6F8FA;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F6F8FA;
+  --bg-input: #FFFFFF;
+  --bg-hover: #F0F3F6;
+  --bg-active: #E5E9EE;
+
+  --line: #D1D9E0;
+  --line-soft: #E1E6EB;
+  --line-bright: #BFC8D1;
+
+  --fg: #1F2328;
+  --fg-2: #393F46;
+  --fg-3: #59636E;
+  --fg-4: #6E7781;
+  --fg-5: #8C959F;
+
+  --accent: #0969DA;
+  --accent-deep: #074FA4;
+  --accent-soft: rgba(9, 105, 218, 0.12);
+  --accent-glow: rgba(9, 105, 218, 0.4);
+  --on-accent: #FFFFFF;
+
+  --magenta: #BF3989;
+  --cyan: #1B7C83;
+  --amber: #9A6700;
+  --lilac: #8250DF;
+  --rose: #CF222E;
+  --lime: #1A7F37;
+
+  --syntax-comment: #6E7781;
+  --syntax-key: #CF222E;
+  --syntax-str: #0A3069;
+  --syntax-num: #0550AE;
+  --syntax-fn: #8250DF;
+  --syntax-tag: #116329;
+
+  --diff-add-bg: rgba(26, 127, 55, 0.1);
+  --diff-add-fg: #1A7F37;
+  --diff-rm-bg: rgba(207, 34, 46, 0.08);
+  --diff-rm-fg: #CF222E;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}
+
+/* ── Dracula (dark) ─── */
+.theme-dracula {
+  --bg-app: #191A21;
+  --bg-window: #282A36;
+  --bg-sidebar: #21222C;
+  --bg-surface: #21222C;
+  --bg-elevated: #343746;
+  --bg-input: #21222C;
+  --bg-hover: #303241;
+  --bg-active: #44475A;
+
+  --line: #383A4A;
+  --line-soft: #2E303E;
+  --line-bright: #44475A;
+
+  --fg: #F8F8F2;
+  --fg-2: #E0E0E6;
+  --fg-3: #B4B6C8;
+  --fg-4: #8B93B8;
+  --fg-5: #6272A4;
+
+  --accent: #BD93F9;
+  --accent-deep: #8E6EBB;
+  --accent-soft: rgba(189, 147, 249, 0.14);
+  --accent-glow: rgba(189, 147, 249, 0.45);
+  --on-accent: #282A36;
+
+  --magenta: #FF79C6;
+  --cyan: #8BE9FD;
+  --amber: #FFB86C;
+  --lilac: #BD93F9;
+  --rose: #FF5555;
+  --lime: #50FA7B;
+
+  --syntax-comment: #6272A4;
+  --syntax-key: #FF79C6;
+  --syntax-str: #F1FA8C;
+  --syntax-num: #BD93F9;
+  --syntax-fn: #50FA7B;
+  --syntax-tag: #8BE9FD;
+
+  --diff-add-bg: rgba(80, 250, 123, 0.12);
+  --diff-add-fg: #50FA7B;
+  --diff-rm-bg: rgba(255, 85, 85, 0.1);
+  --diff-rm-fg: #FF5555;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Kanagawa (dark) ─── */
+.theme-kanagawa {
+  --bg-app: #16161D;
+  --bg-window: #1F1F28;
+  --bg-sidebar: #1A1A22;
+  --bg-surface: #1A1A22;
+  --bg-elevated: #2A2A37;
+  --bg-input: #1A1A22;
+  --bg-hover: #2A2A37;
+  --bg-active: #363646;
+
+  --line: #2A2A37;
+  --line-soft: #252530;
+  --line-bright: #54546D;
+
+  --fg: #DCD7BA;
+  --fg-2: #C8C093;
+  --fg-3: #A6A28C;
+  --fg-4: #8A8980;
+  --fg-5: #727169;
+
+  --accent: #7E9CD8;
+  --accent-deep: #5E75A2;
+  --accent-soft: rgba(126, 156, 216, 0.14);
+  --accent-glow: rgba(126, 156, 216, 0.45);
+  --on-accent: #1F1F28;
+
+  --magenta: #D27E99;
+  --cyan: #7FB4CA;
+  --amber: #E6C384;
+  --lilac: #957FB8;
+  --rose: #E46876;
+  --lime: #98BB6C;
+
+  --syntax-comment: #727169;
+  --syntax-key: #957FB8;
+  --syntax-str: #98BB6C;
+  --syntax-num: #D27E99;
+  --syntax-fn: #7E9CD8;
+  --syntax-tag: #FFA066;
+
+  --diff-add-bg: rgba(152, 187, 108, 0.12);
+  --diff-add-fg: #98BB6C;
+  --diff-rm-bg: rgba(228, 104, 118, 0.1);
+  --diff-rm-fg: #E46876;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Everforest (dark) ─── */
+.theme-everforest {
+  --bg-app: #232A2E;
+  --bg-window: #2D353B;
+  --bg-sidebar: #272F34;
+  --bg-surface: #343F44;
+  --bg-elevated: #3D484D;
+  --bg-input: #343F44;
+  --bg-hover: #323C41;
+  --bg-active: #475258;
+
+  --line: #3D484D;
+  --line-soft: #343F44;
+  --line-bright: #4F585E;
+
+  --fg: #D3C6AA;
+  --fg-2: #C4B99D;
+  --fg-3: #9DA9A0;
+  --fg-4: #859289;
+  --fg-5: #7A8478;
+
+  --accent: #A7C080;
+  --accent-deep: #7D9060;
+  --accent-soft: rgba(167, 192, 128, 0.14);
+  --accent-glow: rgba(167, 192, 128, 0.45);
+  --on-accent: #2D353B;
+
+  --magenta: #D699B6;
+  --cyan: #7FBBB3;
+  --amber: #DBBC7F;
+  --lilac: #D699B6;
+  --rose: #E67E80;
+  --lime: #A7C080;
+
+  --syntax-comment: #859289;
+  --syntax-key: #E67E80;
+  --syntax-str: #83C092;
+  --syntax-num: #D699B6;
+  --syntax-fn: #A7C080;
+  --syntax-tag: #7FBBB3;
+
+  --diff-add-bg: rgba(167, 192, 128, 0.12);
+  --diff-add-fg: #A7C080;
+  --diff-rm-bg: rgba(230, 126, 128, 0.1);
+  --diff-rm-fg: #E67E80;
+
+  --grain-opacity: 0;
+  color-scheme: dark;
+}
+
+/* ── Solarized Light (light) ─── */
+.theme-solarized-light {
+  --bg-app: #EEE8D5;
+  --bg-window: #FDF6E3;
+  --bg-sidebar: #F5EFDC;
+  --bg-surface: #FDF6E3;
+  --bg-elevated: #EEE8D5;
+  --bg-input: #FFFBF0;
+  --bg-hover: #F3EDDA;
+  --bg-active: #E6DFC8;
+
+  --line: #E3DCC6;
+  --line-soft: #EEE8D5;
+  --line-bright: #D3CBB2;
+
+  --fg: #073642;
+  --fg-2: #3E5961;
+  --fg-3: #586E75;
+  --fg-4: #657B83;
+  --fg-5: #93A1A1;
+
+  --accent: #268BD2;
+  --accent-deep: #1C689E;
+  --accent-soft: rgba(38, 139, 210, 0.12);
+  --accent-glow: rgba(38, 139, 210, 0.4);
+  --on-accent: #FDF6E3;
+
+  --magenta: #D33682;
+  --cyan: #2AA198;
+  --amber: #B58900;
+  --lilac: #6C71C4;
+  --rose: #DC322F;
+  --lime: #859900;
+
+  --syntax-comment: #93A1A1;
+  --syntax-key: #859900;
+  --syntax-str: #2AA198;
+  --syntax-num: #D33682;
+  --syntax-fn: #268BD2;
+  --syntax-tag: #CB4B16;
+
+  --diff-add-bg: rgba(133, 153, 0, 0.1);
+  --diff-add-fg: #859900;
+  --diff-rm-bg: rgba(220, 50, 47, 0.08);
+  --diff-rm-fg: #DC322F;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}

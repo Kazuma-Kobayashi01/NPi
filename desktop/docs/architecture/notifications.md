@@ -1,10 +1,10 @@
 # System notifications
 
-Code: `src-tauri/src/notify/` (`mod.rs` state, frame classification and commands; `policy.rs` pure rules and banner text; `macos.rs`; `other.rs`), `agent/reader.rs` (the hooks), `app/notify.js` (`OMP_NOTIFY`), `design/settings/rows-notifications.jsx`, `live.js` (`notify*` bridge methods, `notify://open`). Tests: `cargo test --lib notify`, `test-notify.mjs`.
+Code: `src-tauri/src/notify/` (`mod.rs` state, frame classification and commands; `policy.rs` pure rules and banner text; `summary.rs` the banner's one line; `macos.rs`; `other.rs`), `agent/reader.rs` (the hooks), `app/notify.js` (`OMP_NOTIFY`), `design/settings/rows-notifications.jsx`, `live.js` (`notify*` bridge methods, `notify://open`). Tests: `cargo test --lib notify`, `test-notify.mjs`.
 
 ## What was wrong
 
-The old `system_notice.rs` ran `osascript -e 'display notification'` (macOS), `notify-send` or a PowerShell toast built by string formatting. On macOS that banner belongs to Script Editor, not to NPi Desktop: the app never had a permission of its own to ask for or to be refused, a failure was swallowed, and a click did nothing. The webview fired it only for the *active* tab (a background tab's frames are not processed there), only when `document.hasFocus()` was false, with no setting to turn it off, and the "turn finished" banner carried the first 80 characters of the reply. The PowerShell text was spliced into the script, so a quote in it broke (or injected into) the command.
+The old `system_notice.rs` ran `osascript -e 'display notification'` (macOS), `notify-send` or a PowerShell toast built by string formatting. On macOS that banner belongs to Script Editor, not to NPi Desktop: the app never had a permission of its own to ask for or to be refused, a failure was swallowed, and a click did nothing. The webview fired it only for the *active* tab (a background tab's frames are not processed there), only when `document.hasFocus()` was false, with no setting to turn it off, and the "turn finished" banner carried the first 80 characters of the reply, markup and all. The PowerShell text was spliced into the script, so a quote in it broke (or injected into) the command.
 
 ## Policy lives in Rust
 
@@ -18,7 +18,19 @@ Only the stdout reader sees every tab's frames, so it hands each parsed frame to
 
 `policy::should_send` then applies: the master switch and the kind's own switch; no banner while the window has focus **and** the event's tab is the one on screen (a background tab of a focused window still notifies); one banner per tab and kind per 20 s. The Settings test button ignores all of it.
 
-The webview sends only the switches and the language (`notify_configure`, from `OMP_NOTIFY.configFrom`: four booleans and one of `zh-CN`, `zh-TW`, `en-US`, `ja-JP`; anything else keeps the old language) and which tab is on screen (`notify_set_active`: `null` on the start page and the Settings page). A banner's title is the project folder name (cut to 60 characters) or "NPi Desktop"; its body is a fixed sentence per kind and language. No prompt, reply, tool or file text ever reaches it.
+The webview sends only the switches and the language (`notify_configure`, from `OMP_NOTIFY.configFrom`: four booleans and one of `zh-CN`, `zh-TW`, `en-US`, `ja-JP`; anything else keeps the old language) and which tab is on screen (`notify_set_active`: `null` on the start page and the Settings page). A banner's title is the project folder name (cut to 60 characters) or "NPi Desktop".
+
+## The banner's line
+
+The body is a short lead per kind and language ("已完成：", "等你处理：", "出错：") followed by one line taken from the frame that raised it, so the banner says what happened rather than only that something did:
+
+|Kind|Line from|
+|---|---|
+|Done|the run's last assistant message (`agent_end` `messages`): its text blocks; thinking and tool calls are ignored|
+|NeedsInput|an ask dialog's first `question`, else the prompt's `title` (a tool approval: "Allow tool: …"), else its `message`|
+|Failed|that message's `errorMessage`, or the process exit reason|
+
+`summary::line` turns the text into the line: the first line that is prose (headings, code fences, tables, rules and HTML are passed over), its quote/list/task marker and inline markup removed (links and images become their text), cut after the first sentence (`。！？`, or `.!?` before a space) and to 90 characters with "…". Replies are written conclusion first, so this is the reply's own summary; nothing asks a model for one. With no such line the body is the kind's generic sentence ("任务已完成。"). The text appears on the lock screen as macOS shows previews (System Settings → Notifications → Show previews).
 
 ## macOS
 

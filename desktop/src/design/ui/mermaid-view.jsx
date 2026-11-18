@@ -28,9 +28,7 @@
   function configureMermaid() {
     if (!window.mermaid) return;
     const cs = window.getComputedStyle(document.documentElement);
-    const isLight =
-      document.documentElement.classList.contains("theme-latte") ||
-      document.documentElement.classList.contains("theme-ivory");
+    const isLight = document.documentElement.classList.contains("tone-light");
 
     const bgElevated = cs.getPropertyValue("--bg-elevated").trim() || (isLight ? "#e6e9ef" : "#303446");
     const fg = cs.getPropertyValue("--fg").trim() || (isLight ? "#4c4f69" : "#cdd6f4");

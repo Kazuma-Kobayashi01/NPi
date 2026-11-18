@@ -101,8 +101,36 @@ pub fn should_send(cfg: Config, kind: Kind, now: Moment) -> bool {
     now.since_last.is_none_or(|d| d >= DEDUPE)
 }
 
-/// The generic body of `kind`: never a prompt, reply or file name.
-pub const fn body(kind: Kind, lang: Lang) -> &'static str {
+/// The banner body: `kind`'s lead and the one-line `detail` (the reply's
+/// first sentence, the question, the error), or `kind`'s generic sentence
+/// when there is no detail.
+pub fn body(kind: Kind, lang: Lang, detail: Option<&str>) -> String {
+    detail.map_or_else(
+        || generic(kind, lang).to_string(),
+        |d| format!("{}{d}", lead(kind, lang)),
+    )
+}
+
+/// What goes before a detail.
+const fn lead(kind: Kind, lang: Lang) -> &'static str {
+    match (kind, lang) {
+        (Kind::Done, Lang::ZhCn | Lang::ZhTw) => "已完成：",
+        (Kind::Done, Lang::EnUs) => "Done: ",
+        (Kind::Done, Lang::JaJp) => "完了：",
+        (Kind::NeedsInput, Lang::ZhCn) => "等你处理：",
+        (Kind::NeedsInput, Lang::ZhTw) => "等你處理：",
+        (Kind::NeedsInput, Lang::EnUs) => "Waiting for you: ",
+        (Kind::NeedsInput, Lang::JaJp) => "対応待ち：",
+        (Kind::Failed, Lang::ZhCn) => "出错：",
+        (Kind::Failed, Lang::ZhTw) => "出錯：",
+        (Kind::Failed, Lang::EnUs) => "Failed: ",
+        (Kind::Failed, Lang::JaJp) => "エラー：",
+        (Kind::Test, _) => "",
+    }
+}
+
+/// The body without a detail.
+const fn generic(kind: Kind, lang: Lang) -> &'static str {
     match (kind, lang) {
         (Kind::Done, Lang::ZhCn) => "任务已完成。",
         (Kind::Done, Lang::ZhTw) => "任務已完成。",
@@ -225,13 +253,17 @@ mod tests {
     }
 
     #[test]
-    fn languages_parse_exactly_and_every_body_is_generic_text() {
+    fn a_detail_follows_its_lead_and_without_one_the_generic_sentence_stays() {
         assert_eq!(Lang::parse("ja-JP"), Some(Lang::JaJp));
         assert_eq!(Lang::parse("fr-FR"), None);
-        for lang in [Lang::ZhCn, Lang::ZhTw, Lang::EnUs, Lang::JaJp] {
-            for kind in [Kind::Done, Kind::NeedsInput, Kind::Failed, Kind::Test] {
-                assert!(!body(kind, lang).is_empty());
-            }
-        }
+        assert_eq!(
+            body(Kind::Done, Lang::ZhCn, Some("修好了。")),
+            "已完成：修好了。"
+        );
+        assert_eq!(
+            body(Kind::Failed, Lang::EnUs, Some("429 rate limited")),
+            "Failed: 429 rate limited"
+        );
+        assert_eq!(body(Kind::Done, Lang::ZhCn, None), "任务已完成。");
     }
 }

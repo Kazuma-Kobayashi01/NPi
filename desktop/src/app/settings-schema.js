@@ -20,14 +20,26 @@
 // app/*.js modules does not matter.
 (function () {
   const THEMES = Object.freeze([
-    { id: "graphite", label: "Graphite", tone: "dark", accent: "#3F8FEA" },
-    { id: "ivory", label: "Ivory", tone: "light", accent: "#2B6FD6" },
+    { id: "graphite", label: "Graphite", tone: "dark", accent: "#9E8CFC" },
+    { id: "ivory", label: "Ivory", tone: "light", accent: "#6E56CF" },
     { id: "latte", label: "Latte", group: "Catppuccin", tone: "light", accent: "#8839EF" },
     { id: "frappe", label: "Frappé", group: "Catppuccin", tone: "dark", accent: "#CA9EE6" },
     { id: "macchiato", label: "Macchiato", group: "Catppuccin", tone: "dark", accent: "#C6A0F6" },
     { id: "mocha", label: "Mocha", group: "Catppuccin", tone: "dark", accent: "#CBA6F7" },
+    { id: "tokyo-night", label: "Tokyo Night", tone: "dark", accent: "#7AA2F7" },
+    { id: "nord", label: "Nord", tone: "dark", accent: "#88C0D0" },
+    { id: "rose-pine", label: "Rosé Pine", tone: "dark", accent: "#C4A7E7" },
+    { id: "rose-pine-dawn", label: "Rosé Pine Dawn", tone: "light", accent: "#286983" },
+    { id: "gruvbox-dark", label: "Gruvbox Dark", tone: "dark", accent: "#FE8019" },
+    { id: "gruvbox-light", label: "Gruvbox Light", tone: "light", accent: "#AF3A03" },
+    { id: "github-dark", label: "GitHub Dark", tone: "dark", accent: "#4493F8" },
+    { id: "github-light", label: "GitHub Light", tone: "light", accent: "#0969DA" },
+    { id: "dracula", label: "Dracula", tone: "dark", accent: "#BD93F9" },
+    { id: "kanagawa", label: "Kanagawa", tone: "dark", accent: "#7E9CD8" },
+    { id: "everforest", label: "Everforest", tone: "dark", accent: "#A7C080" },
+    { id: "solarized-light", label: "Solarized Light", tone: "light", accent: "#268BD2" },
   ]);
-  const ACCENTS = Object.freeze(["#3F8FEA", "#D97757", "#4FB37A", "#E8A33D", "#A58BF0", "#E26AA8"]);
+  const ACCENTS = Object.freeze(["#9E8CFC", "#3F8FEA", "#D97757", "#4FB37A", "#E8A33D", "#E26AA8"]);
   /** The accent a theme ships with; picking the theme resets to it. */
   const themeAccent = (theme) => (THEMES.find(t => t.id === theme) ?? THEMES[0]).accent;
 
@@ -62,7 +74,7 @@
           { keys: ["uiDetail"] }),
       ] },
       { name: "Theme", rows: [
-        tweak("theme", "themes", "Theme", "Picking a theme also resets the accent to the theme's own.", "dark light colour color graphite ivory catppuccin latte frappe macchiato mocha"),
+        tweak("theme", "themes", "Theme", "Picking a theme also resets the accent to the theme's own.", "dark light colour color graphite ivory catppuccin latte frappe macchiato mocha tokyo night nord rose pine dawn gruvbox github dracula kanagawa everforest solarized"),
         tweak("accent", "swatches", "Accent", "Focus rings, the active tab, links and the assistant's marks.", "color colour highlight"),
       ] },
       { name: "Wallpaper", rows: [
@@ -214,6 +226,9 @@
         tweak("autoCompaction", "toggle", "Auto-compact context", "omp summarises older turns when the context fills up. Off: you run `/compact` yourself.", "compaction context window"),
         tweak("autoRetry", "toggle", "Retry failed requests", "omp retries a request the provider refused or dropped, with a retry row you can stop.", "retry error rate limit"),
         custom("goalContinue", "Keep working on a goal", "omp continues an active goal on its own after each turn instead of waiting for you. Costs tokens while unattended.", "goal auto continue"),
+      ] },
+      { name: "Remote control (/rc)", src: "omp config", rows: [
+        custom("remoteControl", "Start /rc automatically", "A paired phone can drive npi sessions you run in a terminal: each starts /rc on its own once a relay is set below and a phone is paired with `npi remote pair`. Without either it stays off quietly. On by default; it is the same setting as the CLI's remote.autoStart. The app's own tabs are not reached by /rc.", "rc remote control phone mobile relay pair autostart 远程 手机 遥控"),
       ] },
       { name: "Subagents", rows: [
         custom("subagentModel", "Subagent default model", "Choose a model policy for delegated tasks: Ask before spawning, sync with the conversation, or use a Custom model and thinking level.", "subagent model thinking auto sync custom worker delegate", { keys: ["subagentModelMode", "subagentCustomModel", "subagentCustomThinking"] }),

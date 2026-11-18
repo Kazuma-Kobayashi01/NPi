@@ -3954,6 +3954,19 @@
     setSandboxMode(profile, mode) {
       return _invokeResult("sandbox_mode_set", { profile, mode });
     },
+    /** The terminal's `/rc` settings for `profile` (src-tauri remote_control_config.rs): `{ok, value:
+     *  {autoStart, relayUrl}}` or `{ok: false, error}`. Same values as the CLI's `remote.*`. */
+    remoteControl(profile) {
+      return _invokeResult("remote_control_get", { profile });
+    },
+    /** Write `remote.autoStart`; resolves like `remoteControl` with both values afterwards. */
+    setRemoteAutoStart(profile, enabled) {
+      return _invokeResult("remote_control_set_auto_start", { profile, enabled });
+    },
+    /** Write `remote.relayUrl` (empty clears it; anything but ws(s):// is refused); resolves like `remoteControl`. */
+    setRemoteRelay(profile, url) {
+      return _invokeResult("remote_control_set_relay", { profile, url });
+    },
 
     computerUseGet(profile) {
       return _invokeResult("computer_use_get", { profile });

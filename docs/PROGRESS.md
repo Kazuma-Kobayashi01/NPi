@@ -6,6 +6,26 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 设置里的 /rc，默认开启（2026-11-19，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `6594dcd76e`；已提交、已打包，见 RELEASES 3.1.0.107 Theme-Notify-RC）
+
+- 内核：`remote.autoStart` 默认改为 true；自动启动时没有中继或没有配对手机就静默不启动（不再每次启动都警告），手动 `/rc` 仍报原因。
+- Desktop：设置 → Agent → 远程控制（/rc）：自动启动开关 + 中继地址，经 `omp config get/set` 读写（`remote_control_config.rs`、`remote_control_*` 命令、四语言文案）。/rc 只作用于终端里的 npi 会话，应用自己的标签页（rpc-ui）不支持。
+- 已做：内核 `remote-control.test.ts` 5 项（新增默认值与静默用例）、`tsgo` 通过，`startup-composer` 有 1 项改动前就失败；Desktop Rust 3 项、`test-i18n`、`test-settings-schema` 通过；临时 HOME 下核对了 `config get` 的 JSON；Chromium 桩桥接冒烟设置行（开关、非法中继报错、合法中继保存）。
+- 未验证：打包后的应用与新内核；真实手机经中继连上自动启动的 /rc。
+
+## 通知带一句话概括（2026-11-19，Desktop `3.1.0.107`；已提交、已打包，见 RELEASES 3.1.0.107 Theme-Notify-RC）
+
+- 通知正文改为“前缀 + 一句话”：完成取最后一条回复的首句，等待处理取问题或审批标题，出错取错误信息；去掉 Markdown，限 90 字，没有可用文字时退回原来的固定句子（`src-tauri/src/notify/summary.rs`、`policy.rs`、`mod.rs`）。
+- 已做：`cargo test --lib notify` 16 项通过（新增摘要与帧解析用例），`cargo fmt`；clippy 只用 DevStore 的 stable 跑了（nightly 未装 clippy 组件），notify 模块无告警。
+- 未验证：打包后的真实横幅（`tauri dev` 下系统通知不可用）。
+
+## 配色：新增 12 款主题（2026-11-19，Desktop `3.1.0.107`；已提交、已打包，见 RELEASES 3.1.0.107 Theme-Notify-RC）
+
+- 参考 `~/Documents/Code/Temp/omp-studio`：它的亮/暗配色与现有 Graphite/Ivory 基本同源（同为 `#121519`/`#9E8CFC`、`#FBFBFC`/`#6E56CF`），所以没有照搬，改为按公开调色板新增 Tokyo Night、Nord、Rosé Pine、Rosé Pine Dawn、Gruvbox Dark/Light、GitHub Dark/Light、Dracula、Kanagawa、Everforest、Solarized Light（`design/themes.css`、`settings-schema.js` THEMES）。
+- 根元素新增 `tone-light|dark` 类（`accent.js`）；壁纸透明度与 Mermaid 改按 tone 判断。顺带修复：Latte 的壁纸透明度原先被 `:root` 覆盖，没有生效。聊天区中性文字色阶只保留给 Graphite 与 Catppuccin 暗色，新主题用各自色阶。
+- 已做：`test-accent`（新增 tone 断言）、`test-settings-schema`、`test-i18n` 通过；Chromium 中用真实 `styles.css`/`themes.css` 渲染 18 款主题样张，并检查了文字对比度。
+- 未验证：在真实应用里逐个切换主题（设置页卡片、终端、Git 浏览器、Mermaid）。布局改造暂不做。
+
 ## 联网搜索：失败短暂跳过（2026-11-18，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `c7e88b5bcf`；已提交并推送）
 
 - 内核 `web_search`：后端返回 429 后在搜索链里排到最后，默认 15 分钟（`providers.webSearchCooldownMinutes`，0 关闭），其余都失败时仍兜底，成功即解除；状态存 `cache/web-search-cooldowns.json`，跨进程共享。Desktop 代码未改，没有设置界面。

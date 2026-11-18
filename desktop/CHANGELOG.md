@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Twelve more themes in Settings → Appearance: Tokyo Night, Nord, Rosé Pine, Rosé Pine Dawn, Gruvbox Dark, Gruvbox Light, GitHub Dark, GitHub Light, Dracula, Kanagawa, Everforest and Solarized Light. The root now carries `tone-light`/`tone-dark` beside `theme-<id>`, so the wallpaper strength and Mermaid's light/dark choice follow the theme's tone instead of a list of light theme ids (Catppuccin Latte's stronger wallpaper now takes effect).
+- The model picker's effort slider follows the theme: a thin track in the accent colour with a hollow knob, instead of a fixed colour per level on a thick capsule; Ultra runs from the accent into the theme's magenta, without the sparks.
+- Notifications say what happened: "已完成：" with the first sentence of the reply, "等你处理：" with the question or the tool asking for approval, "出错：" with the error, instead of only "The task has finished." and the like. Markdown is stripped, the line stops at 90 characters, and a reply with no prose keeps the generic sentence.
+- Settings → Agent → Remote control (/rc): whether terminal `npi` sessions start `/rc` on their own (omp's `remote.autoStart`, now on by default in the bundled kernel) and the relay they connect through (`remote.relayUrl`, `ws://`/`wss://` only). Same values as the CLI's /settings; the app's own tabs have no /rc.
 - Settings → Models lists every model in a table with its picker visibility and a context window slider (200K / 400K / 1M, topped by the model's largest window); the choice is omp's `modelContextWindows`, shared with the terminal's /settings.
 - The model picker opens straight to the model list with the effort slider on top; the separate level card is gone.
 - `scripts/build-web-ui.mjs` bundles the Code view's chat components for the kernel's `/web` page, so a CLI session opened in a browser on the LAN looks like this app. It only reads `src/`; the app's own build is unchanged.

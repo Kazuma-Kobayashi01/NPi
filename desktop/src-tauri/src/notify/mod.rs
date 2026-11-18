@@ -9,9 +9,11 @@
 //! and the language (`notify_configure`), names the visible tab
 //! (`notify_set_active`) and drives the Settings row (`notify_status`,
 //! `notify_request_permission`, `notify_test`). A notification carries the
-//! project folder name and a generic line, never prompt, reply or file text.
+//! project folder name and one line ([`summary::line`]): the reply's first
+//! sentence, the question asked, or the error.
 
 mod policy;
+mod summary;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -53,12 +55,46 @@ impl Status {
     }
 }
 
-/// What a frame means to us.
+/// What a frame means to us; `detail` is the banner's line, if the frame has one.
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
     RunStart,
-    RunEnd { failed: bool },
-    Ask,
+    RunEnd {
+        failed: bool,
+        detail: Option<String>,
+    },
+    Ask {
+        detail: Option<String>,
+    },
+}
+
+/// The text blocks of a message's `content` (a string or an array of blocks).
+fn message_text(message: &Value) -> String {
+    match message.get("content") {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(blocks)) => blocks
+            .iter()
+            .filter(|b| b.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|b| b.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+/// The line of an `extension_ui_request` prompt: an ask dialog's first
+/// question, else the prompt's title, else its message.
+fn ask_detail(frame: &Value) -> Option<String> {
+    let str_at = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_owned);
+    frame
+        .get("questions")
+        .and_then(Value::as_array)
+        .and_then(|q| q.first())
+        .and_then(|q| str_at(q, "question"))
+        .into_iter()
+        .chain(str_at(frame, "title"))
+        .chain(str_at(frame, "message"))
+        .find_map(|text| summary::line(&text))
 }
 
 /// `None` for every frame that is not one of the three.
@@ -74,22 +110,32 @@ fn classify(frame_type: Option<&str>, frame: &Value) -> Option<Event> {
             if !terminal {
                 return None;
             }
-            let failed = frame
+            let last = frame
                 .get("messages")
                 .and_then(Value::as_array)
                 .and_then(|m| {
                     m.iter()
                         .rev()
                         .find(|m| m.get("role").and_then(Value::as_str) == Some("assistant"))
-                })
-                .is_some_and(|m| m.get("stopReason").and_then(Value::as_str) == Some("error"));
-            Some(Event::RunEnd { failed })
+                });
+            let failed =
+                last.is_some_and(|m| m.get("stopReason").and_then(Value::as_str) == Some("error"));
+            let detail = last.and_then(|m| {
+                if failed {
+                    summary::line(m.get("errorMessage").and_then(Value::as_str)?)
+                } else {
+                    summary::line(&message_text(m))
+                }
+            });
+            Some(Event::RunEnd { failed, detail })
         }
         "extension_ui_request" => matches!(
             frame.get("method").and_then(Value::as_str),
             Some("select" | "ask" | "confirm")
         )
-        .then_some(Event::Ask),
+        .then(|| Event::Ask {
+            detail: ask_detail(frame),
+        }),
         _ => None,
     }
 }
@@ -152,18 +198,18 @@ impl NotifyState {
         let Some(event) = classify(frame_type, frame) else {
             return;
         };
-        let (kind, run) = match event {
+        let (kind, run, detail) = match event {
             Event::RunStart => {
                 lock(&self.runs).insert(sid.to_string(), Instant::now());
                 return;
             }
-            Event::RunEnd { failed } => {
+            Event::RunEnd { failed, detail } => {
                 let run = lock(&self.runs).remove(sid).map(|t| t.elapsed());
-                (if failed { Kind::Failed } else { Kind::Done }, run)
+                (if failed { Kind::Failed } else { Kind::Done }, run, detail)
             }
-            Event::Ask => (Kind::NeedsInput, None),
+            Event::Ask { detail } => (Kind::NeedsInput, None, detail),
         };
-        self.dispatch(app, sid, project, kind, run);
+        self.dispatch(app, sid, project, kind, run, detail);
     }
 
     /// The agent process of `sid` ended; a non-empty `reason` is a crash.
@@ -171,7 +217,7 @@ impl NotifyState {
         lock(&self.runs).remove(sid);
         lock(&self.last).retain(|(s, _), _| s != sid);
         if !reason.is_empty() {
-            self.dispatch(app, sid, project, Kind::Failed, None);
+            self.dispatch(app, sid, project, Kind::Failed, None, summary::line(reason));
         }
     }
 
@@ -182,6 +228,7 @@ impl NotifyState {
         project: Option<&Path>,
         kind: Kind,
         run: Option<Duration>,
+        detail: Option<String>,
     ) {
         let focused = app
             .get_webview_window("main")
@@ -190,7 +237,7 @@ impl NotifyState {
         if !self.admit(sid, kind, run, focused, Instant::now()) {
             return;
         }
-        let lang = lock(&self.cfg).lang;
+        let body = body(kind, lock(&self.cfg).lang, detail.as_deref());
         let title = project
             .and_then(Path::file_name)
             .and_then(|n| n.to_str())
@@ -200,7 +247,7 @@ impl NotifyState {
             );
         let sid = sid.to_string();
         // The system call may block on its answer: never on the reader thread.
-        std::thread::spawn(move || platform::post(&title, body(kind, lang), &sid));
+        std::thread::spawn(move || platform::post(&title, &body, &sid));
     }
 }
 
@@ -271,9 +318,9 @@ pub async fn notify_request_permission() -> Result<String, String> {
 /// What the Settings row shows beside the state: the system's last refusal and how this build is signed.
 #[tauri::command]
 pub async fn notify_diagnose() -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        serde_json::json!({ "error": platform::last_error(), "signing": platform::signing() })
-    })
+    tauri::async_runtime::spawn_blocking(
+        || serde_json::json!({ "error": platform::last_error(), "signing": platform::signing() }),
+    )
     .await
     .map_err(|e| e.to_string())
 }
@@ -285,7 +332,7 @@ pub async fn notify_test(state: State<'_, NotifyState>) -> Result<String, String
     let status = tauri::async_runtime::spawn_blocking(move || {
         let status = platform::status();
         if status == Status::Granted {
-            platform::post("NPi Desktop", body(Kind::Test, lang), "");
+            platform::post("NPi Desktop", &body(Kind::Test, lang, None), "");
         }
         status
     })
@@ -313,14 +360,19 @@ mod tests {
         );
         assert_eq!(
             classify(Some("agent_end"), &json!({})),
-            Some(Event::RunEnd { failed: false })
+            Some(Event::RunEnd {
+                failed: false,
+                detail: None
+            })
         );
         assert_eq!(classify(Some("message_update"), &json!({})), None);
         assert_eq!(classify(None, &json!({})), None);
-        let ask = json!({ "method": "select" });
+        let ask = json!({ "method": "select", "title": "Allow tool: bash" });
         assert_eq!(
             classify(Some("extension_ui_request"), &ask),
-            Some(Event::Ask)
+            Some(Event::Ask {
+                detail: Some("Allow tool: bash".into())
+            })
         );
         assert_eq!(
             classify(Some("extension_ui_request"), &json!({ "method": "notify" })),
@@ -340,16 +392,40 @@ mod tests {
         );
         let failed = json!({ "messages": [
             { "role": "user" },
-            { "role": "assistant", "stopReason": "error" },
+            { "role": "assistant", "stopReason": "error", "errorMessage": "429 Too Many Requests\n{\"raw\":1}" },
         ]});
         assert_eq!(
             classify(Some("agent_end"), &failed),
-            Some(Event::RunEnd { failed: true })
+            Some(Event::RunEnd {
+                failed: true,
+                detail: Some("429 Too Many Requests".into())
+            })
         );
-        let fine = json!({ "messages": [{ "role": "assistant", "stopReason": "stop" }] });
+    }
+
+    #[test]
+    fn a_finished_run_carries_the_first_sentence_of_its_last_reply() {
+        let done = json!({ "messages": [
+            { "role": "assistant", "content": [{ "type": "text", "text": "Looking." }, { "type": "toolCall", "id": "1" }] },
+            { "role": "toolResult", "content": [{ "type": "text", "text": "ok" }] },
+            { "role": "assistant", "stopReason": "stop", "content": [
+                { "type": "thinking", "thinking": "hidden" },
+                { "type": "text", "text": "## 结论\n\n通知现在带**一句话**概括。细节如下。" },
+            ]},
+        ]});
         assert_eq!(
-            classify(Some("agent_end"), &fine),
-            Some(Event::RunEnd { failed: false })
+            classify(Some("agent_end"), &done),
+            Some(Event::RunEnd {
+                failed: false,
+                detail: Some("通知现在带一句话概括。".into())
+            })
+        );
+        let ask = json!({ "method": "ask", "title": "", "questions": [{ "id": "a", "question": "Which `database`?", "options": [] }] });
+        assert_eq!(
+            classify(Some("extension_ui_request"), &ask),
+            Some(Event::Ask {
+                detail: Some("Which database?".into())
+            })
         );
     }
 

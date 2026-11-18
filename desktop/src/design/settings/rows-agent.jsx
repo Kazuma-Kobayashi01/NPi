@@ -9,6 +9,10 @@
                      holds "rpc") in omp's config of ctx.goal.profileId,
                      read and written through app/use-goal-mode.jsx's
                      useGoalContinuation (goal_continuation_get/set)
+     remoteControl   the terminal's /rc: omp's `remote.autoStart` and
+                     `remote.relayUrl` in the config of ctx.profileId
+                     (OMP_BRIDGE.remoteControl / setRemoteAutoStart /
+                     setRemoteRelay); the relay saves on Enter or blur
    ═════════════════════════════════════════════════════════════════════ */
 
 function _SRA_profileName(ctx, id) {
@@ -58,6 +62,55 @@ function _SRA_GoalContinue({ row, ctx, query }) {
         {control}
       </Row>
       {cont.error && <div className="st-row-error">{cont.error}</div>}
+    </>
+  );
+}
+
+function _SRA_RemoteControl({ row, ctx, query }) {
+  const { SettingsRow: Row, SettingsToggle: Toggle } = window;
+  const T = window.OMP_I18N.t;
+  const { bridge, profileId } = ctx;
+  const [state, setState] = React.useState({ profileId, value: null, draft: "", error: "", busy: false });
+  const settle = res => setState(s => s.profileId !== profileId ? s : {
+    ...s, busy: false,
+    value: res.ok ? res.value : s.value,
+    draft: res.ok ? res.value.relayUrl : s.draft,
+    error: res.ok ? "" : res.error,
+  });
+  React.useEffect(() => {
+    let current = true;
+    setState({ profileId, value: null, draft: "", error: "", busy: false });
+    bridge.remoteControl(profileId).then(res => { if (current) settle(res); });
+    return () => { current = false; };
+  }, [bridge, profileId]);
+  const run = call => {
+    if (state.busy) return;
+    setState(s => ({ ...s, busy: true, error: "" }));
+    call().then(settle);
+  };
+  const saveRelay = () => {
+    if (state.value && state.draft.trim() !== state.value.relayUrl) run(() => bridge.setRemoteRelay(profileId, state.draft));
+  };
+  const ready = state.profileId === profileId && state.value !== null;
+  return (
+    <>
+      <Row label={row.label} desc={row.desc} query={query}>
+        {ready
+          ? <Toggle value={state.value.autoStart} label={row.label}
+              onChange={v => run(() => bridge.setRemoteAutoStart(profileId, v))} />
+          : <span className="st-ro">{state.error ? "unavailable" : "reading…"}</span>}
+      </Row>
+      {ready && (
+        <Row label="Relay URL" query={query}
+          desc="The relay /rc connects through. Empty: /rc stays off until you set one here or run /rc <wss://relay> once.">
+          <input className="st-input mono" value={state.draft} placeholder="wss://relay.example.com" spellCheck={false}
+            aria-label={T("Relay URL")} disabled={state.busy}
+            onChange={e => setState(s => ({ ...s, draft: e.target.value }))}
+            onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+            onBlur={saveRelay} />
+        </Row>
+      )}
+      {state.error && <div className="st-row-error">{state.error}</div>}
     </>
   );
 }
@@ -195,6 +248,7 @@ function _SRA_SidechatModel({ row, ctx, query, modified, onReset }) {
 Object.assign(window.OMP_SETTINGS_ROWS = window.OMP_SETTINGS_ROWS || {}, {
   startupProfile: _SRA_StartupProfile,
   goalContinue: _SRA_GoalContinue,
+  remoteControl: _SRA_RemoteControl,
   subagentModel: _SRA_SubagentModel,
   subagentDelegation: _SRA_SubagentDelegation,
   sidechatModel: _SRA_SidechatModel,

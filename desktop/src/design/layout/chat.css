@@ -7,8 +7,9 @@
   position: relative;
   display: flex;
 }
-/* Four semantic levels, scoped to chat; light themes retain their palette. */
-:root:not(.theme-ivory):not(.theme-latte) .chat-wrap {
+/* Four neutral levels for the chat of Graphite and the Catppuccin dark
+   flavours; light themes and the other dark palettes keep their own ramp. */
+:root:is(.theme-graphite, .theme-frappe, .theme-macchiato, .theme-mocha) .chat-wrap {
   --fg: #E5E7EB;
   --fg-2: #C0C4CC;
   --fg-3: #929AA6;
