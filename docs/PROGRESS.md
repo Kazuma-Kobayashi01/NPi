@@ -6,6 +6,14 @@
 
 状态词:**已做**=代码和单元测试完成;**已验证**=在真实 app / 真实数据里确认过;**未验证**=只有编译与单元测试。
 
+## 联网搜索：失败短暂跳过（2026-11-18，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `c7e88b5bcf`；已提交并推送）
+
+- 内核 `web_search`：后端返回 429 后在搜索链里排到最后，默认 15 分钟（`providers.webSearchCooldownMinutes`，0 关闭），其余都失败时仍兜底，成功即解除；状态存 `cache/web-search-cooldowns.json`，跨进程共享。Desktop 代码未改，没有设置界面。
+- 本机搜索链（用户配置）：`modelRoles.web` 改为 `web/parallel,web/hosted,web/exa,web/google`。注意逗号列表只取第一个可用项，兜底顺序来自 `retry.fallbackChains.web`，未配置时用内置默认链，所以实际顺序是 Parallel → 会话模型自带搜索 → Exa → …… → Google。
+- 已做：新增测试 4 项、搜索测试共 202 项、类型检查通过；打包见 RELEASES 3.1.0.107 Cooldown。
+- 未验证：真实搜索中冷却是否按预期跳过 Google；打包后的应用未运行。
+- 可做：Desktop 设置里显示和编辑搜索链（含各后端可用状态、冷却中）；搜索结果可选附带正文片段。
+
 ## GPT-6.2 Astra / Sol（2026-11-18，Desktop `3.1.0.107`，内核 `kernel.2.1.5-universal` `ac9a630129`；已提交并推送）
 
 - 内核 catalog：OpenAI API 内置 `gpt-6.2-astra` / `gpt-6.2-sol`（价格、1.05M 窗口、长上下文档位、API Ultrafast 3 倍）；Codex 渠道的计价、默认窗口 272K / 500K、922K 扩展上限、Fast 2× / Ultrafast 6×、Plus 及以上路由；Codex 客户端版本升到 0.170.0（GPT-6.2 要求 ≥0.166.0）。Desktop 代码未改。
